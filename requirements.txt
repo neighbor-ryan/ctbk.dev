@@ -1,0 +1,5 @@
+boto3
+dask[dataframe]
+kaleido
+plotly
+pyarrow
