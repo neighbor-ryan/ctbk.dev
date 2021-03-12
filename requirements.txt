@@ -3,5 +3,6 @@ dask[dataframe]
 kaleido
 plotly
 pyarrow
+s3fs
 sqlalchemy
 jedi==0.17.2
