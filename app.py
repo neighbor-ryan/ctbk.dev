@@ -113,11 +113,13 @@ def plot_months(df, title=None, name=None, gender_stack=True, genders=None, **kw
 def _(region, gender_stack, genders):
     if region == 'All':
         d = df
+        title = 'Monthly Citibike Rides'
     else:
         d = df[df.Region == region]
+        title = f'Monthly Citibike{region} Rides'
     if genders:
         d = d[d.Gender.isin(genders)]
-    return plot_months(d, gender_stack=gender_stack, genders=genders, title=f'Monthly Citibike{region} Rides')
+    return plot_months(d, gender_stack=gender_stack, genders=genders, title=title)
 
 
 controls = {
