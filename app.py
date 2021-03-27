@@ -138,7 +138,7 @@ controls = {
         options=[
             {'label':'Male','value':'M'},
             {'label':'Female','value':'F'},
-            {'label':'Unspecified','value':'U'},
+            {'label':'Other / Unspecified','value':'U'},
         ],
         value=['M','F','U',],
     ),
