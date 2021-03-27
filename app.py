@@ -116,7 +116,6 @@ def _(region, gender_stack, genders):
     else:
         d = df[df.Region == region]
     if genders:
-        print(genders)
         d = d[d.Gender.isin(genders)]
     return plot_months(d, gender_stack=gender_stack, genders=genders, title=f'Monthly Citibike{region} Rides')
 
