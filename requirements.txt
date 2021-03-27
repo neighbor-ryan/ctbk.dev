@@ -1,4 +1,6 @@
 boto3
+dash==1.19.0
+dash-bootstrap-components
 dask[dataframe]
 kaleido
 plotly
@@ -6,3 +8,4 @@ pyarrow
 s3fs
 sqlalchemy
 jedi==0.17.2
+utz==0.3.17

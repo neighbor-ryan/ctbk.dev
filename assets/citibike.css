@@ -1,0 +1,15 @@
+.row {
+  width: 100%;
+  padding: 0 2em;
+  margin: 0;
+}
+.control {
+  /*margin: 0 2em;*/
+}
+.control label {
+  /*display: block;*/
+  /*font-size: 1.2em;*/
+}
+.control-header {
+  font-weight: bold;
+}
