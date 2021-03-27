@@ -38,7 +38,7 @@ def plot_months(df, title=None, name=None, gender_stack=True, genders=None, **kw
         idx = months.index.to_frame()
         month = idx.Month.dt.month
         year = idx.Month.dt.year
-        mg = idx.apply(lambda r: '%s-%s' % (calendar.month_abbr[r.Month.month], r.Gender), axis=1).rename('mg')
+        mg = idx.apply(lambda r: '%s, %s' % (calendar.month_abbr[r.Month.month], r.Gender), axis=1).rename('mg')
     else:
         months = df.groupby(['Month'])['Count'].sum()
         idx = months.index.to_frame()
@@ -80,7 +80,7 @@ def plot_months(df, title=None, name=None, gender_stack=True, genders=None, **kw
             y='Count',
             color='mg',
             color_discrete_sequence=color_discrete_sequence,
-            labels={'mg': 'Month-Gender','Count':'Number of Rides'},
+            labels={'mg': 'Month, Gender','Count':'Number of Rides'},
             **kwargs,
         )
     else:
@@ -155,6 +155,7 @@ app.layout = Div([
             )
             for label, control in controls.items()
         ],
+        className='no-gutters',
     )
 ])
 
