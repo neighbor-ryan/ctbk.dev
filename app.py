@@ -6,13 +6,15 @@
 import calendar
 from colors import darken
 import dash
-from dash_core_components import Graph, RadioItems, Checklist
+from dash_core_components import Graph, RadioItems, RangeSlider, Checklist
 from dash_html_components import *
 from dash_bootstrap_components import Row, Col
 from dash.dependencies import Input, Output
 from month_colors import month_colors
 import plotly.express as px
 import pandas as pd
+
+from opts import opts
 
 
 external_stylesheets = [
@@ -25,14 +27,23 @@ external_stylesheets = [
     'https://codepen.io/chriddyp/pen/bWLwgP.css',
 ]
 
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+app = dash.Dash(__name__, title='Citibike Dashboard', external_stylesheets=external_stylesheets)
 server = app.server
 
 df = pd.read_parquet('year-month-region-gender-weekday.parquet')
 df['Gender'] = df.Gender.apply(lambda g: 'UMF'[g])
 
 
-def plot_months(df, title=None, name=None, gender_stack=True, genders=None, **kwargs):
+def plot_months(
+    df,
+    title=None,
+    name=None,
+    gender_stack=True,
+    genders=None,
+    rolling_avgs=None,
+    date_range=None,
+    **kwargs,
+):
     if gender_stack:
         months = df.groupby(['Month','Gender'])['Count'].sum()
         idx = months.index.to_frame()
@@ -58,6 +69,15 @@ def plot_months(df, title=None, name=None, gender_stack=True, genders=None, **kw
     else:
         p = p.sort_values('m')
 
+    # Compute rolling avgs before any date-range restrictions below
+    rolls = []
+    if rolling_avgs:
+        rolling_avgs = [ int(r) for r in rolling_avgs ]
+        for r in rolling_avgs:
+            k = f'{r}mo avg'
+            rolling = p.groupby('Month').Count.sum().rolling(r, min_periods=1).mean().rename(k)
+            rolls.append(rolling)
+
     if gender_stack:
         color_sets = {
             'U': month_colors,
@@ -74,22 +94,25 @@ def plot_months(df, title=None, name=None, gender_stack=True, genders=None, **kw
             for cc in zip(*color_sets)
             for c in cc
         ]
-        mp = px.bar(
-            p,
-            x='Month',
-            y='Count',
-            color='mg',
-            color_discrete_sequence=color_discrete_sequence,
-            labels={'mg': 'Month, Gender','Count':'Number of Rides'},
-            **kwargs,
-        )
+        labels={'mg': 'Month, Gender','Count':'Number of Rides'}
     else:
-        mp = px.bar(
-            p, x='Month', y='Count', color='mg',
-            color_discrete_sequence=darken(month_colors, f=0.9),
-            labels={'mg': 'Month','Count':'Number of Rides'},
-            **kwargs,
-        )
+        color_discrete_sequence = darken(month_colors, f=0.9)
+        labels = {'mg': 'Month','Count':'Number of Rides'}
+
+    if date_range:
+        start, end = date_range
+        ums = umos.iloc[start:(end+1)]
+        p = p.merge(ums, on='Month')
+        rolls = [ r.reset_index().merge(ums, on='Month').set_index('Month')[r.name] for r in rolls ]
+
+    mp = px.bar(
+        p, x='Month', y='Count', color='mg',
+        color_discrete_sequence=color_discrete_sequence,
+        labels=labels,
+        **kwargs,
+    )
+    for r in rolls:
+        mp.add_scatter(x=r.index, y=r, line=dict(color='black',), name=r.name)
     if title:
         mp.update_layout(
             title={
@@ -107,44 +130,102 @@ def plot_months(df, title=None, name=None, gender_stack=True, genders=None, **kw
 @app.callback(
     Output('graph','figure'),
     Input('region','value'),
-    Input('gender-stack','value'),
+    Input('stack-by','value'),
     Input('gender','value'),
+    Input('date-range','value'),
 )
-def _(region, gender_stack, genders):
+def _(region, stack_by, genders, date_range):
+    d = df.copy()
     if region == 'All':
-        d = df
         title = 'Monthly Citibike Rides'
     else:
-        d = df[df.Region == region]
+        d = d[d.Region == region]
         title = f'Monthly Citibike{region} Rides'
     if genders:
         d = d[d.Gender.isin(genders)]
-    return plot_months(d, gender_stack=gender_stack, genders=genders, title=title)
+    if stack_by == 'Gender':
+        gender_stack = True
+    elif stack_by == 'None':
+        gender_stack = False
+    else:
+        raise ValueError(stack_by)
+    return plot_months(
+        d, title=title,
+        gender_stack=gender_stack,
+        genders=genders,
+        rolling_avgs=['12'],
+        date_range=date_range,
+    )
 
+
+umos = df.Month.sort_values().drop_duplicates().reset_index(drop=True)
+marks = umos.apply(lambda d: "%d/%s" % (d.month, str(d.year)[-2:]))
 
 controls = {
     'Region': RadioItems(
         id='region',
-        options=[{'label': region, 'value': region} for region in ['All','NYC','JC']],
+        options=opts('All', 'NYC', 'JC'),
         value='All',
     ),
-    'Stack by gender': RadioItems(
-        id='gender-stack',
-        options=[{'label':'Yes','value':'True'},{'label':'No','value':''}],
-        value='True',
+    'Time Window': RadioItems(
+        id='time-window',
+        options=opts(
+            'Months',
+            {'value':'Quarters','disabled':True},
+            {'value':'Years','disabled':True},
+        ),
+        value='Months',
+    ),
+    'Stack by': RadioItems(
+        id='stack-by',
+        options=opts(
+            'Gender',
+            {'value':'Ride Type','disabled':True},
+            'None',
+        ),
+        value='Gender',
     ),
     'Gender': Checklist(
         id='gender',
-        options=[
-            {'label':'Male','value':'M'},
-            {'label':'Female','value':'F'},
-            {'label':'Other / Unspecified','value':'U'},
-        ],
+        options=opts({'Male':'M','Female':'F','Other / Unspecified':'U'}),
         value=['M','F','U',],
     ),
 }
 app.layout = Div([
     Graph(id='graph'),
+    Row(
+        [
+            Col(
+                [
+                    Div('Date Range:', className='control-header',),
+                    RangeSlider(
+                        id='date-range',
+                        min=0,
+                        max=len(umos) - 1,
+                        value=[0, len(umos) - 1],
+                        # value=[10, len(umos) - 10],
+                        marks={
+                            d['index']: {
+                                'label': (
+                                    d['Month']
+                                    if (int(d['Month'].split('/')[0]) % 3) == (umos.dt.month.values[0] % 3) or d['index'] + 1 == len(umos)
+                                    else ''
+                                ),
+                                'style': {
+                                    'text-align': 'right',
+                                    'transform': 'translate(0,1.5em) rotate(-90deg)',
+                                    'transform-origin': '0 50% 0',
+                                }
+                            }
+                            for d in marks.reset_index().to_dict('records')
+                        },
+                    ),
+                ],
+                className='control',
+            ),
+        ],
+        className='no-gutters',
+    ),
     Row(
         [
             Col(
