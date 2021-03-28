@@ -113,10 +113,10 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('-s','--src',default='tripdata',help='`src` bucket to sync from')
     parser.add_argument('-d','--dst',default='ctbk',help='`dst` bucket to sync converted/cleaned data to')
-    parser.add_argument('-s','--src',default='tripdata',help='`src` bucket to sync from')
+    parser.add_argument('-r','--dst-root',help='Prefix under `dst` to sync converted/cleaned data to')
     args = parser.parse_args()
     src_bkt = args.src
     dst_bkt = args.dst
-    dst_root = None
+    dst_root = args.dst_root
 
     main(src_bkt, dst_bkt, dst_root)
