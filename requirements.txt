@@ -9,3 +9,4 @@ pyarrow
 s3fs
 sqlalchemy
 jedi==0.17.2
+utz==0.3.17
