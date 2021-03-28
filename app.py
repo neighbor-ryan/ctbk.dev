@@ -27,6 +27,7 @@ external_stylesheets = [
 ]
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+server = app.server
 
 df = pd.read_parquet('year-month-region-gender-weekday.parquet')
 df['Gender'] = df.Gender.apply(lambda g: 'UMF'[g])
