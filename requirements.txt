@@ -2,6 +2,7 @@ boto3
 dash==1.19.0
 dash-bootstrap-components
 dask[dataframe]
+gunicorn
 kaleido
 plotly
 pyarrow
