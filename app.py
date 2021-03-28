@@ -13,7 +13,6 @@ from dash.dependencies import Input, Output
 from month_colors import month_colors
 import plotly.express as px
 import pandas as pd
-from utz import sxs
 
 
 external_stylesheets = [
@@ -48,7 +47,7 @@ def plot_months(df, title=None, name=None, gender_stack=True, genders=None, **kw
         mg = idx.apply(lambda r: calendar.month_abbr[r.Month.month], axis=1).rename('mg')
 
     m = month.rename('m')
-    months = sxs(months, mg, m, year.rename('y'))
+    months = pd.concat([months, mg, m, year.rename('y')], axis=1)
 
     # make months show up in input (and therefore legend) in order.
     # datetime column 'Month' ensures x-axis is still sorted chronologically
