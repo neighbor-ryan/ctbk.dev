@@ -3,42 +3,28 @@
 
 from boto3 import client
 from botocore import UNSIGNED
-from botocore.client import Config
+from botocore.client import Config, ClientError
 from utz import *
-
-parser = ArgumentParser()
-parser.add_argument('-s','--src',default='tripdata',help='`src` bucket to sync from')
-parser.add_argument('-d','--dst',default='ctbk',help='`dst` bucket to sync converted/cleaned data to')
-parser.add_argument('-s','--src',default='tripdata',help='`src` bucket to sync from')
-args = parser.parse_args()
-src_bkt = 'tripdata'
-dst_bkt = 'ctbk'
-dst_root = None
-
-s3 = client('s3', config=Config())
-
-resp = s3.list_objects_v2(Bucket=src_bkt)
-contents = pd.DataFrame(resp['Contents'])
-zips = contents[contents.Key.str.endswith('.zip')]
+from zipfile import ZipFile
 
 rgx = r'^(?P<JC>JC-)?(?P<year>\d{4})(?P<month>\d{2})[ \-]citibike-tripdata?(?P<csv>\.csv)?(?P<zip>\.zip)?$'
 
 fields = {
-  'Trip Duration',
-  'Start Time',
-  'Stop Time',
-  'Start Station ID',
-  'Start Station Name',
-  'Start Station Latitude',
-  'Start Station Longitude',
-  'End Station ID',
-  'End Station Name',
-  'End Station Latitude',
-  'End Station Longitude',
-  'Bike ID',
-  'User Type',
-  'Birth Year',
-  'Gender'
+    'Trip Duration',
+    'Start Time',
+    'Stop Time',
+    'Start Station ID',
+    'Start Station Name',
+    'Start Station Latitude',
+    'Start Station Longitude',
+    'End Station ID',
+    'End Station Name',
+    'End Station Latitude',
+    'End Station Longitude',
+    'Bike ID',
+    'User Type',
+    'Birth Year',
+    'Gender'
 }
 def normalize_field(f): return sub(r'\s', '', f.lower())
 normalize_fields_map = { normalize_field(f): f for f in fields }
@@ -48,7 +34,7 @@ def normalize_fields(df):
         for col in df.columns
     })
 
-from botocore.client import ClientError
+
 def s3_exists(Bucket, Key, s3=None):
     if not s3:
         s3 = client('s3', config=Config(signature_version=UNSIGNED))
@@ -59,7 +45,7 @@ def s3_exists(Bucket, Key, s3=None):
         return False
 
 
-def to_parquet(zip_key, error='warn', overwrite=False):
+def to_parquet(dst_bkt, zip_key, error='warn', overwrite=False, dst_root=None):
     name = basename(zip_key)
     m = match(rgx, name)
     if not m:
@@ -112,6 +98,25 @@ def to_parquet(zip_key, error='warn', overwrite=False):
         return msg
 
 
-parallel = Parallel(n_jobs=cpu_count())
-parallel(delayed(to_parquet)(f) for f in zips.Key.values)
+def main(src_bkt, dst_bkt, dst_root):
+    s3 = client('s3', config=Config())
 
+    resp = s3.list_objects_v2(Bucket=src_bkt)
+    contents = pd.DataFrame(resp['Contents'])
+    zips = contents[contents.Key.str.endswith('.zip')]
+
+    parallel = Parallel(n_jobs=cpu_count())
+    print('\n'.join(parallel(delayed(to_parquet)(dst_bkt, f, dst_root=dst_root) for f in zips.Key.values)))
+
+
+if __name__ == '__main__':
+    parser = ArgumentParser()
+    parser.add_argument('-s','--src',default='tripdata',help='`src` bucket to sync from')
+    parser.add_argument('-d','--dst',default='ctbk',help='`dst` bucket to sync converted/cleaned data to')
+    parser.add_argument('-s','--src',default='tripdata',help='`src` bucket to sync from')
+    args = parser.parse_args()
+    src_bkt = args.src
+    dst_bkt = args.dst
+    dst_root = None
+
+    main(src_bkt, dst_bkt, dst_root)
