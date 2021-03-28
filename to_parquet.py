@@ -1,21 +1,27 @@
 #!/usr/bin/env python
-
-from utz import *
-
-src_bkt = 'tripdata'
-dst_bkt = 'runsascoded'
-dst_root = 'citibike'
+# coding: utf-8
 
 from boto3 import client
 from botocore import UNSIGNED
 from botocore.client import Config
-s3 = client('s3', config=Config(signature_version=UNSIGNED))
+from utz import *
+
+parser = ArgumentParser()
+parser.add_argument('-s','--src',default='tripdata',help='`src` bucket to sync from')
+parser.add_argument('-d','--dst',default='ctbk',help='`dst` bucket to sync converted/cleaned data to')
+parser.add_argument('-s','--src',default='tripdata',help='`src` bucket to sync from')
+args = parser.parse_args()
+src_bkt = 'tripdata'
+dst_bkt = 'ctbk'
+dst_root = None
+
+s3 = client('s3', config=Config())
+
 resp = s3.list_objects_v2(Bucket=src_bkt)
 contents = pd.DataFrame(resp['Contents'])
 zips = contents[contents.Key.str.endswith('.zip')]
 
-# match monthly-zip filenames
-rgx = r'^(?P<JC>JC-)?(?P<year>\d{4})(?P<month>\d{2})[ \-]citibike-tripdata(?P<csv>\.csv)?(?P<zip>\.zip)?$'
+rgx = r'^(?P<JC>JC-)?(?P<year>\d{4})(?P<month>\d{2})[ \-]citibike-tripdata?(?P<csv>\.csv)?(?P<zip>\.zip)?$'
 
 fields = {
   'Trip Duration',
@@ -42,10 +48,19 @@ def normalize_fields(df):
         for col in df.columns
     })
 
-from zipfile import ZipFile
+from botocore.client import ClientError
+def s3_exists(Bucket, Key, s3=None):
+    if not s3:
+        s3 = client('s3', config=Config(signature_version=UNSIGNED))
+    try:
+        s3.head_object(Bucket=Bucket, Key=Key)
+        return True
+    except ClientError:
+        return False
 
-def to_parquet(zip_path, error='warn', overwrite=False):
-    name = basename(zip_path)
+
+def to_parquet(zip_key, error='warn', overwrite=False):
+    name = basename(zip_key)
     m = match(rgx, name)
     if not m:
         msg = f'Unrecognized key: {name}'
@@ -54,39 +69,49 @@ def to_parquet(zip_path, error='warn', overwrite=False):
             return msg
         else:
             raise Exception(msg)
-    assert name.endswith('.zip'), name
-    base = splitext(zip_path)[0]
+    base, ext = splitext(zip_key)
+    assert ext == '.zip'
     if base.endswith('.csv'):
         base = splitext(base)[0]
 
-    pqt_path = f'{base}.parquet'
-    if exists(pqt_path):
+    # normalize the dst path; a few src files have typos/inconsistencies
+    base = '%s%s%s-citibike-tripdata' % (m['JC'] or '', m['year'], m['month'])
+    if dst_root is None:
+        dst_key = f'{base}.parquet'
+    else:
+        dst_key = f'{dst_root}/{base}.parquet'
+    dst = f's3://{dst_bkt}/{dst_key}'
+    s3 = client('s3', config=Config())
+    if s3_exists(dst_bkt, dst_key, s3=s3):
         if overwrite:
-            msg = f'Overwrote {pqt_path}'
-            print(f'Overwriting {pqt_path}')
+            msg = f'Overwrote {dst}'
+            print(f'Overwriting {dst}')
         else:
-            msg = f'Found {pqt_path}; skipping'
+            msg = f'Found {dst}; skipping'
             print(msg)
             return msg
     else:
-        msg = f'Wrote {pqt_path}'
+        msg = f'Wrote {dst}'
 
-    z = ZipFile(zip_path)
-    names = z.namelist()
-    print(f'{name}: zip names: {names}')
-    [ name ] = [ f for f in names if f.endswith('.csv') and not f.startswith('_') ]
-    with z.open(name,'r') as i:
-        df = pd.read_csv(i)
-        df = normalize_fields(df)
-        df = df.astype({'Start Time':'datetime64[ns]','Stop Time':'datetime64[ns]'})
-        df.to_parquet(pqt_path)
+    with TemporaryDirectory() as d:
+        zip_path = f'{d}/{base}.zip'
+        pqt_path = f'{d}/{base}.parquet'
+        s3.download_file(src_bkt, zip_key, zip_path)
+        z = ZipFile(zip_path)
+        names = z.namelist()
+        print(f'{name}: zip names: {names}')
+        [ name ] = [ f for f in names if f.endswith('.csv') and not f.startswith('_') ]
+        with z.open(name,'r') as i:
+            df = pd.read_csv(i)
+            df = normalize_fields(df)
+            df = df.astype({'Start Time':'datetime64[ns]','Stop Time':'datetime64[ns]'})
+            df.to_parquet(pqt_path)
 
-    return msg
+        s3.upload_file(pqt_path, dst_bkt, dst_key)
+
+        return msg
 
 
-cached_zips = sorted(glob(f'{cache}/*.zip'))
-
-from joblib import delayed, Parallel
 parallel = Parallel(n_jobs=cpu_count())
+parallel(delayed(to_parquet)(f) for f in zips.Key.values)
 
-parallel(delayed(to_parquet)(f) for f in cached_zips)
