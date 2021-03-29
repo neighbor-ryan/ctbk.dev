@@ -2,12 +2,10 @@
 # coding: utf-8
 
 from utz import *
-import plotly.express as px
 
 Bucket = 'ctbk'
 
 from boto3 import client
-from botocore import UNSIGNED
 from botocore.client import Config
 s3 = client('s3', config=Config())
 resp = s3.list_objects_v2(Bucket=Bucket)
@@ -119,6 +117,7 @@ def main(
         new_path = '%s%d%02d.parquet' % (Prefix, next_year, next_month)
         new_url = s3_url(new_path)
 
+        new_data = False
         for region in ['', 'JC-']:
             new_month_path = '%s%d%02d-citibike-tripdata.parquet' % (region, next_year, next_month)
             new_month_url = s3_url(new_month_path)
@@ -131,6 +130,7 @@ def main(
                     continue
                 else:
                     raise e
+            new_data = True
             if new_months is None:
                 new_months = new_month
             else:
@@ -139,8 +139,12 @@ def main(
         if new_months is None:
             return
 
-        print(f'Writing: {new_url}')
-        new_months.to_parquet(new_url)
+        if new_data:
+            print(f'Writing: {new_url}')
+            new_months.to_parquet(new_url)
+        else:
+            print('No new data found; breaking')
+            break
 
         last_year, last_month = next_year, next_month
         if max_months > 0:

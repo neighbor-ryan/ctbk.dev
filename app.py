@@ -30,8 +30,23 @@ external_stylesheets = [
 app = dash.Dash(__name__, title='Citibike Dashboard', external_stylesheets=external_stylesheets)
 server = app.server
 
-df = pd.read_parquet('year-month-region-gender-weekday.parquet')
+Bucket = 'ctbk'
+Prefix = 'year-month-weekday-hour-region-gender_'
+
+from boto3 import client
+from botocore.client import Config
+s3 = client('s3', config=Config())
+resp = s3.list_objects_v2(Bucket=Bucket, Prefix=Prefix)
+contents = pd.DataFrame(resp['Contents'])
+keys = contents.Key
+key = keys.max()
+url = f's3://{Bucket}/{key}'
+print(f'Loading: {url}')
+df = pd.read_parquet(url)
 df['Gender'] = df.Gender.apply(lambda g: 'UMF'[g])
+n = len(df)
+df = df.groupby(['Month','Region','Gender']).Count.sum().reset_index()
+print(f'Aggregated {n} entries down to {len(df)}; columns: {df.columns}')
 
 
 def plot_months(
@@ -203,7 +218,6 @@ app.layout = Div([
                         min=0,
                         max=len(umos) - 1,
                         value=[0, len(umos) - 1],
-                        # value=[10, len(umos) - 10],
                         marks={
                             d['index']: {
                                 'label': (
