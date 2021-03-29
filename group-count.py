@@ -19,7 +19,7 @@ cur_month = months.apply(lambda m: to_dt('%s-%s' % (m.yyyy, m.mm)), axis=1).max(
 
 
 def sum_by_wd_gender(url):
-    print(f'Aggregating {url}')
+    print(f'Aggregating: {url}')
     df = read_parquet(url)
     m = match('(?:(?P<region>JC)-)?(?P<year>\d{4})(?P<month>\d{2})', basename(url))
     region = m['region'] or 'NYC'
@@ -83,23 +83,24 @@ def main(
     if 'Contents' in resp:
         contents = pd.DataFrame(resp['Contents'])
         keys = contents.Key
+        last_date = \
+            keys \
+                .str \
+                .extract(r'^.*_.*_(?P<year>\d{4})(?P<month>\d{2})') \
+                .apply(lambda r: to_dt('%s-%s' % (r['year'], r['month'])), axis=1) \
+                .max()
+        last_year = last_date.year
+        last_month = last_date.month
+        last_path = '%s%d%02d.parquet' % (Prefix, last_year, last_month)
+        s3_last_url = s3_url(last_path)
+        new_months = read_parquet(s3_last_url)
     else:
-        keys = None
+        last_year = 2013
+        last_month = 5
+        new_months = None
 
     n = 0
     while True:
-        if not keys or keys.empty:
-            last_year = 2013
-            last_month = 5
-            new_months = None
-        else:
-            last_date = keys.str.extract(r'^.*_.*_(?P<month>\d{6})').month.apply(to_dt).max().values[0]
-            last_year = last_date.year
-            last_month = last_date.month
-            last_path = '%s%d%02d.parquet' % (Prefix, last_date.year, last_date.month)
-            s3_last_url = s3_url(last_path)
-            new_months = read_parquet(s3_last_url)
-
         next_month = last_month + 1
         if next_month > 12:
             next_year = last_year + 1
@@ -108,7 +109,7 @@ def main(
             next_year = last_year
 
         if (to.year, to.month) < (next_year, next_month):
-            print(f'Up to date with data through {last_year}-{last_month}')
+            print('Up to date with data through %d-%02d' % (last_year, last_month))
             return
 
         if max_months == 0:
@@ -121,18 +122,19 @@ def main(
         for region in ['', 'JC-']:
             new_month_path = '%s%d%02d-citibike-tripdata.parquet' % (region, next_year, next_month)
             new_month_url = s3_url(new_month_path)
-            print(f'Aggregating: {new_month_url}')
             try:
                 new_month = sum_by_wd_gender(new_month_url)
             except FileNotFoundError as e:
                 if region == 'JC-':
                     continue
+                if (to.year, to.month) == (next_year, next_month):
+                    continue
                 else:
                     raise e
-            if new_months:
-                new_months = concat([ new_months, new_month ])
-            else:
+            if new_months is None:
                 new_months = new_month
+            else:
+                new_months = concat([ new_months, new_month ])
 
         if new_months is None:
             return
@@ -140,7 +142,9 @@ def main(
         print(f'Writing: {new_url}')
         new_months.to_parquet(new_url)
 
-        max_months -= 1
+        last_year, last_month = next_year, next_month
+        if max_months > 0:
+            max_months -= 1
         n += 1
 
 
@@ -153,7 +157,7 @@ if __name__ == '__main__':
     parser.add_argument('-G','--no-gender',action='store_true',help="Don't include rider `gender` among aggregation keys")
     parser.add_argument('-H','--no-hour',action='store_true',help="Don't include ride `hour` among aggregation keys")
     parser.add_argument('-M','--no-month',action='store_true',help="Don't include ride `month` among aggregation keys")
-    parser.add_argument('-n','--max-months',default=1,type=int,help="If there is new data to compute, only compute at most this many months' worth")
+    parser.add_argument('-n','--max-months',default=0,type=int,help="If there is new data to compute, only compute at most this many months' worth (default: 0, means no limit)")
     parser.add_argument('-R','--no-region',action='store_true',help="Don't include ride `region` (JC vs NYC) among aggregation keys")
     parser.add_argument('-t','--to','--through',help="Date (YYYYMM or equivalent) to process through")
     parser.add_argument('-W','--no-weekday',action='store_true',help="Don't include ride `weekday` among aggregation keys")
@@ -165,6 +169,8 @@ if __name__ == '__main__':
     gender = not args.no_gender
     hour = not args.no_hour
     max_months = args.max_months
+    if max_months <= 0:
+        max_months = -1
     month = not args.no_month
     region = not args.no_region
     to = args.to
