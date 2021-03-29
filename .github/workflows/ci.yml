@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - main
+  schedule:
+    - cron: "0 4 * * *"
 jobs:
   parquet_months:
     runs-on: ubuntu-latest
