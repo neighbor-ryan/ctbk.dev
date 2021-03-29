@@ -31,4 +31,4 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       run: |
         python to_parquet.py
-        python group-counts.py
+        python group_counts.py
