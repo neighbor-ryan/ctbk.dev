@@ -18,6 +18,7 @@ from opts import opts
 
 
 external_stylesheets = [
+    'https://www.google-analytics.com/analytics.js',
     {
         'href': 'https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css',
         'rel': 'stylesheet',
@@ -29,6 +30,14 @@ external_stylesheets = [
 
 app = dash.Dash(__name__, title='Citibike Dashboard', external_stylesheets=external_stylesheets)
 server = app.server
+
+# app.scripts.config.serve_locally = False
+# app.scripts.append_script({
+#     'external_url': 'https://www.googletagmanager.com/gtag/js?id=G-JDP856VCQP'
+# })
+# app.scripts.append_script({
+#     'external_url': './ga.js'
+# })
 
 Bucket = 'ctbk'
 Prefix = 'year-month-weekday-hour-region-gender_'
