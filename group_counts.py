@@ -5,9 +5,12 @@ from utz import *
 
 Bucket = 'ctbk'
 
+import boto3
 from boto3 import client
 from botocore.client import Config
 s3 = client('s3', config=Config())
+s3_resource = boto3.resource('s3')
+ObjectAcl = s3_resource.ObjectAcl
 resp = s3.list_objects_v2(Bucket=Bucket)
 contents = pd.DataFrame(resp['Contents'])
 keys = contents.Key
@@ -94,6 +97,7 @@ def main(
     hour=False,
     dst_bucket='ctbk',
     dst_root=None,
+    sort_agg_keys=False,
 ):
     if not to:
         to = now().time
@@ -110,7 +114,8 @@ def main(
         'r':region, 'g':gender, 't':user_type,
     }
     agg_keys = { k:v for k,v in agg_keys.items() if v }
-    agg_keys = dict(sorted(list(agg_keys.items()), key=lambda t: t[0]))
+    if sort_agg_keys:
+        agg_keys = dict(sorted(list(agg_keys.items()), key=lambda t: t[0]))
 
     Prefix = f'{"".join(agg_keys.keys())}_{value}/'
 
@@ -154,8 +159,9 @@ def main(
             print(f'Exiting after {n} iterations')
             break
 
-        new_path = '%s%d%02d.parquet' % (Prefix, next_year, next_month)
-        new_url = s3_url(new_path)
+        name = '%d%02d.parquet' % (next_year, next_month)
+        Key = '%s%s' % (Prefix, name)
+        new_url = s3_url(Key)
 
         new_data = False
         for region in ['', 'JC-']:
@@ -187,6 +193,8 @@ def main(
         if new_data:
             print(f'Writing: {new_url} ({len(new_months)} entries)')
             new_months.to_parquet(new_url)
+            object_acl = ObjectAcl(Bucket, Key)
+            object_acl.put(ACL='public-read')
         else:
             print('No new data found; breaking')
             break
@@ -217,6 +225,7 @@ if __name__ == '__main__':
     #parser.add_argument('-W','--no-weekday',action='store_true',help="Omit ride `weekday` from aggregation keys")
     parser.add_argument('-Y','--no-year',action='store_true',help="Omit ride-start `year` from aggregation keys")
 
+    parser.add_argument('--sort-agg-keys',action='store_true',help="Sort the aggregation keys in output filenames")
     parser.add_argument('-n','--max-months',default=0,type=int,help="If there is new data to compute, only compute at most this many months' worth (default: 0, means no limit)")
     parser.add_argument('-t','--to','--through',help="Date (YYYYMM or equivalent) to process through")
     args = parser.parse_args()
@@ -228,6 +237,7 @@ if __name__ == '__main__':
         max_months = -1
 
     to = args.to
+    sort_agg_keys = args.sort_agg_keys
 
     counts = not args.no_counts
     duration = not args.no_duration
@@ -248,5 +258,6 @@ if __name__ == '__main__':
         counts, duration,
         gender, region, user_type,
         year, month, weekday, hour,
-        dst_bucket, dst_root,
+        dst_bucket=dst_bucket, dst_root=dst_root,
+        sort_agg_keys=sort_agg_keys,
     )
