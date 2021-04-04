@@ -42,6 +42,14 @@ def sum_by_wd_gender(url):
     return counts
 
 
+def inc_month(y, m):
+    m += 1
+    if m > 12:
+        y += 1
+        m = 1
+    return y, m
+
+
 def main(
     to,
     max_months,
@@ -99,12 +107,7 @@ def main(
 
     n = 0
     while True:
-        next_month = last_month + 1
-        if next_month > 12:
-            next_year = last_year + 1
-            next_month = 1
-        else:
-            next_year = last_year
+        next_year, next_month = inc_month(last_year, last_month)
 
         if (to.year, to.month) < (next_year, next_month):
             print('Up to date with data through %d-%02d' % (last_year, last_month))
@@ -124,9 +127,14 @@ def main(
             try:
                 new_month = sum_by_wd_gender(new_month_url)
             except FileNotFoundError as e:
-                if region == 'JC-':
-                    continue
                 if (to.year, to.month) == (next_year, next_month):
+                    print("Couldn't find data for final month %d-%02d" % (next_year, next_month))
+                    continue
+                if (to.year, to.month) == inc_month(next_year, next_month):
+                    print("Couldn't find data for penultimate month %d-%02d" % (next_year, next_month))
+                    continue
+                if region == 'JC-':
+                    print("Missing JC data for %d-%02d" % (next_year, next_month))
                     continue
                 else:
                     raise e
