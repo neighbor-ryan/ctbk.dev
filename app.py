@@ -40,7 +40,7 @@ server = app.server
 # })
 
 Bucket = 'ctbk'
-Prefix = 'year-month-weekday-hour-region-gender_'
+Prefix = 'gmrty_c'
 
 from boto3 import client
 from botocore.client import Config
@@ -54,8 +54,9 @@ print(f'Loading: {url}')
 df = pd.read_parquet(url)
 df['Gender'] = df.Gender.apply(lambda g: 'UMF'[g])
 n = len(df)
-df = df.groupby(['Month','Region','Gender']).Count.sum().reset_index()
-print(f'Aggregated {n} entries down to {len(df)}; columns: {df.columns}')
+df = df.groupby(['Month','Region','Gender'])['Count'].sum().reset_index()
+print(f'Loaded {url}; {n} entries, cols: {df.columns}')
+#print(f'Aggregated {n} entries down to {len(df)}; columns: {df.columns}')
 
 
 def plot_months(
