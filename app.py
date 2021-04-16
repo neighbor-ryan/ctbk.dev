@@ -54,7 +54,7 @@ print(f'Loading: {url}')
 df = pd.read_parquet(url)
 df['Gender'] = df.Gender.apply(lambda g: 'UMF'[g])
 n = len(df)
-df = df.groupby(['Month','Region','Gender'])['Count'].sum().reset_index()
+df = df.groupby(['Month','Region','Gender','User Type',])['Count'].sum().reset_index()
 print(f'Loaded {url}; {n} entries, cols: {df.columns}')
 
 
@@ -62,35 +62,47 @@ def plot_months(
     df,
     title=None,
     name=None,
-    gender_stack=True,
+    stack_by='Gender',
     genders=None,
+    user_types=None,
     rolling_avgs=None,
     date_range=None,
     **kwargs,
 ):
-    if gender_stack:
+    if stack_by == 'Gender':
         months = df.groupby(['Month','Gender'])['Count'].sum()
         idx = months.index.to_frame()
         month = idx.Month.dt.month
         year = idx.Month.dt.year
-        mg = idx.apply(lambda r: '%s, %s' % (calendar.month_abbr[r.Month.month], r.Gender), axis=1).rename('mg')
+        stacked_key = idx.apply(lambda r: '%s, %s' % (calendar.month_abbr[r.Month.month], r.Gender), axis=1).rename('stacked_key')
+    elif stack_by == 'User Type':
+        months = df.groupby(['Month','User Type'])['Count'].sum()
+        idx = months.index.to_frame()
+        month = idx.Month.dt.month
+        year = idx.Month.dt.year
+        stacked_key = idx.apply(lambda r: '%s, %s' % (calendar.month_abbr[r.Month.month], r['User Type']), axis=1).rename('stacked_key')
     else:
+        assert stack_by is None
         months = df.groupby(['Month'])['Count'].sum()
         idx = months.index.to_frame()
         month = idx.Month.dt.month
         year = idx.Month.dt.year
-        mg = idx.apply(lambda r: calendar.month_abbr[r.Month.month], axis=1).rename('mg')
+        stacked_key = idx.apply(lambda r: calendar.month_abbr[r.Month.month], axis=1).rename('stacked_key')
 
     m = month.rename('m')
-    months = pd.concat([months, mg, m, year.rename('y')], axis=1)
+    months = pd.concat([months, stacked_key, m, year.rename('y')], axis=1)
 
     # make months show up in input (and therefore legend) in order.
     # datetime column 'Month' ensures x-axis is still sorted chronologically
     p = months.reset_index()
-    if gender_stack:
+    if stack_by == 'Gender':
         p.Gender = p.Gender.apply(lambda g: {'U':0,'M':2,'F':1}[g])
         p = p.sort_values(['m','Gender'])
+    elif stack_by == 'User Type':
+        p['User Type'] = p['User Type'].apply(lambda g: {'Customer':0,'Subscriber':1}[g])
+        p = p.sort_values(['m','User Type'])
     else:
+        assert stack_by is None
         p = p.sort_values('m')
 
     # Compute rolling avgs before any date-range restrictions below
@@ -102,7 +114,7 @@ def plot_months(
             rolling = p.groupby('Month').Count.sum().rolling(r, min_periods=1).mean().rename(k)
             rolls.append(rolling)
 
-    if gender_stack:
+    if stack_by == 'Gender':
         color_sets = {
             'U': month_colors,
             'F': darken(month_colors, f=0.85),
@@ -118,10 +130,26 @@ def plot_months(
             for cc in zip(*color_sets)
             for c in cc
         ]
-        labels={'mg': 'Month, Gender','Count':'Number of Rides'}
+        labels={'stacked_key': 'Month, Gender','Count':'Number of Rides'}
+    elif stack_by == 'User Type':
+        color_sets = {
+            'Subscriber': month_colors,
+            'Customer': darken(month_colors, f=0.8),
+        }
+        color_sets = [
+            v
+            for k,v in color_sets.items()
+            if not user_types or k in user_types
+        ]
+        color_discrete_sequence=[
+            c
+            for cc in zip(*color_sets)
+            for c in cc
+        ]
+        labels={'stacked_key': 'Month, User Type','Count':'Number of Rides'}
     else:
-        color_discrete_sequence = darken(month_colors, f=0.9)
-        labels = {'mg': 'Month','Count':'Number of Rides'}
+        color_discrete_sequence = month_colors # darken(month_colors, f=0.9)
+        labels = {'stacked_key': 'Month','Count':'Number of Rides'}
 
     if date_range:
         start, end = date_range
@@ -130,7 +158,7 @@ def plot_months(
         rolls = [ r.reset_index().merge(ums, on='Month').set_index('Month')[r.name] for r in rolls ]
 
     mp = px.bar(
-        p, x='Month', y='Count', color='mg',
+        p, x='Month', y='Count', color='stacked_key',
         color_discrete_sequence=color_discrete_sequence,
         labels=labels,
         **kwargs,
@@ -156,9 +184,10 @@ def plot_months(
     Input('region','value'),
     Input('stack-by','value'),
     Input('gender','value'),
+    Input('user-type','value'),
     Input('date-range','value'),
 )
-def _(region, stack_by, genders, date_range):
+def _(region, stack_by, genders, user_types, date_range):
     d = df.copy()
     if region == 'All':
         title = 'Monthly Citibike Rides'
@@ -167,16 +196,17 @@ def _(region, stack_by, genders, date_range):
         title = f'Monthly Citibike{region} Rides'
     if genders:
         d = d[d.Gender.isin(genders)]
-    if stack_by == 'Gender':
-        gender_stack = True
-    elif stack_by == 'None':
-        gender_stack = False
-    else:
-        raise ValueError(stack_by)
+    if user_types:
+        d = d[d['User Type'].isin(user_types)]
+    if stack_by == 'None':
+        stack_by = None
+    if stack_by and not stack_by in {'Gender','User Type'}:
+        raise ValueError(f'Unrecognized `stack_by` value: {stack_by}')
     return plot_months(
         d, title=title,
-        gender_stack=gender_stack,
+        stack_by=stack_by,
         genders=genders,
+        user_types=user_types,
         rolling_avgs=['12'],
         date_range=date_range,
     )
@@ -204,7 +234,7 @@ controls = {
         id='stack-by',
         options=opts(
             'Gender',
-            {'value':'Ride Type','disabled':True},
+            'User Type',
             'None',
         ),
         value='Gender',
@@ -213,6 +243,11 @@ controls = {
         id='gender',
         options=opts({'Male':'M','Female':'F','Other / Unspecified':'U'}),
         value=['M','F','U',],
+    ),
+    'User Type': Checklist(
+        id='user-type',
+        options=opts('Subscriber','Customer'),
+        value=['Subscriber','Customer'],
     ),
 }
 app.layout = Div([
