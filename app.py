@@ -32,13 +32,13 @@ external_stylesheets = [
 app = dash.Dash(__name__, title='Citibike Dashboard', external_stylesheets=external_stylesheets)
 server = app.server
 
-# app.scripts.config.serve_locally = False
-# app.scripts.append_script({
-#     'external_url': 'https://www.googletagmanager.com/gtag/js?id=G-JDP856VCQP'
-# })
-# app.scripts.append_script({
-#     'external_url': './ga.js'
-# })
+app.scripts.config.serve_locally = False
+app.scripts.append_script({
+    'external_url': 'https://www.googletagmanager.com/gtag/js?id=G-YLWVNBWV51'
+})
+app.scripts.append_script({
+    'external_url': '/assets/ga.js'
+})
 
 Bucket = 'ctbk'
 Prefix = 'ymrgt_cd/'  # year, month, region, gender, (user-)type; count, duration
