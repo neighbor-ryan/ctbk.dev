@@ -10,6 +10,7 @@ from dash_core_components import Checklist, Graph, Markdown, RadioItems, RangeSl
 from dash_html_components import *
 from dash_bootstrap_components import Row, Col
 from dash.dependencies import Input, Output
+from dateutil.parser import parse
 from month_colors import month_colors
 import plotly.express as px
 import pandas as pd
@@ -56,6 +57,11 @@ df['Gender'] = df.Gender.apply(lambda g: 'UMF'[g])
 n = len(df)
 df = df.groupby(['Month','Region','Gender','User Type',])[['Count','Duration',]].sum().reset_index()
 print(f'Loaded {url}; {n} entries, cols: {df.columns}')
+
+
+umos = df.Month.sort_values().drop_duplicates().reset_index(drop=True)
+marks = umos.dt.strftime('%m/%y')
+month_to_idx = { v:k for k,v in marks.to_dict().items() }
 
 
 def plot_months(
@@ -183,6 +189,18 @@ def plot_months(
 
 
 @app.callback(
+    Output('date-range','value'),
+    Input('graph','relayoutData'),
+)
+def _(relayoutData):
+    if relayoutData and 'xaxis.range[0]' in relayoutData:
+        [start, end] = [ month_to_idx[parse(m).strftime('%m/%y')] for m in [relayoutData['xaxis.range[0]'], relayoutData['xaxis.range[1]']] ]
+        return [start, end]
+    else:
+        return [0, len(umos) - 1]
+
+
+@app.callback(
     Output('graph','figure'),
     Input('region','value'),
     Input('stack-by','value'),
@@ -219,9 +237,6 @@ def _(region, stack_by, genders, user_types, date_range, y_col):
         date_range=date_range,
     )
 
-
-umos = df.Month.sort_values().drop_duplicates().reset_index(drop=True)
-marks = umos.apply(lambda d: "%d/%s" % (d.month, str(d.year)[-2:]))
 
 controls = {
     'Region': RadioItems(
@@ -313,10 +328,7 @@ app.layout = Div([
     Row(
         [
             Col(
-                [
-                    Div(f'{label}:', className='control-header',),
-                    control,
-                ],
+                [ Div(f'{label}:', className='control-header',), control, ],
                 className='control',
             )
             for label, control in controls.items()
@@ -332,16 +344,10 @@ app.layout = Div([
                         Div([
                             Markdown(f'This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 8th or 9th of each month, covering the previous month).'),
                             Markdown(f'Use the controls above to filter the plot by region, user type, gender, or date, group/stack by user type or gender, and toggle aggregation of rides or total ride minutes.'),
-                        ]),
-                        Div([
-                            'Code: ',
-                            icon('gh', 'https://github.com/neighbor-ryan/citibike#readme', 'GitHub logo'),
-                            ' ',
-                            'Data: ',
-                            icon('s3', 'https://s3.amazonaws.com/ctbk/index.html', 'Amazon S3 logo'),
-                            ' ',
-                            'Author: ',
-                            icon('twitter', 'https://twitter.com/RunsAsCoded', 'Twitter logo'),
+                        ]), Div([
+                            'Code: ',icon('gh', 'https://github.com/neighbor-ryan/citibike#readme', 'GitHub logo'),' ',
+                            'Data: ',icon('s3', 'https://s3.amazonaws.com/ctbk/index.html', 'Amazon S3 logo'),' ',
+                            'Author: ',icon('twitter', 'https://twitter.com/RunsAsCoded', 'Twitter logo'),' ',
                         ]),
                     ],
                     className='footer',
@@ -351,6 +357,7 @@ app.layout = Div([
         className='no-gutters',
     )
 ])
+
 
 if __name__ == '__main__':
     app.run_server(debug=True)
