@@ -54,7 +54,7 @@ print(f'Loading: {url}')
 df = pd.read_parquet(url)
 df['Gender'] = df.Gender.apply(lambda g: 'UMF'[g])
 n = len(df)
-df = df.groupby(['Month','Region','Gender','User Type',])['Count'].sum().reset_index()
+df = df.groupby(['Month','Region','Gender','User Type',])[['Count','Duration',]].sum().reset_index()
 print(f'Loaded {url}; {n} entries, cols: {df.columns}')
 
 
@@ -64,26 +64,27 @@ def plot_months(
     name=None,
     stack_by='Gender',
     genders=None,
+    y_col='Count',
     user_types=None,
     rolling_avgs=None,
     date_range=None,
     **kwargs,
 ):
     if stack_by == 'Gender':
-        months = df.groupby(['Month','Gender'])['Count'].sum()
+        months = df.groupby(['Month','Gender'])[y_col].sum()
         idx = months.index.to_frame()
         month = idx.Month.dt.month
         year = idx.Month.dt.year
         stacked_key = idx.apply(lambda r: '%s, %s' % (calendar.month_abbr[r.Month.month], r.Gender), axis=1).rename('stacked_key')
     elif stack_by == 'User Type':
-        months = df.groupby(['Month','User Type'])['Count'].sum()
+        months = df.groupby(['Month','User Type'])[y_col].sum()
         idx = months.index.to_frame()
         month = idx.Month.dt.month
         year = idx.Month.dt.year
         stacked_key = idx.apply(lambda r: '%s, %s' % (calendar.month_abbr[r.Month.month], r['User Type']), axis=1).rename('stacked_key')
     else:
         assert stack_by is None
-        months = df.groupby(['Month'])['Count'].sum()
+        months = df.groupby(['Month'])[y_col].sum()
         idx = months.index.to_frame()
         month = idx.Month.dt.month
         year = idx.Month.dt.year
@@ -111,8 +112,10 @@ def plot_months(
         rolling_avgs = [ int(r) for r in rolling_avgs ]
         for r in rolling_avgs:
             k = f'{r}mo avg'
-            rolling = p.groupby('Month').Count.sum().rolling(r, min_periods=1).mean().rename(k)
+            rolling = p.groupby('Month')[y_col].sum().rolling(r, min_periods=1).mean().rename(k)
             rolls.append(rolling)
+
+    y_col_label = {'Count':'Total Rides','Duration':'Total Ride Minutes'}[y_col]
 
     if stack_by == 'Gender':
         color_sets = {
@@ -130,7 +133,7 @@ def plot_months(
             for cc in zip(*color_sets)
             for c in cc
         ]
-        labels={'stacked_key': 'Month, Gender','Count':'Number of Rides'}
+        labels={'stacked_key': 'Month, Gender',y_col:y_col_label}
     elif stack_by == 'User Type':
         color_sets = {
             'Subscriber': month_colors,
@@ -146,10 +149,10 @@ def plot_months(
             for cc in zip(*color_sets)
             for c in cc
         ]
-        labels={'stacked_key': 'Month, User Type','Count':'Number of Rides'}
+        labels={'stacked_key': 'Month, User Type',y_col:y_col_label}
     else:
-        color_discrete_sequence = month_colors # darken(month_colors, f=0.9)
-        labels = {'stacked_key': 'Month','Count':'Number of Rides'}
+        color_discrete_sequence = month_colors
+        labels = {'stacked_key': 'Month',y_col:y_col_label}
 
     if date_range:
         start, end = date_range
@@ -158,7 +161,7 @@ def plot_months(
         rolls = [ r.reset_index().merge(ums, on='Month').set_index('Month')[r.name] for r in rolls ]
 
     mp = px.bar(
-        p, x='Month', y='Count', color='stacked_key',
+        p, x='Month', y=y_col, color='stacked_key',
         color_discrete_sequence=color_discrete_sequence,
         labels=labels,
         **kwargs,
@@ -186,8 +189,9 @@ def plot_months(
     Input('gender','value'),
     Input('user-type','value'),
     Input('date-range','value'),
+    Input('y-col','value'),
 )
-def _(region, stack_by, genders, user_types, date_range):
+def _(region, stack_by, genders, user_types, date_range, y_col):
     d = df.copy()
     if region == 'All':
         title = 'Monthly Citibike Rides'
@@ -206,6 +210,7 @@ def _(region, stack_by, genders, user_types, date_range):
         d, title=title,
         stack_by=stack_by,
         genders=genders,
+        y_col=y_col,
         user_types=user_types,
         rolling_avgs=['12'],
         date_range=date_range,
@@ -248,6 +253,11 @@ controls = {
         id='user-type',
         options=opts('Subscriber','Customer'),
         value=['Subscriber','Customer'],
+    ),
+    'Count': RadioItems(
+        id='y-col',
+        options=opts({'Ride Count':'Count', 'Ride Minutes':'Duration'}),
+        value='Count',
     ),
 }
 app.layout = Div([
