@@ -256,7 +256,7 @@ controls = {
     ),
     'Count': RadioItems(
         id='y-col',
-        options=opts({'Ride Count':'Count', 'Ride Minutes':'Duration'}),
+        options=opts({'Rides':'Count', 'Ride Minutes':'Duration'}),
         value='Count',
     ),
 }
