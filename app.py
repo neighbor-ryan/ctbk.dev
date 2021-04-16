@@ -112,7 +112,7 @@ def plot_months(
         rolling_avgs = [ int(r) for r in rolling_avgs ]
         for r in rolling_avgs:
             k = f'{r}mo avg'
-            rolling = p.groupby('Month')[y_col].sum().rolling(r, min_periods=1).mean().rename(k)
+            rolling = p.groupby('Month')[y_col].sum().rolling(r).mean().rename(k)
             rolls.append(rolling)
 
     y_col_label = {'Count':'Total Rides','Duration':'Total Ride Minutes'}[y_col]
