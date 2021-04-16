@@ -369,8 +369,8 @@ app.layout = Div([
                     [
                         H2('About'),
                         Div([
-                            Markdown(f'This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 8th or 9th of each month, covering the previous month).'),
                             Markdown(f'Use the controls above to filter the plot by region, user type, gender, or date, group/stack by user type or gender, and toggle aggregation of rides or total ride minutes.'),
+                            Markdown(f'This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 2nd week of each month, covering the previous month).'),
                         ]), Div([
                             'Code: ',icon('gh', 'https://github.com/neighbor-ryan/citibike#readme', 'GitHub logo'),' ',
                             'Data: ',icon('s3', 'https://s3.amazonaws.com/ctbk/index.html', 'Amazon S3 logo'),' ',
