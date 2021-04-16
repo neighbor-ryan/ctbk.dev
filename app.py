@@ -41,7 +41,7 @@ server = app.server
 # })
 
 Bucket = 'ctbk'
-Prefix = 'ymrgt_c'
+Prefix = 'ymrgt_cd/'  # year, month, region, gender, (user-)type; count, duration
 
 from boto3 import client
 from botocore.client import Config
