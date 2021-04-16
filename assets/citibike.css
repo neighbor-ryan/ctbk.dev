@@ -1,5 +1,5 @@
 body{
-  font-size: 1.6em;
+  /*font-size: 1.6em;*/
 }
 .row {
   padding: 0 2em;
@@ -8,8 +8,8 @@ body{
   /*margin: 0 2em;*/
 }
 .control label {
-  /*display: block;*/
-  /*font-size: 1.2em;*/
+  display: block;
+  margin: 0;
 }
 .control label > input {
   margin-right: 0.3em;
@@ -27,4 +27,15 @@ img.icon {
 
 .footer {
   margin-top: 1em;
+}
+button {
+  font-size: 1em;
+  margin-left: 1em;
+  padding: 0 0.5em;
+  border: 1px solid #bbb;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+#date-range {
+  margin-top: 0.7em;
 }

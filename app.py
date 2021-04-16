@@ -14,6 +14,7 @@ from dateutil.parser import parse
 from month_colors import month_colors
 import plotly.express as px
 import pandas as pd
+from re import fullmatch
 
 from opts import opts
 
@@ -26,7 +27,6 @@ external_stylesheets = [
         'integrity': 'sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO',
         'crossorigin': 'anonymous'
     },
-    'https://codepen.io/chriddyp/pen/bWLwgP.css',
 ]
 
 app = dash.Dash(__name__, title='Citibike Dashboard', external_stylesheets=external_stylesheets)
@@ -61,6 +61,7 @@ print(f'Loaded {url}; {n} entries, cols: {df.columns}')
 
 umos = df.Month.sort_values().drop_duplicates().reset_index(drop=True)
 marks = umos.dt.strftime('%m/%y')
+N = len(umos) - 1
 month_to_idx = { v:k for k,v in marks.to_dict().items() }
 
 
@@ -191,13 +192,30 @@ def plot_months(
 @app.callback(
     Output('date-range','value'),
     Input('graph','relayoutData'),
+    Input('date-1yr','n_clicks'),
+    Input('date-2yr','n_clicks'),
+    Input('date-5yr','n_clicks'),
+    Input('date-all','n_clicks'),
 )
-def _(relayoutData):
+def _(relayoutData, n1, n2, n5, n_all,):
+    ctx = dash.callback_context
+    if ctx.triggered:
+        prop_id = ctx.triggered[0]['prop_id'].split('.')[0]
+        m = fullmatch(r'date-(?P<range>(?P<yrs>\d+)yr|all)', prop_id)
+        if m:
+            yrs = m['yrs']
+            if yrs:
+                mos = int(yrs) * 12
+                return [N-mos+1, N]
+            else:
+                assert m['range'] == 'all'
+                return [0, N]
+
     if relayoutData and 'xaxis.range[0]' in relayoutData:
         [start, end] = [ month_to_idx[parse(m).strftime('%m/%y')] for m in [relayoutData['xaxis.range[0]'], relayoutData['xaxis.range[1]']] ]
         return [start, end]
     else:
-        return [0, len(umos) - 1]
+        return [0, N]
 
 
 @app.callback(
@@ -297,7 +315,16 @@ app.layout = Div([
         [
             Col(
                 [
-                    Div('Date Range:', className='control-header',),
+                    Div(
+                        [
+                            'Date Range:',
+                            Button( '1y', id='date-1yr',),
+                            Button( '2y', id='date-2yr',),
+                            Button( '5y', id='date-5yr',),
+                            Button('All', id='date-all',),
+                        ],
+                        className='control-header',
+                    ),
                     RangeSlider(
                         id='date-range',
                         min=0,
