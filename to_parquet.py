@@ -8,9 +8,6 @@ from botocore.client import Config, ClientError
 from utz import *
 from zipfile import ZipFile
 
-s3_resource = boto3.resource('s3')
-ObjectAcl = s3_resource.ObjectAcl
-
 rgx = r'^(?P<JC>JC-)?(?P<year>\d{4})(?P<month>\d{2})[ \-]citibike-tripdata?(?P<csv>\.csv)?(?P<zip>\.zip)?$'
 
 fields = {
@@ -83,6 +80,9 @@ def to_parquet(dst_bkt, zip_key, error='warn', overwrite=False, dst_root=None):
     else:
         msg = f'Wrote {dst}'
 
+    s3_resource = boto3.resource('s3')
+    ObjectAcl = s3_resource.ObjectAcl
+
     with TemporaryDirectory() as d:
         zip_path = f'{d}/{base}.zip'
         pqt_path = f'{d}/{base}.parquet'
@@ -98,7 +98,7 @@ def to_parquet(dst_bkt, zip_key, error='warn', overwrite=False, dst_root=None):
             df.to_parquet(pqt_path)
 
         s3.upload_file(pqt_path, dst_bkt, dst_key)
-        object_acl = ObjectAcl(Bucket, Key)
+        object_acl = ObjectAcl(dst_bkt, dst_key)
         object_acl.put(ACL='public-read')
 
         return msg
