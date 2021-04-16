@@ -200,8 +200,11 @@ def _(region, stack_by, genders, user_types, date_range, y_col):
         title = f'Monthly Citibike{region} Rides'
     if genders:
         d = d[d.Gender.isin(genders)]
-    if user_types:
-        d = d[d['User Type'].isin(user_types)]
+    if user_types == 'All':
+        user_types = ['Subscriber','Customer',]
+    else:
+        d = d[d['User Type'] == user_types]
+        user_types = [user_types]
     if stack_by == 'None':
         stack_by = None
     if stack_by and not stack_by in {'Gender','User Type'}:
@@ -226,15 +229,30 @@ controls = {
         options=opts('All', 'NYC', 'JC'),
         value='All',
     ),
-    'Time Window': RadioItems(
-        id='time-window',
-        options=opts(
-            'Months',
-            {'value':'Quarters','disabled':True},
-            {'value':'Years','disabled':True},
-        ),
-        value='Months',
+    'User Type': RadioItems(
+        id='user-type',
+        options=opts('All','Subscriber','Customer'),
+        value='All',
     ),
+    'Gender': Checklist(
+        id='gender',
+        options=opts({'Male':'M','Female':'F','Other / Unspecified':'U'}),
+        value=['M','F','U',],
+    ),
+    'Count': RadioItems(
+        id='y-col',
+        options=opts({'Rides':'Count', 'Ride Minutes':'Duration'}),
+        value='Count',
+    ),
+    # 'Time Window': RadioItems(
+    #     id='time-window',
+    #     options=opts(
+    #         'Months',
+    #         {'value':'Quarters','disabled':True},
+    #         {'value':'Years','disabled':True},
+    #     ),
+    #     value='Months',
+    # ),
     'Stack by': RadioItems(
         id='stack-by',
         options=opts(
@@ -243,21 +261,6 @@ controls = {
             'None',
         ),
         value='Gender',
-    ),
-    'Gender': Checklist(
-        id='gender',
-        options=opts({'Male':'M','Female':'F','Other / Unspecified':'U'}),
-        value=['M','F','U',],
-    ),
-    'User Type': Checklist(
-        id='user-type',
-        options=opts('Subscriber','Customer'),
-        value=['Subscriber','Customer'],
-    ),
-    'Count': RadioItems(
-        id='y-col',
-        options=opts({'Rides':'Count', 'Ride Minutes':'Duration'}),
-        value='Count',
     ),
 }
 app.layout = Div([
