@@ -1,7 +1,7 @@
 # Yet Another Citibike Dashboard
-[citibike.neighbor-ryan.org](https://citibike.neighbor-ryan.org/):
+[www.ctbk.dev](https://www.ctbk.dev/):
 
-[![Screenshot of dashboard; per-month ride counts going back 8 years, broken out by gender](https://user-images.githubusercontent.com/465045/115073461-5ca59200-9ec6-11eb-9d06-570fd2e0cc17.png)](https://citibike.neighbor-ryan.org/)
+[![Screenshot of dashboard; per-month ride counts going back 8 years, broken out by gender](https://user-images.githubusercontent.com/465045/115073461-5ca59200-9ec6-11eb-9d06-570fd2e0cc17.png)](https://www.ctbk.dev/)
 
 - [auto-updates with new data each month](#auto-update)
 - [powered by cleaned+improved public data](#cleaned-data)
@@ -25,7 +25,7 @@ Some issues that [`s3://ctbk`] mitigates:
 ## Automatic Updating <a id="auto-update"></a>
 Every day, [a GitHub Action runs in this repo](https://github.com/neighbor-ryan/citibike/actions) and checks `s3://tripdata` for a new month's worth of official data. If new data is found, it is cleaned, converted to `.parquet`, and uploaded to `s3://ctbk`.
 
-Additionally, some aggregated/summary statistics are updated, which the dashboard at https://citibike.neighbor-ryan.org/ reads, meaning it should stay up to date as new data is published.
+Additionally, some aggregated/summary statistics are updated, which the dashboard at https://www.ctbk.dev/ reads, meaning it should stay up to date as new data is published.
 
 At the time of this writing, this process has run successfully once, [adding March 2021 data to the dashboard on April 8, 2021][202103 GHA]:
 ```
