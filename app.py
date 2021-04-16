@@ -6,7 +6,7 @@
 import calendar
 from colors import darken
 import dash
-from dash_core_components import Graph, RadioItems, RangeSlider, Checklist
+from dash_core_components import Checklist, Graph, Markdown, RadioItems, RangeSlider
 from dash_html_components import *
 from dash_bootstrap_components import Row, Col
 from dash.dependencies import Input, Output
@@ -260,9 +260,22 @@ controls = {
             'User Type',
             'None',
         ),
-        value='Gender',
+        value='None',
     ),
 }
+
+def icon(src, href, title):
+    return A(
+        [
+            Img(
+                src=f'/assets/{src}.png',
+                className='icon',
+            ),
+        ],
+        href=href,
+        title=title,
+    )
+
 app.layout = Div([
     Graph(id='graph'),
     Row(
@@ -307,6 +320,33 @@ app.layout = Div([
                 className='control',
             )
             for label, control in controls.items()
+        ],
+        className='no-gutters',
+    ),
+    Row(
+        [
+            Col([
+                Div(
+                    [
+                        H2('About'),
+                        Div([
+                            Markdown(f'This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 8th or 9th of each month, covering the previous month).'),
+                            Markdown(f'Use the controls above to filter the plot by region, user type, gender, or date, group/stack by user type or gender, and toggle aggregation of rides or total ride minutes.'),
+                        ]),
+                        Div([
+                            'Code: ',
+                            icon('gh', 'https://github.com/neighbor-ryan/citibike#readme', 'GitHub logo'),
+                            ' ',
+                            'Data: ',
+                            icon('s3', 'https://s3.amazonaws.com/ctbk/index.html', 'Amazon S3 logo'),
+                            ' ',
+                            'Author: ',
+                            icon('twitter', 'https://twitter.com/RunsAsCoded', 'Twitter logo'),
+                        ]),
+                    ],
+                    className='footer',
+                )
+            ])
         ],
         className='no-gutters',
     )
