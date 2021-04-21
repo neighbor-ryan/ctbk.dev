@@ -39,3 +39,9 @@ button {
 #date-range {
   margin-top: 0.7em;
 }
+.sub-control {
+  margin-bottom: 0.6em
+}
+#stack-percents {
+  font-weight: bold;
+}

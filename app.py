@@ -29,16 +29,19 @@ external_stylesheets = [
     },
 ]
 
-app = dash.Dash(__name__, title='Citibike Dashboard', external_stylesheets=external_stylesheets)
-server = app.server
+external_scripts = [
+    {'external_url': 'https://www.googletagmanager.com/gtag/js?id=G-YLWVNBWV51'},
+    {'external_url': '/assets/ga.js',}
+]
 
-app.scripts.config.serve_locally = False
-app.scripts.append_script({
-    'external_url': 'https://www.googletagmanager.com/gtag/js?id=G-YLWVNBWV51'
-})
-app.scripts.append_script({
-    'external_url': '/assets/ga.js'
-})
+app = dash.Dash(
+    __name__,
+    title='Citibike Dashboard',
+    external_stylesheets=external_stylesheets,
+    external_scripts=external_scripts,
+    serve_locally=False,
+)
+server = app.server
 
 Bucket = 'ctbk'
 Prefix = 'ymrgt_cd/'  # year, month, region, gender, (user-)type; count, duration
@@ -70,6 +73,7 @@ def plot_months(
     title=None,
     name=None,
     stack_by='Gender',
+    stack_relative=False,
     genders=None,
     y_col='Count',
     user_types=None,
@@ -77,18 +81,16 @@ def plot_months(
     date_range=None,
     **kwargs,
 ):
-    if stack_by == 'Gender':
-        months = df.groupby(['Month','Gender'])[y_col].sum()
+    if stack_by in {'Gender','User Type'}:
+        months = df.groupby(['Month',stack_by])[y_col].sum()
+        if stack_relative:
+            month_totals = df.groupby(['Month'])[y_col].sum().rename('total')
+            months = months.reset_index().merge(month_totals, left_on='Month', right_index=True, how='left').set_index(['Month',stack_by])
+            months[y_col] = months[y_col] / months['total'] * 100
         idx = months.index.to_frame()
         month = idx.Month.dt.month
         year = idx.Month.dt.year
-        stacked_key = idx.apply(lambda r: '%s, %s' % (calendar.month_abbr[r.Month.month], r.Gender), axis=1).rename('stacked_key')
-    elif stack_by == 'User Type':
-        months = df.groupby(['Month','User Type'])[y_col].sum()
-        idx = months.index.to_frame()
-        month = idx.Month.dt.month
-        year = idx.Month.dt.year
-        stacked_key = idx.apply(lambda r: '%s, %s' % (calendar.month_abbr[r.Month.month], r['User Type']), axis=1).rename('stacked_key')
+        stacked_key = idx.apply(lambda r: '%s, %s' % (calendar.month_abbr[r.Month.month], r[stack_by]), axis=1).rename('stacked_key')
     else:
         assert stack_by is None
         months = df.groupby(['Month'])[y_col].sum()
@@ -116,13 +118,19 @@ def plot_months(
     # Compute rolling avgs before any date-range restrictions below
     rolls = []
     if rolling_avgs:
-        rolling_avgs = [ int(r) for r in rolling_avgs ]
-        for r in rolling_avgs:
-            k = f'{r}mo avg'
-            rolling = p.groupby('Month')[y_col].sum().rolling(r).mean().rename(k)
-            rolls.append(rolling)
+        if stack_relative and stack_by:
+            # TODO
+            pass
+        else:
+            rolling_avgs = [ int(r) for r in rolling_avgs ]
+            for r in rolling_avgs:
+                k = f'{r}mo avg'
+                rolling = p.groupby('Month')[y_col].sum().rolling(r).mean().rename(k)
+                rolls.append(rolling)
 
     y_col_label = {'Count':'Total Rides','Duration':'Total Ride Minutes'}[y_col]
+    if stack_relative and stack_by:
+        y_col_label += ' (%)'
 
     if stack_by == 'Gender':
         color_sets = {
@@ -222,12 +230,13 @@ def _(relayoutData, n1, n2, n5, n_all,):
     Output('graph','figure'),
     Input('region','value'),
     Input('stack-by','value'),
+    Input('stack-percents','value'),
     Input('gender','value'),
     Input('user-type','value'),
     Input('date-range','value'),
     Input('y-col','value'),
 )
-def _(region, stack_by, genders, user_types, date_range, y_col):
+def _(region, stack_by, stack_percents, genders, user_types, date_range, y_col):
     d = df.copy()
     if region == 'All':
         title = 'Monthly Citibike Rides'
@@ -241,6 +250,7 @@ def _(region, stack_by, genders, user_types, date_range, y_col):
     else:
         d = d[d['User Type'] == user_types]
         user_types = [user_types]
+    stack_relative = bool(stack_percents)
     if stack_by == 'None':
         stack_by = None
     if stack_by and not stack_by in {'Gender','User Type'}:
@@ -248,6 +258,7 @@ def _(region, stack_by, genders, user_types, date_range, y_col):
     return plot_months(
         d, title=title,
         stack_by=stack_by,
+        stack_relative=stack_relative,
         genders=genders,
         y_col=y_col,
         user_types=user_types,
@@ -286,15 +297,22 @@ controls = {
     #     ),
     #     value='Months',
     # ),
-    'Stack by': RadioItems(
-        id='stack-by',
-        options=opts(
-            'Gender',
-            'User Type',
-            'None',
+    'Stack by': [
+        RadioItems(
+            id='stack-by',
+            options=opts(
+                'Gender',
+                'User Type',
+                'None',
+            ),
+            value='None',
         ),
-        value='None',
-    ),
+        Checklist(
+            id='stack-percents',
+            options=opts({'Percentages':'T'}),
+            value=[],
+        )
+    ],
 }
 
 def icon(src, href, title):
@@ -355,7 +373,8 @@ app.layout = Div([
     Row(
         [
             Col(
-                [ Div(f'{label}:', className='control-header',), control, ],
+                [ Div(f'{label}:', className='control-header',), ] + \
+                [ Div(c, className='sub-control') for c in (control if isinstance(control, list) else [control]) ],
                 className='control',
             )
             for label, control in controls.items()
@@ -371,6 +390,7 @@ app.layout = Div([
                         Div([
                             Markdown(f'Use the controls above to filter the plot by region, user type, gender, or date, group/stack by user type or gender, and toggle aggregation of rides or total ride minutes.'),
                             Markdown(f'This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 2nd week of each month, covering the previous month).'),
+                            Markdown(f'[The GitHub repo](https://github.com/neighbor-ryan/citibike) has more info as well as [planned enhancements](https://github.com/neighbor-ryan/citibike/issues)'),
                         ]), Div([
                             'Code: ',icon('gh', 'https://github.com/neighbor-ryan/citibike#readme', 'GitHub logo'),' ',
                             'Data: ',icon('s3', 'https://s3.amazonaws.com/ctbk/index.html', 'Amazon S3 logo'),' ',
