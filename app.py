@@ -126,11 +126,11 @@ def plot_months(
     rolls = []
     roll_colors = {}
     roll_color_bases = {
-        'U': '#'+'8'*6,
-        'F': '#'+'B'*6,
-        'M': '#'+'D'*6,
-        'Subscriber': '#'+'D'*6,
-        'Customer': '#'+'6'*6,
+        'U': '#'+'E'*6,
+        'F': '#'+'D'*6,
+        'M': '#'+'6'*6,
+        'Subscriber': '#'+'7'*6,
+        'Customer': '#'+'E'*6,
     }
     roll_widths = {}
     roll_widths_bases = {
@@ -210,6 +210,8 @@ def plot_months(
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         yaxis_gridcolor='#DDDDDD',
+        bargap=0,
+        bargroupgap=0,
     )
     if stack_by and stack_relative:
         layout_kwargs['yaxis_range'] = [0, 100]
@@ -218,11 +220,16 @@ def plot_months(
         p, x='Month', y=y_col, color='stacked_key',
         color_discrete_sequence=color_discrete_sequence,
         labels=labels,
-        #barmode='group',
+        # barmode='group',
         **kwargs,
     )
-    for year in range(start.year, end.year + 1):
-        mp = mp.add_vline(pd.to_datetime(f'{year-1}-12-25'), line=dict(color='#EEEEEE'), layer='below',)
+
+    if start.month > 1:
+        start_year = start.year + 1
+    else:
+        start_year = start.year
+    for year in range(start_year, end.year + 1):
+        mp = mp.add_vline(pd.to_datetime(f'{year-1}-12-20'), line=dict(color='#EEEEEE'), layer='below',)
     for r in rolls:
         mp.add_scatter(
             x=r.index, y=r,
