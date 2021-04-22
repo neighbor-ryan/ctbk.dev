@@ -81,6 +81,7 @@ def plot_months(
     date_range=None,
     **kwargs,
 ):
+    out_name = name
     if stack_by in {'Gender','User Type'}:
         months = df.groupby(['Month',stack_by])[y_col].sum()
         if stack_relative:
@@ -106,27 +107,54 @@ def plot_months(
     # datetime column 'Month' ensures x-axis is still sorted chronologically
     p = months.reset_index()
     if stack_by == 'Gender':
-        p.Gender = p.Gender.apply(lambda g: {'U':0,'M':2,'F':1}[g])
+        gender_to_val = {'U':0,'M':2,'F':1}
+        val_to_gender = {v:k for k,v in gender_to_val.items()}
+        p.Gender = p.Gender.apply(lambda g: gender_to_val[g])
         p = p.sort_values(['m','Gender'])
+        p.Gender = p.Gender.apply(lambda g: val_to_gender[g])
     elif stack_by == 'User Type':
-        p['User Type'] = p['User Type'].apply(lambda g: {'Customer':0,'Subscriber':1}[g])
+        usertype_to_val = {'Customer':0,'Subscriber':1}
+        val_to_usertype = {v:k for k,v in usertype_to_val.items()}
+        p['User Type'] = p['User Type'].apply(lambda g: usertype_to_val[g])
         p = p.sort_values(['m','User Type'])
+        p['User Type'] = p['User Type'].apply(lambda g: val_to_usertype[g])
     else:
         assert stack_by is None
         p = p.sort_values('m')
 
     # Compute rolling avgs before any date-range restrictions below
     rolls = []
+    roll_colors = {}
+    roll_color_bases = {
+        'U': '#'+'8'*6,
+        'F': '#'+'B'*6,
+        'M': '#'+'D'*6,
+        'Subscriber': '#'+'D'*6,
+        'Customer': '#'+'6'*6,
+    }
+    roll_widths = {}
+    roll_widths_bases = {
+        3: 2,
+        6: 3,
+        12: 4,
+    }
     if rolling_avgs:
-        if stack_relative and stack_by:
-            # TODO
-            pass
-        else:
-            rolling_avgs = [ int(r) for r in rolling_avgs ]
-            for r in rolling_avgs:
+        rolling_avgs = [ int(r) for r in rolling_avgs ]
+        for r in rolling_avgs:
+            if not (stack_relative and stack_by):
                 k = f'{r}mo avg'
                 rolling = p.groupby('Month')[y_col].sum().rolling(r).mean().rename(k)
                 rolls.append(rolling)
+                roll_colors[k] = 'black'
+                roll_widths[k] = roll_widths_bases[r]
+            if stack_by:
+                partial_rolls = p.set_index(['Month',stack_by])[y_col].unstack().rolling(r).mean()
+                for k in partial_rolls:
+                    name = f'{k} ({r}mo)'
+                    v = partial_rolls[k].rename(name)
+                    rolls.append(v)
+                    roll_colors[name] = roll_color_bases[k]
+                    roll_widths[name] = roll_widths_bases[r]
 
     y_col_label = {'Count':'Total Rides','Duration':'Total Ride Minutes'}[y_col]
     if stack_relative and stack_by:
@@ -134,9 +162,9 @@ def plot_months(
 
     if stack_by == 'Gender':
         color_sets = {
-            'U': month_colors,
-            'F': darken(month_colors, f=0.85),
-            'M': darken(month_colors, f=0.75),
+            'U': darken(month_colors, f=0.65),
+            'F': darken(month_colors, f=0.80),
+            'M': month_colors,
         }
         color_sets = [
             v
@@ -151,8 +179,8 @@ def plot_months(
         labels={'stacked_key': 'Month, Gender',y_col:y_col_label}
     elif stack_by == 'User Type':
         color_sets = {
-            'Subscriber': month_colors,
-            'Customer': darken(month_colors, f=0.8),
+            'Subscriber': darken(month_colors, f=0.75),
+            'Customer': month_colors,
         }
         color_sets = [
             v
@@ -175,25 +203,44 @@ def plot_months(
         p = p.merge(ums, on='Month')
         rolls = [ r.reset_index().merge(ums, on='Month').set_index('Month')[r.name] for r in rolls ]
 
+    layout_kwargs = dict(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        yaxis_gridcolor='#DDDDDD',
+    )
+    if stack_by and stack_relative:
+        layout_kwargs['yaxis_range'] = [0, 100]
+
     mp = px.bar(
         p, x='Month', y=y_col, color='stacked_key',
         color_discrete_sequence=color_discrete_sequence,
         labels=labels,
+        #barmode='group',
         **kwargs,
     )
     for r in rolls:
-        mp.add_scatter(x=r.index, y=r, line=dict(color='black',), name=r.name)
+        mp.add_scatter(
+            x=r.index, y=r,
+            #opacity=0.5,
+            line=dict(
+                color=roll_colors[r.name],
+                width=roll_widths[r.name],
+                # dash='dot',
+            ),
+            name=r.name,
+        )
     if title:
         mp.update_layout(
             title={
                 'text': title,
                 'x':0.5,
                 'xanchor':'center', 'yanchor':'top',
-            }
+            },
+            **layout_kwargs,
         )
-    if name:
-        mp.write_image(f'{name}.png')
-        mp.write_image(f'{name}.svg')
+    if out_name:
+        mp.write_image(f'{out_name}.png')
+        mp.write_image(f'{out_name}.svg')
     return mp
 
 
@@ -231,12 +278,13 @@ def _(relayoutData, n1, n2, n5, n_all,):
     Input('region','value'),
     Input('stack-by','value'),
     Input('stack-percents','value'),
+    Input('rolling-avgs','value'),
     Input('gender','value'),
     Input('user-type','value'),
     Input('date-range','value'),
     Input('y-col','value'),
 )
-def _(region, stack_by, stack_percents, genders, user_types, date_range, y_col):
+def _(region, stack_by, stack_percents, rolling_avgs, genders, user_types, date_range, y_col):
     d = df.copy()
     if region == 'All':
         title = 'Monthly Citibike Rides'
@@ -262,7 +310,7 @@ def _(region, stack_by, stack_percents, genders, user_types, date_range, y_col):
         genders=genders,
         y_col=y_col,
         user_types=user_types,
-        rolling_avgs=['12'],
+        rolling_avgs=rolling_avgs,
         date_range=date_range,
     )
 
@@ -287,6 +335,11 @@ controls = {
         id='y-col',
         options=opts({'Rides':'Count', 'Ride Minutes':'Duration'}),
         value='Count',
+    ),
+    'Rolling Avgs': Checklist(
+        id='rolling-avgs',
+        options=opts({'3mo':'3','6mo':'6','12mo':'12'}),
+        value=['12'],
     ),
     # 'Time Window': RadioItems(
     #     id='time-window',
@@ -390,7 +443,7 @@ app.layout = Div([
                         Div([
                             Markdown(f'Use the controls above to filter the plot by region, user type, gender, or date, group/stack by user type or gender, and toggle aggregation of rides or total ride minutes.'),
                             Markdown(f'This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 2nd week of each month, covering the previous month).'),
-                            Markdown(f'[The GitHub repo](https://github.com/neighbor-ryan/citibike) has more info as well as [planned enhancements](https://github.com/neighbor-ryan/citibike/issues)'),
+                            Markdown(f'[The GitHub repo](https://github.com/neighbor-ryan/citibike) has more info as well as [planned enhancements](https://github.com/neighbor-ryan/citibike/issues).'),
                         ]), Div([
                             'Code: ',icon('gh', 'https://github.com/neighbor-ryan/citibike#readme', 'GitHub logo'),' ',
                             'Data: ',icon('s3', 'https://s3.amazonaws.com/ctbk/index.html', 'Amazon S3 logo'),' ',
