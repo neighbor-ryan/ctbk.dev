@@ -202,6 +202,9 @@ def plot_months(
         ums = umos.iloc[start:(end+1)]
         p = p.merge(ums, on='Month')
         rolls = [ r.reset_index().merge(ums, on='Month').set_index('Month')[r.name] for r in rolls ]
+    else:
+        start, end = 0, -1
+    start, end = umos.iloc[start], umos.iloc[end]
 
     layout_kwargs = dict(
         paper_bgcolor='rgba(0,0,0,0)',
@@ -218,6 +221,8 @@ def plot_months(
         #barmode='group',
         **kwargs,
     )
+    for year in range(start.year, end.year + 1):
+        mp = mp.add_vline(pd.to_datetime(f'{year-1}-12-25'), line=dict(color='#EEEEEE'), layer='below',)
     for r in rolls:
         mp.add_scatter(
             x=r.index, y=r,
