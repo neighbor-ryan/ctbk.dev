@@ -1,10 +1,10 @@
 # Yet Another Citibike Dashboard
 [ctbk.dev](https://www.ctbk.dev/):
 
-[![Screenshot of dashboard; per-month ride counts going back 8 years, broken out by gender](https://user-images.githubusercontent.com/465045/115073461-5ca59200-9ec6-11eb-9d06-570fd2e0cc17.png)](https://www.ctbk.dev/)
+[![Screenshot of dashboard; per-month ride counts going back 8 years, with a 12mo rolling avg showing mostly steady growth](https://user-images.githubusercontent.com/465045/115654571-63396c80-a2ff-11eb-9bc2-acc48debe06c.png)](https://www.ctbk.dev/)
 
 - [auto-updates with new data each month](#auto-update)
-- [powered by cleaned+improved public data](#cleaned-data)
+- [powered by cleaned, public data (derived from the official Citibike data)](#cleaned-data)
 - Interactive! Filter by:
   - user type (annual "subscriber" vs. daily "customer")
   - gender (male, female, or other/unspecified)
@@ -13,6 +13,7 @@
 - Stack/Group by:
   - gender
   - user type
+- Toggle 3, 6, or 12mo rolling averages
 
 ## Cleaned, public data <a id="cleaned-data"></a>
 I fixed some rough edges in [Citibike's published data][citibike system data] and published the results to [the `ctbk` Amazon S3 bucket][`s3://ctbk`].
@@ -51,12 +52,12 @@ Found s3://ctbk/202102-citibike-tripdata.parquet; skipping
 
 ## Prior Art
 [Many][ckran-20210305] [great][toddschneider-20160113] [analyses][jc-analysis-2017] [of][jc-analysis-2018] [Citibike][datastudio-analysis] [data][cl2871-analysis] [have][tableau #citibike] [been][coursera citibike viz course] [done][juanjocarin analysis] over the years. However, I've generally found them lacking in 2 ways:
-- They're typically stale. They were run once and published; I find them via Google years later, and want to see the same analysis on the latest data.
-- They show a few specific, static plots, but I want to ask slightly different questions of the data.
+- They were run once and published, and are now stale. I find them via Google, years later, and want to see the same analysis on the latest data.
+- They show a few specific, static plots, but I want to ask slightly different questions of the data, or slice it another way.
 
 My hope is that this dashboard will solve both of these issues, by:
-- ≈always staying up to date with the latest published data
-- providing 5-10 orthogonal, common-sense toggles that let you easily answer any of a large number of high-level questions about the system-level data
+- always staying up to date with the latest published data
+- providing 5-10 orthogonal, common-sense toggles that let you easily answer a large number of basic system-level questions
 
 ## Feedback / Contributing
 Feel free to [file an issue here](https://github.com/neighbor-ryan/citibike/issues) with any comments, bug reports, or feedback!
