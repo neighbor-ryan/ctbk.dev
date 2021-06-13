@@ -1,4 +1,3 @@
 mount:
 - home:/home
-- /Volumes/T7/citibike:/cache  # TODO: interpolate env vars
 

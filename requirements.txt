@@ -4,6 +4,7 @@ dash-bootstrap-components
 dask[dataframe]
 gunicorn
 kaleido
+lxml
 plotly
 pyarrow
 s3fs
