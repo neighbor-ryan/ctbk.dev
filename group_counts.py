@@ -40,7 +40,7 @@ def aggregate(
     if agg_keys.get('g'):
         if 'Gender' not in df:
             stderr.write('%s: gender not found; setting to 0 ("unknown") for all rows\n' % (url))
-            df['Gender'] = 0
+            df['Gender'] = '0'
         group_keys.append('Gender')
     if agg_keys.get('t'):
         if 'User Type' not in df:
@@ -101,6 +101,8 @@ def inc_month(y, m):
 @opt('--dst-bucket',default='ctbk')
 @opt('--dst-root')
 @opt('--sort-agg-keys/--no-sort-agg-keys')
+# @opt('-f','--overwrite/--no-overwrite',help='When set, write files even if they already exist')
+# @opt('--start',type=int,help='Month to process from (in YYYYMM form)')
 def main(
     to,
     max_months,
@@ -118,6 +120,8 @@ def main(
     dst_bucket,
     dst_root,
     sort_agg_keys,
+    # overwrite,
+    # start,
 ):
     if not to:
         to = now().time
