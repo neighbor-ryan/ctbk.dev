@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import click
-from click import command, option as opt
+from click import command as cmd, option as opt
 
 from boto3 import client
 from botocore.client import Config
@@ -55,22 +54,22 @@ def original_to_csv(src_bkt, zip_key, dst_bkt, error='warn', overwrite=False, ds
             return f'{dst_root}/{base}.csv'
 
     return convert_file(
+        to_csv,
         src_bkt=src_bkt, src_key=zip_key,
         dst_bkt=dst_bkt, dst_key=dst_key,
-        fn=to_csv,
         error=error,
         overwrite=overwrite,
     ).get('msg', '')
 
 
-@command()
-@opt('-s','--src-bkt',default='tripdata',help='Source bucket to read Zip files from')
+@cmd()
+@opt('-s','--src-bucket',default='tripdata',help='Source bucket to read Zip files from')
 @opt('-d','--dst-bkt',default='ctbk',help='Destination bucket to write CSV files to')
 @opt('-r','--dst-root',default='csvs',help='Prefix (in destination bucket) to write CSVs udner')
 @opt('-p','--parallel/--no-parallel',help='Use joblib to parallelize execution')
-def main(src_bkt, dst_bkt, dst_root, parallel):
+def main(src_bucket, dst_bucket, dst_root, parallel):
     s3 = client('s3', config=Config())
-    resp = s3.list_objects_v2(Bucket=src_bkt)
+    resp = s3.list_objects_v2(Bucket=src_bucket)
     contents = pd.DataFrame(resp['Contents'])
     zips = contents[contents.Key.str.endswith('.zip')]
     zips = zips.Key.values
@@ -80,7 +79,7 @@ def main(src_bkt, dst_bkt, dst_root, parallel):
             '\n'.join(
                 p(
                     delayed(original_to_csv)(
-                        src_bkt, zip, dst_bkt, dst_root=dst_root
+                        src_bucket, zip, dst_bucket, dst_root=dst_root
                     )
                     for zip in zips
                 )
@@ -88,7 +87,7 @@ def main(src_bkt, dst_bkt, dst_root, parallel):
         )
     else:
         for zip in zips:
-            print(original_to_csv(src_bkt, zip, dst_bkt, dst_root=dst_root))
+            print(original_to_csv(src_bucket, zip, dst_bucket, dst_root=dst_root))
 
 
 if __name__ == '__main__':

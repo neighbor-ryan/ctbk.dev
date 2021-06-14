@@ -20,7 +20,7 @@ def s3_exists(Bucket, Key, s3=None):
         return False
 
 
-def run(fn, ctx):
+def run(fn, ctx, **kwargs):
     spec = getfullargspec(fn)
     args = spec.args
     defaults = spec.defaults or ()
@@ -28,26 +28,77 @@ def run(fn, ctx):
     missing_args = [ arg for arg in pos_args if arg not in ctx ]
     if missing_args:
         raise ValueError('Missing arguments for function %s: %s' % (str(fn), ','.join(missing_args)))
-    kwargs = { k:v for k,v in ctx.items() if k in args }
-    return fn(**kwargs)
+    ctx_kwargs = { k:v for k,v in ctx.items() if k in args }
+    return fn(**ctx_kwargs, **kwargs)
+
+
+def verify_pieces(bkt, key, uri):
+    rgx = 's3://(?P<bkt>[^/]+)(?:/(?P<key>.*))?'
+    if uri is None:
+        if not bkt:
+            raise ValueError('No bkt found: %s %s' % (bkt, uri))
+        if not key:
+            raise ValueError('No key found: %s %s' % (key, uri))
+        uri = f's3://{bkt}/{key}'
+    else:
+        m = match(rgx, uri)
+        if not m:
+            raise ValueError('Invalid uri: %s' % uri)
+        if bkt is None:
+            bkt = m['bkt']
+        elif bkt != m['bkt']:
+            raise('`bkt` %s != `uri` bucket %s' % (bkt, m['bkt']))
+        if key is None:
+            key = m['key']
+        elif key != m['key']:
+            raise('`key` %s != `uri` key %s' % (key, m['key']))
+
+    return bkt, key, uri
+
+
+def verify_bucket(bkt, default):
+    if default is not None:
+        if bkt is None:
+            bkt = default
+        elif bkt != default:
+            raise ValueError('`a` %s != `b` %s' % (bkt, default))
+    return bkt
+
+
+# def paths(
+#     src_bkt=None, src_key=None, src=None,
+#     dst_bkt=None, dst_key=None, dst=None,
+#     bkt=None,
+# ):
+#     src_bkt = verify_bucket(src_bkt, bkt)
+#     dst_bkt = verify_bucket(dst_bkt, bkt)
+#
+#     src_bkt, src_key, src = verify_pieces(src_bkt, src_key, src)
+#     dst_bkt, dst_key, dst = verify_pieces(dst_bkt, dst_key, dst)
+#
+#     return src_bkt, src_key, src, dst_bkt, dst_key, dst
 
 
 def convert_file(
-    src_bkt, src_key,
-    dst_bkt, dst_key,
     fn,
+    src_bkt=None, src_key=None, src=None,
+    dst_bkt=None, dst_key=None,
+    bkt=None,
     error='warn',
     overwrite=False,
     public=False,
+    **kwargs,
 ):
+    src_bkt = verify_bucket(src_bkt, bkt)
+    dst_bkt = verify_bucket(dst_bkt, bkt)
+
+    src_bkt, src_key, src = verify_pieces(src_bkt, src_key, src)
+
     ctx = dict(
-        src_bkt=src_bkt, src_key=src_key,
+        src_bkt=src_bkt, src_key=src_key, src=src, src_name=basename(src_key),
         dst_bkt=dst_bkt,
         error=error,
     )
-
-    src_name = ctx['src_name'] = basename(src_key)
-    src = ctx['src'] = f's3://{src_bkt}/{src_key}'
 
     if callable(dst_key):
         try:
@@ -74,8 +125,8 @@ def convert_file(
         msg = f'Wrote {dst}'
 
     def run_fn():
-        result = run(fn, ctx)
-        dst_path = result.get('dst_path')
+        result = run(fn, ctx, **kwargs)
+        dst_path = result and result.get('dst_path')
         if dst_path:
             s3.upload_file(dst_path, dst_bkt, dst_key)
         return result
@@ -91,6 +142,8 @@ def convert_file(
     else:
         result = run_fn()
 
+    if result is None:
+        result = {}
     msg = result.get('msg', msg)
 
     if public:

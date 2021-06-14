@@ -3,20 +3,10 @@
 
 from utz import *
 
-Bucket = 'ctbk'
-
 import boto3
 from boto3 import client
 from botocore.client import Config
-s3 = client('s3', config=Config())
-s3_resource = boto3.resource('s3')
-ObjectAcl = s3_resource.ObjectAcl
-resp = s3.list_objects_v2(Bucket=Bucket)
-contents = pd.DataFrame(resp['Contents'])
-keys = contents.Key
-
-months = keys.str.extract('^(?:JC-)?(?P<yyyy>\d{4})(?P<mm>\d{2}).*\.parquet').dropna()
-cur_month = months.apply(lambda m: to_dt('%s-%s' % (m.yyyy, m.mm)), axis=1).max()
+from click import argument as arg, command as cmd, option as opt
 
 
 def aggregate(
@@ -48,9 +38,20 @@ def aggregate(
         df['Start Hour'] = df['Start Time'].dt.hour
         group_keys.append('Start Hour')
     if agg_keys.get('g'):
+        if 'Gender' not in df:
+            stderr.write('%s: gender not found; setting to 0 ("unknown") for all rows\n' % (url))
+            df['Gender'] = 0
         group_keys.append('Gender')
     if agg_keys.get('t'):
+        if 'User Type' not in df:
+            assert 'Member/Casual' in df
+            df = df.rename(columns={'Member/Casual':'User Type'})
         group_keys.append('User Type')
+    if agg_keys.get('b'):
+        if 'Rideable Type' not in df:
+            stderr.write('%s: "Rideable Type" not found; setting to "docked bike" for all rows\n' % (url))
+            df['Rideable Type'] = 'docked bike'
+        group_keys.append('Rideable Type')
 
     select_keys = []
     if sum_keys.get('c'):
@@ -83,21 +84,40 @@ def inc_month(y, m):
     return y, m
 
 
+@cmd()
+@arg('to',nargs=1,required=False,default=None)
+@opt('-n','--max-months',type=int,default=-1)
+@opt('-c/-C','--counts/--no-counts',default=True)
+@opt('-d/-D','--durations/--no-durations',default=True)
+@opt('-g/-G','--gender/--no-gender',default=True)
+@opt('-r/-R','--region/--no-region',default=True)
+@opt('-t/-T','--user-type/--no-user-type',default=True)
+@opt('-b/-B','--rideable-type/--no-rideable-type',default=True)
+@opt('-y/-Y','--year/--no-year',default=True)
+@opt('-m/-M','--month/--no-month',default=True)
+@opt('-w/-W','--weekday/--no-weekday',default=False)
+@opt('-h/-H','--hour/--no-hour',default=True)
+@opt('--src-root',default='pqts')
+@opt('--dst-bucket',default='ctbk')
+@opt('--dst-root')
+@opt('--sort-agg-keys/--no-sort-agg-keys')
 def main(
     to,
     max_months,
-    counts=True,
-    durations=True,
-    gender=True,
-    region=True,
-    user_type=True,
-    year=True,
-    month=True,
-    weekday=False,
-    hour=False,
-    dst_bucket='ctbk',
-    dst_root=None,
-    sort_agg_keys=False,
+    counts,
+    durations,
+    gender,
+    region,
+    user_type,
+    rideable_type,
+    year,
+    month,
+    weekday,
+    hour,
+    src_root,
+    dst_bucket,
+    dst_root,
+    sort_agg_keys,
 ):
     if not to:
         to = now().time
@@ -111,7 +131,7 @@ def main(
 
     agg_keys = {
         'y':year, 'm':month, 'w':weekday, 'h':hour,
-        'r':region, 'g':gender, 't':user_type,
+        'r':region, 'g':gender, 't':user_type, 'b':rideable_type,
     }
     agg_keys = { k:v for k,v in agg_keys.items() if v }
     if sort_agg_keys:
@@ -125,6 +145,17 @@ def main(
             path = f'{path}/{dst_root}'
         path = f'{path}/{key}'
         return path
+
+    Bucket = 'ctbk'
+    s3 = client('s3', config=Config())
+    s3_resource = boto3.resource('s3')
+    ObjectAcl = s3_resource.ObjectAcl
+    # resp = s3.list_objects_v2(Bucket=Bucket)
+    # contents = pd.DataFrame(resp['Contents'])
+    # keys = contents.Key
+
+    # months = keys.str.extract('^(?:JC-)?(?P<yyyy>\d{4})(?P<mm>\d{2}).*\.parquet').dropna()
+    #cur_month = months.apply(lambda m: to_dt('%s-%s' % (m.yyyy, m.mm)), axis=1).max()
 
     resp = s3.list_objects_v2(Bucket=Bucket, Prefix=Prefix)
     if 'Contents' in resp:
@@ -166,6 +197,8 @@ def main(
         new_data = False
         for region in ['', 'JC-']:
             new_month_path = '%s%d%02d-citibike-tripdata.parquet' % (region, next_year, next_month)
+            if src_root:
+                new_month_path = f'{src_root}/{new_month_path}'
             new_month_url = s3_url(new_month_path)
             try:
                 new_month = aggregate(new_month_url, agg_keys, sum_keys)
@@ -206,58 +239,4 @@ def main(
 
 
 if __name__ == '__main__':
-    from argparse import ArgumentParser
-    parser = ArgumentParser()
-    parser.add_argument('-C','--no-counts',action='store_true',help="Omit ride counts from summed keys")
-    # parser.add_argument('-d','--duration',action='store_true',help="Include ride duration in summed keys")
-    parser.add_argument('-D','--no-duration',action='store_true',help="Omit ride duration from summed keys")
-    parser.add_argument('--dst-bucket',default='ctbk',help="Bucket to read from / write to")
-    parser.add_argument('--dst-root',help="Prefix within `dst` to read from / write to")
-
-    # Flags for omitting various fields from aggregation
-    parser.add_argument('-G','--no-gender',action='store_true',help="Omit rider `gender` from aggregation keys")
-    parser.add_argument('--hour',action='store_true',help="Include ride-start `hour` from aggregation keys")
-    #parser.add_argument('-H','--no-hour',action='store_true',help="Omit ride-start `hour` from aggregation keys")
-    parser.add_argument('-M','--no-month',action='store_true',help="Omit ride-start `month` from aggregation keys")
-    parser.add_argument('-R','--no-region',action='store_true',help="Omit ride `region` (JC vs NYC) from aggregation keys")
-    parser.add_argument('-T','--no-user-type',action='store_true',help="Omit user `type` (daily 'Customer' vs. annual 'Subscriber') from aggregation keys")
-    parser.add_argument('-w','--weekday',action='store_true',help="Include ride-start `weekday` in aggregation keys")
-    #parser.add_argument('-W','--no-weekday',action='store_true',help="Omit ride `weekday` from aggregation keys")
-    parser.add_argument('-Y','--no-year',action='store_true',help="Omit ride-start `year` from aggregation keys")
-
-    parser.add_argument('--sort-agg-keys',action='store_true',help="Sort the aggregation keys in output filenames")
-    parser.add_argument('-n','--max-months',default=0,type=int,help="If there is new data to compute, only compute at most this many months' worth (default: 0, means no limit)")
-    parser.add_argument('-t','--to','--through',help="Date (YYYYMM or equivalent) to process through")
-    args = parser.parse_args()
-
-    dst_bucket = args.dst_bucket
-    dst_root = args.dst_root
-    max_months = args.max_months
-    if max_months <= 0:
-        max_months = -1
-
-    to = args.to
-    sort_agg_keys = args.sort_agg_keys
-
-    counts = not args.no_counts
-    duration = not args.no_duration
-    # duration = args.duration
-
-    gender = not args.no_gender
-    hour = args.hour
-    # hour = not args.no_hour
-    month = not args.no_month
-    region = not args.no_region
-    user_type = not args.no_user_type
-    weekday = args.weekday
-    # weekday = not args.no_weekday
-    year = not args.no_year
-
-    main(
-        to, max_months,
-        counts, duration,
-        gender, region, user_type,
-        year, month, weekday, hour,
-        dst_bucket=dst_bucket, dst_root=dst_root,
-        sort_agg_keys=sort_agg_keys,
-    )
+    main()
