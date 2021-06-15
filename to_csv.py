@@ -64,7 +64,7 @@ def original_to_csv(src_bkt, zip_key, dst_bkt, error='warn', overwrite=False, ds
 
 @cmd()
 @opt('-s','--src-bucket',default='tripdata',help='Source bucket to read Zip files from')
-@opt('-d','--dst-bkt',default='ctbk',help='Destination bucket to write CSV files to')
+@opt('-d','--dst-bucket',default='ctbk',help='Destination bucket to write CSV files to')
 @opt('-r','--dst-root',default='csvs',help='Prefix (in destination bucket) to write CSVs udner')
 @opt('-p','--parallel/--no-parallel',help='Use joblib to parallelize execution')
 def main(src_bucket, dst_bucket, dst_root, parallel):
@@ -92,13 +92,3 @@ def main(src_bucket, dst_bucket, dst_root, parallel):
 
 if __name__ == '__main__':
     main()
-#     parser = ArgumentParser(description='Pull CSVs out of ZIP files for each month of Citibike ridership data')
-#     parser.add_argument('-s','--src-bkt',default='tripdata',help='`src` bucket to sync from')
-#     parser.add_argument('-d','--dst-bkt',default='ctbk',help='`dst` bucket to sync converted/cleaned data to')
-#     parser.add_argument('-r','--dst-root',default='original',help='Prefix under `dst` to sync converted/cleaned data to')
-#     args = parser.parse_args()
-#     src_bkt = args.src_bkt
-#     dst_bkt = args.dst_bkt
-#     dst_root = args.dst_root
-#
-#     main(src_bkt, dst_bkt, dst_root)
