@@ -37,6 +37,8 @@ dtypes = {
 }
 def normalize_field(f): return sub(r'[\s/]', '', f.lower())
 normalize_fields_map = { normalize_field(f): f for f in fields }
+
+# New columns from 202102
 normalize_fields_map['ride_id'] = 'Ride ID'
 normalize_fields_map['rideable_type'] = 'Rideable Type'
 normalize_fields_map['start_lng'] = 'Start Station Longitude'
@@ -49,7 +51,9 @@ normalize_fields_map['end_station_id'] = 'End Station ID'
 normalize_fields_map['end_station_name'] = 'End Station Name'
 normalize_fields_map['started_at'] = 'Start Time'
 normalize_fields_map['ended_at'] = 'Stop Time'
-def normalize_fields(df):
+normalize_fields_map['member_casual'] = 'Member/Casual'
+
+def normalize_fields(df, dst):
     rename_dict = {}
     for col in df.columns:
         normalized_col = normalize_field(col)
@@ -57,52 +61,69 @@ def normalize_fields(df):
             rename_dict[col] = normalize_fields_map[normalized_col]
         else:
             stderr.write('Unexpected field: %s (%s)\n' % (normalized_col, col))
-    if 'member_casual' in df:
+
+    df = df.rename(columns=rename_dict)
+    if 'Gender' not in df:
+        stderr.write('%s: "Gender" column not found; setting to 0 ("unknown") for all rows\n' % dst)
+        df['Gender'] = 0  # unknown
+    if 'Rideable Type' not in df:
+        stderr.write('%s: "Rideable Type" column not found; setting to "unknown" for all rows\n' % dst)
+        df['Rideable Type'] = 'unknown'
+    if 'Member/Casual' in df:
         assert 'User Type' not in df
-        df['member_casual'] = df['member_casual'].apply({'member':'Subscriber','casual':'Customer'})
-        rename_dict['member_casual'] = 'User Type'
-    return df.rename(columns=rename_dict)
+        stderr.write('%s: renaming/harmonizing "member_casual" → "User Type", substituting "member" → "Subscriber", "casual" → "customer" \n' % dst)
+        df['User Type'] = df['Member/Casual'].map({'member':'Subscriber','casual':'Customer'})
+        del df['Member/Casual']
+
+    return df
 
 
+def normalize_csv(url, region, dst):
+    _, ext = splitext(url)
+    assert ext == '.csv'
 
-def normalize_parquet(src, dst):
-    df = read_csv(src, dtype=str)
-    df = normalize_fields(df)
+    df = read_csv(url, dtype=str)
+    df = normalize_fields(df, dst)
+    df['Region'] = region
     df = df.astype({ k:v for k,v in dtypes.items() if k in df })
+    return df
+
+
+def normalize_csvs(entries, dst):
+    df = pd.concat([ normalize_csv(**entry, dst=dst) for entry in entries ])
     df.to_parquet(dst)
 
 
-def csv2parquet(bkt, src_key, dst_root, overwrite, start=None):
-    rgx = '(?:(?P<region>JC)-)?(?P<year>\d{4})(?P<month>\d{2})-citibike-tripdata.csv'
-    m = match(rgx, basename(src_key))
+def csv2pqt(year, month, entries, bkt, dst_root, overwrite, public=False, start=None):
+    name = '%d%02d' % (year, month)
     if start:
-        month = int('%s%s' % (m['year'], m['month']))
-        if month < start:
-            return 'Skipping month %d < %d' % (month, start)
-    def dst_key(src_name):
-        base, ext = splitext(src_name)
-        assert ext == '.csv'
-        dst_name = f'{base}.parquet'
-        if dst_root:
-            return f'{dst_root}/{dst_name}'
-        else:
-            return dst_name
+        start_year, start_month = int(start[:4]), int(start[4:])
+        if (year, month) < (start_year, start_month):
+            return 'Skipping month %s < %d%02d' % (name, start_year, start_month)
+
+    dst_name = f'{name}.parquet'
+    if dst_root:
+        dst_key = f'{dst_root}/{dst_name}'
+    else:
+        dst_key = dst_name
 
     return convert_file(
-        normalize_parquet,
-        bkt=bkt, src_key=src_key, dst_key=dst_key,
+        normalize_csvs,
+        bkt=bkt, entries=entries, dst_key=dst_key,
         overwrite=overwrite,
+        public=public,
     ).get('msg')
 
 
 @cmd()
 @opt('-b','--bucket',default='ctbk',help='Bucket to read from and write to')
 @opt('-s','--src-root',default='csvs',help='Prefix to read CSVs from')
-@opt('-d','--dst-root',default='pqts',help='Prefix to write normalized Parquet files to')
+@opt('-d','--dst-root',default='normalized',help='Prefix to write normalized files to')
 @opt('-p','--parallel/--no-parallel',help='Use joblib to parallelize execution')
 @opt('-f','--overwrite/--no-overwrite',help='When set, write files even if they already exist')
-@opt('--start',type=int,help='Month to process from (in YYYYMM form)')
-def main(bucket, src_root, dst_root, parallel, overwrite, start):
+@opt('--public/--no-public',help='Give written objects a public ACL')
+@opt('--start',help='Month to process from (in YYYYMM form)')
+def main(bucket, src_root, dst_root, parallel, overwrite, public, start):
     s3 = client('s3', config=Config())
 
     if not src_root.endswith('/'):
@@ -110,12 +131,20 @@ def main(bucket, src_root, dst_root, parallel, overwrite, start):
     resp = s3.list_objects_v2(Bucket=bucket, Prefix=src_root)
     contents = pd.DataFrame(resp['Contents'])
     csvs = contents[contents.Key.str.endswith('.csv')]
-    csvs = csvs.Key.values
+    keys = csvs.Key.rename('key')
+    urls = keys.apply(lambda key: f's3://{bucket}/{key}').rename('url')
+    rgx = '(?:(?P<region>JC)-)?(?P<year>\d{4})(?P<month>\d{2})-citibike-tripdata.csv'
+    d = sxs(keys.str.extract(rgx), urls)
+    d['region'] = d['region'].fillna('NYC')
+    d = d.astype({'year':int,'month':int})
+    d['region_url'] = d[['region','url']].to_dict('records')
+    months = d.groupby(['year','month'])['region_url'].apply(list).to_dict()
 
     kwargs = dict(
         bkt=bucket,
         dst_root=dst_root,
         overwrite=overwrite,
+        public=public,
         start=start,
     )
 
@@ -124,15 +153,15 @@ def main(bucket, src_root, dst_root, parallel, overwrite, start):
         print(
             '\n'.join(
                 p(
-                    delayed(csv2parquet)(src_key=csv, **kwargs)
-                    for csv in csvs
+                    delayed(csv2pqt)(year, month, entries, **kwargs)
+                    for (year, month), entries in months.items()
                 )
             )
         )
     else:
-        for csv in csvs:
+        for (year, month), entries in months.items():
             print(
-                csv2parquet(src_key=csv, **kwargs)
+                csv2pqt(year, month, entries, **kwargs)
             )
 
 

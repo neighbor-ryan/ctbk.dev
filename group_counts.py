@@ -1,12 +1,12 @@
 #!/usr/bin/env python
-# coding: utf-8
 
 from utz import *
 
-import boto3
 from boto3 import client
 from botocore.client import Config
-from click import argument as arg, command as cmd, option as opt
+from click import command as cmd, option as opt
+
+from utils import convert_file, Month, s3_exists
 
 
 def aggregate(
@@ -16,11 +16,10 @@ def aggregate(
 ):
     print(f'Aggregating: {url}')
     df = read_parquet(url)
-    m = match('(?:(?P<region>JC)-)?(?P<year>\d{4})(?P<month>\d{2})', basename(url))
     group_keys = []
     if agg_keys.get('r'):
-        region = m['region'] or 'NYC'
-        df['Region'] = region
+        # region = m['region'] or 'NYC'
+        # df['Region'] = region
         group_keys.append('Region')
     if agg_keys.get('y'):
         df['Start Year'] = df['Start Time'].dt.year
@@ -38,23 +37,10 @@ def aggregate(
         df['Start Hour'] = df['Start Time'].dt.hour
         group_keys.append('Start Hour')
     if agg_keys.get('g'):
-        if 'Gender' in df:
-            if df['Gender'].dtype == np.dtype('O'):
-                stderr.write('%s: casting gender to int\n' % (url))
-                df['Gender'] = df['Gender'].astype(int)
-        else:
-            stderr.write('%s: gender not found; setting to 0 ("unknown") for all rows\n' % (url))
-            df['Gender'] = 0
         group_keys.append('Gender')
     if agg_keys.get('t'):
-        if 'User Type' not in df:
-            assert 'Member/Casual' in df
-            df = df.rename(columns={'Member/Casual':'User Type'})
         group_keys.append('User Type')
     if agg_keys.get('b'):
-        if 'Rideable Type' not in df:
-            stderr.write('%s: "Rideable Type" not found; setting to "docked bike" for all rows\n' % (url))
-            df['Rideable Type'] = 'docked bike'
         group_keys.append('Rideable Type')
 
     select_keys = []
@@ -80,17 +66,18 @@ def aggregate(
     return counts
 
 
-def inc_month(y, m):
-    m += 1
-    if m > 12:
-        y += 1
-        m = 1
-    return y, m
+def aggregate_months(urls, agg_keys, sum_keys, parallel, dst):
+    if parallel:
+        p = Parallel(n_jobs=cpu_count())
+        dfs = p(delayed(aggregate)(url, agg_keys, sum_keys) for url in urls)
+    else:
+        dfs = [ aggregate(url, agg_keys, sum_keys) for url in urls ]
+
+    df = pd.concat(dfs)
+    df.to_parquet(dst)
 
 
 @cmd()
-@arg('to',nargs=1,required=False,default=None)
-@opt('-n','--max-months',type=int,default=-1)
 @opt('-c/-C','--counts/--no-counts',default=True)
 @opt('-d/-D','--durations/--no-durations',default=True)
 @opt('-g/-G','--gender/--no-gender',default=True)
@@ -101,15 +88,19 @@ def inc_month(y, m):
 @opt('-m/-M','--month/--no-month',default=True)
 @opt('-w/-W','--weekday/--no-weekday',default=False)
 @opt('-h/-H','--hour/--no-hour',default=False)
-@opt('--src-root',default='pqts')
+@opt('--src-bucket',default='ctbk')
+@opt('--src-root',default='normalized')
 @opt('--dst-bucket',default='ctbk')
-@opt('--dst-root')
+@opt('--dst-root',default='aggregated')
 @opt('--sort-agg-keys/--no-sort-agg-keys')
-# @opt('-f','--overwrite/--no-overwrite',help='When set, write files even if they already exist')
-# @opt('--start',type=int,help='Month to process from (in YYYYMM form)')
+# @opt('--parquet/--no-parquet', default=True, help='Write a Parquet version of the output data')
+# @opt('--sql/--no-sql',help='Write a SQLite version of the output data')
+@opt('-p','--parallel/--no-parallel',help='Use joblib to parallelize execution')
+@opt('-f','--overwrite/--no-overwrite',help='When set, write files even if they already exist')
+@opt('--public/--no-public',help='Give written objects a public ACL')
+@opt('--start',help='Month to process from (inclusive; in YYYYMM form)')
+@opt('--end',help='Month to process to (exclusive; in YYYYMM form)')
 def main(
-    to,
-    max_months,
     counts,
     durations,
     gender,
@@ -120,21 +111,65 @@ def main(
     month,
     weekday,
     hour,
+    src_bucket,
     src_root,
     dst_bucket,
     dst_root,
     sort_agg_keys,
-    # overwrite,
-    # start,
+    parallel,
+    overwrite,
+    # parquet,
+    # sql,
+    public,
+    start,
+    end,
 ):
-    if not to:
-        to = now().time
-    if isinstance(to, str):
-        to = parse(to)
+    if start is None:
+        start = Month(2013, 6)
+    else:
+        start = Month(start)
+    if end is None:
+        end = Month() + 1
+    else:
+        end = Month(end)
+
+    s3 = client('s3', config=Config())
+
+    def url(month):
+        if src_root:
+            src_key = f'{src_root}/{month}.parquet'
+        else:
+            src_key = f'{month}.parquet'
+        if s3_exists(src_bucket, src_key, s3):
+            return f's3://{src_bucket}/{src_key}'
+        else:
+            return None
+
+    months = [ dict(month=month, url=url(month)) for month in start.until(end) ]
+    l = 0
+    while l < len(months) and months[l]['url'] is None:
+        l += 1
+    r = len(months) - 1
+    while r >= 0 and months[r]['url'] is None:
+        r -= 1
+
+    original_months = months
+    months = months[l:r+1]
+    if not months:
+        missing_months = original_months
+    else:
+        missing_months = [ m for m in months if m['url'] is None ]
+    if missing_months:
+        raise ValueError(f'Missing months: {[",".join([m["url"] for m in missing_months])]}')
+
+    urls = [ m['url'] for m in months ]
+    months = [ m['month'] for m in months ]
+    start = months[0]
+    end = months[-1] + 1
 
     sum_keys = { k:v for k,v in {'c':counts,'d':durations}.items() if v }
-    value = ''.join([ label for label, flag in sum_keys.items() ])
-    if not value:
+    values_label = ''.join([ label for label, flag in sum_keys.items() ])
+    if not values_label:
         raise ValueError('Specify at least one eligible y-axis (`counts` or `durations`)')
 
     agg_keys = {
@@ -144,106 +179,33 @@ def main(
     agg_keys = { k:v for k,v in agg_keys.items() if v }
     if sort_agg_keys:
         agg_keys = dict(sorted(list(agg_keys.items()), key=lambda t: t[0]))
+    agg_keys_label = "".join(agg_keys.keys())
 
-    Prefix = f'{"".join(agg_keys.keys())}_{value}/'
+    name = "_".join([
+        agg_keys_label,
+        values_label,
+        f'{start}:{end}',
+    ])
+    name += '.parquet'
 
-    def s3_url(key):
-        path = f's3://{dst_bucket}'
-        if dst_root:
-            path = f'{path}/{dst_root}'
-        path = f'{path}/{key}'
-        return path
-
-    Bucket = 'ctbk'
-    s3 = client('s3', config=Config())
-    s3_resource = boto3.resource('s3')
-    ObjectAcl = s3_resource.ObjectAcl
-    # resp = s3.list_objects_v2(Bucket=Bucket)
-    # contents = pd.DataFrame(resp['Contents'])
-    # keys = contents.Key
-
-    # months = keys.str.extract('^(?:JC-)?(?P<yyyy>\d{4})(?P<mm>\d{2}).*\.parquet').dropna()
-    #cur_month = months.apply(lambda m: to_dt('%s-%s' % (m.yyyy, m.mm)), axis=1).max()
-
-    resp = s3.list_objects_v2(Bucket=Bucket, Prefix=Prefix)
-    if 'Contents' in resp:
-        contents = pd.DataFrame(resp['Contents'])
-        keys = contents.Key
-        last_date = \
-            keys \
-                .str \
-                .extract(r'^.*/(?P<year>\d{4})(?P<month>\d{2})\.parquet$') \
-                .dropna() \
-                .apply(lambda r: to_dt('%s-%s' % (r['year'], r['month'])), axis=1) \
-                .max()
-        last_year = last_date.year
-        last_month = last_date.month
-        last_path = '%s%d%02d.parquet' % (Prefix, last_year, last_month)
-        s3_last_url = s3_url(last_path)
-        new_months = read_parquet(s3_last_url)
+    if dst_root:
+        dst_key = f'{dst_root}/{name}'
     else:
-        last_year = 2013
-        last_month = 5
-        new_months = None
+        dst_key = name
 
-    n = 0
-    while True:
-        next_year, next_month = inc_month(last_year, last_month)
-
-        if (to.year, to.month) < (next_year, next_month):
-            print('Up to date with data through %d-%02d' % (last_year, last_month))
-            return
-
-        if max_months == 0:
-            print(f'Exiting after {n} iterations')
-            break
-
-        name = '%d%02d.parquet' % (next_year, next_month)
-        Key = '%s%s' % (Prefix, name)
-        new_url = s3_url(Key)
-
-        new_data = False
-        for region in ['', 'JC-']:
-            new_month_path = '%s%d%02d-citibike-tripdata.parquet' % (region, next_year, next_month)
-            if src_root:
-                new_month_path = f'{src_root}/{new_month_path}'
-            new_month_url = s3_url(new_month_path)
-            try:
-                new_month = aggregate(new_month_url, agg_keys, sum_keys)
-            except FileNotFoundError as e:
-                if (to.year, to.month) == (next_year, next_month):
-                    print("Couldn't find data for final month %d-%02d" % (next_year, next_month))
-                    continue
-                if (to.year, to.month) == inc_month(next_year, next_month):
-                    print("Couldn't find data for penultimate month %d-%02d" % (next_year, next_month))
-                    continue
-                if region == 'JC-':
-                    print("Missing JC data for %d-%02d" % (next_year, next_month))
-                    continue
-                else:
-                    raise e
-            new_data = True
-            if new_months is None:
-                new_months = new_month
-            else:
-                new_months = concat([ new_months, new_month ])
-
-        if new_months is None:
-            return
-
-        if new_data:
-            print(f'Writing: {new_url} ({len(new_months)} entries)')
-            new_months.to_parquet(new_url)
-            object_acl = ObjectAcl(Bucket, Key)
-            object_acl.put(ACL='public-read')
-        else:
-            print('No new data found; breaking')
-            break
-
-        last_year, last_month = next_year, next_month
-        if max_months > 0:
-            max_months -= 1
-        n += 1
+    dst = f's3://{dst_bucket}/{dst_key}'
+    print(f'Computing: {dst}')
+    result = convert_file(
+        aggregate_months,
+        urls=urls,
+        agg_keys=agg_keys,
+        sum_keys=sum_keys,
+        parallel=parallel,
+        dst=dst,
+        public=public,
+        overwrite=overwrite,
+    )
+    print(result.get('msg'))
 
 
 if __name__ == '__main__':

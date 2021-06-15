@@ -44,7 +44,7 @@ app = dash.Dash(
 server = app.server
 
 Bucket = 'ctbk'
-Prefix = 'ymrgtb_cd/'  # year, month, region, gender, (user-)type; count, duration
+Prefix = 'aggregated/ymrgtb_cd_201306:'  # ymrgtb_cd: (y)ear, (m)onth, (r)egion, (g)ender, user (t)ype, (b)ike ("rideable") type; (c)ount, (d)uration
 
 from boto3 import client
 from botocore.client import Config
@@ -58,7 +58,7 @@ print(f'Loading: {url}')
 df = pd.read_parquet(url)
 df['Gender'] = df.Gender.apply(lambda g: 'UMF'[g])
 n = len(df)
-df = df.groupby(['Month','Region','Gender','User Type',])[['Count','Duration',]].sum().reset_index()
+df = df.groupby(['Month','Region','Gender','User Type','Rideable Type'])[['Count','Duration',]].sum().reset_index()
 print(f'Loaded {url}; {n} entries, cols: {df.columns}')
 
 
@@ -75,6 +75,7 @@ def plot_months(
     stack_by='Gender',
     stack_relative=False,
     genders=None,
+    rideables=None,
     y_col='Count',
     user_types=None,
     rolling_avgs=None,
@@ -82,7 +83,7 @@ def plot_months(
     **kwargs,
 ):
     out_name = name
-    if stack_by in {'Gender','User Type'}:
+    if stack_by in {'Gender','User Type','Rideable Type'}:
         months = df.groupby(['Month',stack_by])[y_col].sum()
         if stack_relative:
             month_totals = df.groupby(['Month'])[y_col].sum().rename('total')
@@ -112,6 +113,12 @@ def plot_months(
         p.Gender = p.Gender.apply(lambda g: gender_to_val[g])
         p = p.sort_values(['m','Gender'])
         p.Gender = p.Gender.apply(lambda g: val_to_gender[g])
+    elif stack_by == 'Rideable Type':
+        rideable_to_val = {'unknown':0,'electric_bike':1,'docked_bike':2}
+        val_to_rideable = {v:k for k,v in rideable_to_val.items()}
+        p['Rideable Type'] = p['Rideable Type'].apply(lambda g: rideable_to_val[g])
+        p = p.sort_values(['m','Gender'])
+        p['Rideable Type'] = p['Rideable Type'].apply(lambda g: val_to_rideable[g])
     elif stack_by == 'User Type':
         usertype_to_val = {'Customer':0,'Subscriber':1,}
         val_to_usertype = {v:k for k,v in usertype_to_val.items()}
@@ -291,18 +298,21 @@ def _(relayoutData, n1, n2, n5, n_all,):
     Input('stack-by','value'),
     Input('stack-percents','value'),
     Input('rolling-avgs','value'),
-    Input('gender','value'),
+    Input('rideables','value'),
+    Input('genders','value'),
     Input('user-type','value'),
     Input('date-range','value'),
     Input('y-col','value'),
 )
-def _(region, stack_by, stack_percents, rolling_avgs, genders, user_types, date_range, y_col):
+def _(region, stack_by, stack_percents, rolling_avgs, rideables, genders, user_types, date_range, y_col):
     d = df.copy()
     if region == 'All':
         title = 'Monthly Citibike Rides'
     else:
         d = d[d.Region == region]
         title = f'Monthly Citibike{region} Rides'
+    if rideables:
+        d = d[d['Rideable Type'].isin(rideables)]
     if genders:
         d = d[d.Gender.isin(genders)]
     if user_types == 'All':
@@ -320,6 +330,7 @@ def _(region, stack_by, stack_percents, rolling_avgs, genders, user_types, date_
         stack_by=stack_by,
         stack_relative=stack_relative,
         genders=genders,
+        rideables=rideables,
         y_col=y_col,
         user_types=user_types,
         rolling_avgs=rolling_avgs,
@@ -338,8 +349,13 @@ controls = {
         options=opts('All','Subscriber','Customer'),
         value='All',
     ),
-    'Gender': Checklist(
-        id='gender',
+    'Rideable Type 🚧': Checklist(
+        id='rideables',
+        options=opts({'Classic':'docked_bike','Electric':'electric_bike','Unknown':'unknown',}),
+        value=['docked_bike','electric_bike','unknown',],
+    ),
+    'Gender 🚧': Checklist(
+        id='genders',
         options=opts({'Male':'M','Female':'F','Other / Unspecified':'U'}),
         value=['M','F','U',],
     ),
@@ -366,9 +382,10 @@ controls = {
         RadioItems(
             id='stack-by',
             options=opts(
-                'Gender',
                 'User Type',
                 'None',
+                'Gender 🚧',
+                'Rideable Type 🚧',
             ),
             value='None',
         ),
@@ -456,7 +473,19 @@ app.layout = Div([
                             Markdown(f'Use the controls above to filter the plot by region, user type, gender, or date, group/stack by user type or gender, and toggle aggregation of rides or total ride minutes.'),
                             Markdown(f'This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 2nd week of each month, covering the previous month).'),
                             Markdown(f'[The GitHub repo](https://github.com/neighbor-ryan/citibike) has more info as well as [planned enhancements](https://github.com/neighbor-ryan/citibike/issues).'),
-                        ]), Div([
+                        ]),
+                        H3('🚧 Known data-quality issues 🚧'),
+                        Markdown('Several things changed in February 2021 (presumably when some backend systems were converted as part of [the Lyft acquistion](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):'),
+                        Markdown('''
+                            - "Gender" information is no longer provided (it is present here through January 2021, after which point all rides are labeled "unknown")
+                            - A new "Rideable Type" field was added, containing values `docked_bike` `electric_bike` 🎉; however, it is mostly incorrect at present:
+                              - The field is not present prior to February 2021, even though e-citibikes were in widespread use in that time
+                              - Additionally, only a tiny number of rides are labeled `electric_bike` (122 in April 2021, 148 in May 2021). This is certainly not accurate!
+                                - One possibile explanation: [electric citibikes were launched in Jersey City and Hoboken around April 2021](https://www.hobokengirl.com/hoboken-jersey-city-citi-bike-share-program/); perhaps those bikes were part of a new fleet that show up as `electric_bike` in the data (where previous e-citibikes didn't).
+                                - These `electric_bike` rides showed up in the default ("NYC") data, not the "JC" data, but it could be all in flux; February through April 2021 were also updated when the May 2021 data release happened in early June.                          
+                            - The "User Type" values changed ("Subscriber" → "member", "Customer" → "casual"); I'm using the former/old values here, they seem equivalent.
+                        '''),
+                        Div([
                             'Code: ',icon('gh', 'https://github.com/neighbor-ryan/citibike#readme', 'GitHub logo'),' ',
                             'Data: ',icon('s3', 'https://s3.amazonaws.com/ctbk/index.html', 'Amazon S3 logo'),' ',
                             'Author: ',icon('twitter', 'https://twitter.com/RunsAsCoded', 'Twitter logo'),' ',
