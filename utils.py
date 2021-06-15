@@ -171,7 +171,8 @@ def convert_file(
         ctx['src_bkt'] = src_bkt
         ctx['src_key'] = src_key
         ctx['src'] = src
-        src_name = ctx['src_name'] = basename(src_key)
+        if src_key is not None:
+            src_name = ctx['src_name'] = basename(src_key)
 
     if callable(dst_key):
         try:
