@@ -33,6 +33,7 @@ dtypes = {
     'End Station Latitude':float,
     'End Station Longitude':float,
     'Trip Duration':int,
+    'Gender':int,
 }
 def normalize_field(f): return sub(r'[\s/]', '', f.lower())
 normalize_fields_map = { normalize_field(f): f for f in fields }
@@ -48,7 +49,6 @@ normalize_fields_map['end_station_id'] = 'End Station ID'
 normalize_fields_map['end_station_name'] = 'End Station Name'
 normalize_fields_map['started_at'] = 'Start Time'
 normalize_fields_map['ended_at'] = 'Stop Time'
-normalize_fields_map['member_casual'] = 'Member/Casual'
 def normalize_fields(df):
     rename_dict = {}
     for col in df.columns:
@@ -57,7 +57,12 @@ def normalize_fields(df):
             rename_dict[col] = normalize_fields_map[normalized_col]
         else:
             stderr.write('Unexpected field: %s (%s)\n' % (normalized_col, col))
+    if 'member_casual' in df:
+        assert 'User Type' not in df
+        df['member_casual'] = df['member_casual'].apply({'member':'Subscriber','casual':'Customer'})
+        rename_dict['member_casual'] = 'User Type'
     return df.rename(columns=rename_dict)
+
 
 
 def normalize_parquet(src, dst):

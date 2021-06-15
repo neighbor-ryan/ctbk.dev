@@ -38,9 +38,13 @@ def aggregate(
         df['Start Hour'] = df['Start Time'].dt.hour
         group_keys.append('Start Hour')
     if agg_keys.get('g'):
-        if 'Gender' not in df:
+        if 'Gender' in df:
+            if df['Gender'].dtype == np.dtype('O'):
+                stderr.write('%s: casting gender to int\n' % (url))
+                df['Gender'] = df['Gender'].astype(int)
+        else:
             stderr.write('%s: gender not found; setting to 0 ("unknown") for all rows\n' % (url))
-            df['Gender'] = '0'
+            df['Gender'] = 0
         group_keys.append('Gender')
     if agg_keys.get('t'):
         if 'User Type' not in df:
@@ -96,7 +100,7 @@ def inc_month(y, m):
 @opt('-y/-Y','--year/--no-year',default=True)
 @opt('-m/-M','--month/--no-month',default=True)
 @opt('-w/-W','--weekday/--no-weekday',default=False)
-@opt('-h/-H','--hour/--no-hour',default=True)
+@opt('-h/-H','--hour/--no-hour',default=False)
 @opt('--src-root',default='pqts')
 @opt('--dst-bucket',default='ctbk')
 @opt('--dst-root')

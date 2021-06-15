@@ -44,7 +44,7 @@ app = dash.Dash(
 server = app.server
 
 Bucket = 'ctbk'
-Prefix = 'ymrgt_cd/'  # year, month, region, gender, (user-)type; count, duration
+Prefix = 'ymrgtb_cd/'  # year, month, region, gender, (user-)type; count, duration
 
 from boto3 import client
 from botocore.client import Config
@@ -113,7 +113,7 @@ def plot_months(
         p = p.sort_values(['m','Gender'])
         p.Gender = p.Gender.apply(lambda g: val_to_gender[g])
     elif stack_by == 'User Type':
-        usertype_to_val = {'Customer':0,'Subscriber':1}
+        usertype_to_val = {'Customer':0,'Subscriber':1,}
         val_to_usertype = {v:k for k,v in usertype_to_val.items()}
         p['User Type'] = p['User Type'].apply(lambda g: usertype_to_val[g])
         p = p.sort_values(['m','User Type'])
