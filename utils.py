@@ -171,12 +171,7 @@ def convert_file(
         ctx['src_bkt'] = src_bkt
         ctx['src_key'] = src_key
         ctx['src'] = src
-
-    #if any(v is not None for v in [src_bkt, src_key, src]):
-    dst_bkt, dst_key, dst = verify_pieces(dst_bkt, dst_key, dst)
-    ctx['dst_bkt'] = dst_bkt
-    ctx['dst_key'] = dst_key
-    ctx['dst'] = dst
+        src_name = ctx['src_name'] = basename(src_key)
 
     if callable(dst_key):
         try:
@@ -188,6 +183,11 @@ def convert_file(
             if error == 'warn':
                 stderr.write('%s\n' % msg)
             return dict(msg=msg)
+
+    dst_bkt, dst_key, dst = verify_pieces(dst_bkt, dst_key, dst)
+    ctx['dst_bkt'] = dst_bkt
+    ctx['dst_key'] = dst_key
+    ctx['dst'] = dst
 
     dst_name = ctx['dst_name'] = basename(dst_key)
     dst = ctx['dst'] = f's3://{dst_bkt}/{dst_key}'
