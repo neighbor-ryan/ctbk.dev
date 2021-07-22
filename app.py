@@ -117,7 +117,7 @@ def plot_months(
         rideable_to_val = {'unknown':0,'electric_bike':1,'docked_bike':2}
         val_to_rideable = {v:k for k,v in rideable_to_val.items()}
         p['Rideable Type'] = p['Rideable Type'].apply(lambda g: rideable_to_val[g])
-        p = p.sort_values(['m','Gender'])
+        p = p.sort_values(['m','Rideable Type'])
         p['Rideable Type'] = p['Rideable Type'].apply(lambda g: val_to_rideable[g])
     elif stack_by == 'User Type':
         usertype_to_val = {'Customer':0,'Subscriber':1,}
@@ -138,6 +138,9 @@ def plot_months(
         'M': '#'+'6'*6,
         'Subscriber': '#'+'7'*6,
         'Customer': '#'+'E'*6,
+        'unknown': '#'+'E'*6,
+        'electric_bike': '#'+'D'*6,
+        'docked_bike': '#'+'6'*6,
     }
     roll_widths = {}
     roll_widths_bases = {
@@ -160,10 +163,16 @@ def plot_months(
                     name = f'{k} ({r}mo)'
                     v = partial_rolls[k].rename(name)
                     rolls.append(v)
+                    print(roll_color_bases)
                     roll_colors[name] = roll_color_bases[k]
                     roll_widths[name] = roll_widths_bases[r]
 
-    y_col_label = {'Count':'Total Rides','Duration':'Total Ride Minutes'}[y_col]
+    y_col_labels = {
+        'Count': 'Total Rides',
+        'Duration': 'Total Ride Minutes',
+    }
+    y_col_label = y_col_labels[y_col]
+
     if stack_relative and stack_by:
         y_col_label += ' (%)'
 
@@ -323,7 +332,7 @@ def _(region, stack_by, stack_percents, rolling_avgs, rideables, genders, user_t
     stack_relative = bool(stack_percents)
     if stack_by == 'None':
         stack_by = None
-    if stack_by and not stack_by in {'Gender','User Type'}:
+    if stack_by and not stack_by in {'Gender','User Type','Rideable Type',}:
         raise ValueError(f'Unrecognized `stack_by` value: {stack_by}')
     return plot_months(
         d, title=title,
@@ -337,6 +346,17 @@ def _(region, stack_by, stack_percents, rolling_avgs, rideables, genders, user_t
         date_range=date_range,
     )
 
+rideable_type_opts = {
+    'Classic': 'docked_bike',
+    'Electric': 'electric_bike',
+    'Unknown': 'unknown',
+}
+
+gender_opts = {
+    'Male': 'M',
+    'Female': 'F',
+    'Other / Unspecified': 'U',
+}
 
 controls = {
     'Region': RadioItems(
@@ -351,22 +371,29 @@ controls = {
     ),
     'Rideable Type 🚧': Checklist(
         id='rideables',
-        options=opts({'Classic':'docked_bike','Electric':'electric_bike','Unknown':'unknown',}),
-        value=['docked_bike','electric_bike','unknown',],
+        options=opts(rideable_type_opts),
+        value=list(rideable_type_opts.values()),
     ),
     'Gender 🚧': Checklist(
         id='genders',
-        options=opts({'Male':'M','Female':'F','Other / Unspecified':'U'}),
-        value=['M','F','U',],
+        options=opts(gender_opts),
+        value=list(gender_opts.values()),
     ),
     'Count': RadioItems(
         id='y-col',
-        options=opts({'Rides':'Count', 'Ride Minutes':'Duration'}),
+        options=opts({
+            'Rides':'Count',
+            'Ride Minutes':'Duration',
+        }),
         value='Count',
     ),
     'Rolling Avgs': Checklist(
         id='rolling-avgs',
-        options=opts({'3mo':'3','6mo':'6','12mo':'12'}),
+        options=opts({
+            '3mo':'3',
+            '6mo':'6',
+            '12mo':'12',
+        }),
         value=['12'],
     ),
     # 'Time Window': RadioItems(
@@ -381,12 +408,12 @@ controls = {
     'Stack by': [
         RadioItems(
             id='stack-by',
-            options=opts(
-                'User Type',
-                'None',
-                'Gender 🚧',
-                'Rideable Type 🚧',
-            ),
+            options=opts({
+                'User Type': 'User Type',
+                'None': 'None',
+                'Gender 🚧': 'Gender',
+                'Rideable Type 🚧': 'Rideable Type',
+            }),
             value='None',
         ),
         Checklist(
