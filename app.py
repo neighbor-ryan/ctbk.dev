@@ -65,6 +65,8 @@ print(f'Loaded {url}; {n} entries, cols: {df.columns}')
 umos = df.Month.sort_values().drop_duplicates().reset_index(drop=True)
 marks = umos.dt.strftime('%m/%y')
 N = len(umos) - 1
+start_mo = N - 5*12 + 1
+end_mo = N
 month_to_idx = { v:k for k,v in marks.to_dict().items() }
 
 
@@ -277,10 +279,12 @@ def plot_months(
     Input('graph','relayoutData'),
     Input('date-1yr','n_clicks'),
     Input('date-2yr','n_clicks'),
+    Input('date-3yr','n_clicks'),
+    Input('date-4yr','n_clicks'),
     Input('date-5yr','n_clicks'),
     Input('date-all','n_clicks'),
 )
-def _(relayoutData, n1, n2, n5, n_all,):
+def _(relayoutData, n1, n2, n3, n4, n5, n_all,):
     ctx = dash.callback_context
     if ctx.triggered:
         prop_id = ctx.triggered[0]['prop_id'].split('.')[0]
@@ -298,7 +302,43 @@ def _(relayoutData, n1, n2, n5, n_all,):
         [start, end] = [ month_to_idx[parse(m).strftime('%m/%y')] for m in [relayoutData['xaxis.range[0]'], relayoutData['xaxis.range[1]']] ]
         return [start, end]
     else:
-        return [0, N]
+        return [start_mo, end_mo]
+
+
+@app.callback(Output('date-1yr','disabled'), Input('date-range','value'))
+def _(date_range):
+    [ start, end ] = date_range
+    return end == end_mo and start + 12 == end + 1
+
+
+@app.callback(Output('date-2yr','disabled'), Input('date-range','value'))
+def _(date_range):
+    [ start, end ] = date_range
+    return end == end_mo and start + 12*2 == end + 1
+
+
+@app.callback(Output('date-3yr','disabled'), Input('date-range','value'))
+def _(date_range):
+    [ start, end ] = date_range
+    return end == end_mo and start + 12*3 == end + 1
+
+
+@app.callback(Output('date-4yr','disabled'), Input('date-range','value'))
+def _(date_range):
+    [ start, end ] = date_range
+    return end == end_mo and start + 12*4 == end + 1
+
+
+@app.callback(Output('date-5yr','disabled'), Input('date-range','value'))
+def _(date_range):
+    [ start, end ] = date_range
+    return end == end_mo and start + 12*5 == end + 1
+
+
+@app.callback(Output('date-all','disabled'), Input('date-range','value'))
+def _(date_range):
+    [ start, end ] = date_range
+    return start == 0 and end == N
 
 
 @app.callback(
@@ -390,9 +430,9 @@ controls = {
     'Rolling Avgs': Checklist(
         id='rolling-avgs',
         options=opts({
-            '3mo':'3',
-            '6mo':'6',
             '12mo':'12',
+            '6mo':'6',
+            '3mo':'3',
         }),
         value=['12'],
     ),
@@ -436,6 +476,7 @@ def icon(src, href, title):
         title=title,
     )
 
+
 app.layout = Div([
     Graph(id='graph'),
     Row(
@@ -447,6 +488,8 @@ app.layout = Div([
                             'Date Range:',
                             Button( '1y', id='date-1yr',),
                             Button( '2y', id='date-2yr',),
+                            Button( '3y', id='date-3yr',),
+                            Button( '4y', id='date-4yr',),
                             Button( '5y', id='date-5yr',),
                             Button('All', id='date-all',),
                         ],
@@ -455,8 +498,8 @@ app.layout = Div([
                     RangeSlider(
                         id='date-range',
                         min=0,
-                        max=len(umos) - 1,
-                        value=[0, len(umos) - 1],
+                        max=N,
+                        value=[0, N],
                         marks={
                             d['index']: {
                                 'label': (
@@ -505,9 +548,9 @@ app.layout = Div([
                         Markdown('Several things changed in February 2021 (presumably when some backend systems were converted as part of [the Lyft acquistion](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):'),
                         Markdown('''
                             - "Gender" information is no longer provided (it is present here through January 2021, after which point all rides are labeled "unknown")
-                            - A new "Rideable Type" field was added, containing values `docked_bike` `electric_bike` 🎉; however, it is mostly incorrect at present:
-                              - The field is not present prior to February 2021, even though e-citibikes were in widespread use in that time
-                              - Additionally, only a tiny number of rides are labeled `electric_bike` (122 in April 2021, 148 in May 2021). This is certainly not accurate!
+                            - A new "Rideable Type" field was added, containing values `docked_bike` and `electric_bike` 🎉; however, it is mostly incorrect at present:
+                              - Prior to February 2021, the field is absent (even though e-citibikes were in widespread use before then)
+                              - Since February 2021, only a tiny number of rides are labeled `electric_bike` (122 in April 2021, 148 in May 2021). This is certainly not accurate!
                                 - One possibile explanation: [electric citibikes were launched in Jersey City and Hoboken around April 2021](https://www.hobokengirl.com/hoboken-jersey-city-citi-bike-share-program/); perhaps those bikes were part of a new fleet that show up as `electric_bike` in the data (where previous e-citibikes didn't).
                                 - These `electric_bike` rides showed up in the default ("NYC") data, not the "JC" data, but it could be all in flux; February through April 2021 were also updated when the May 2021 data release happened in early June.                          
                             - The "User Type" values changed ("Subscriber" → "member", "Customer" → "casual"); I'm using the former/old values here, they seem equivalent.
