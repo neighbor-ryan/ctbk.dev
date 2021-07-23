@@ -77,7 +77,7 @@ def plot_months(
     stack_by='Gender',
     stack_relative=False,
     genders=None,
-    rideables=None,
+    rideable_types=None,
     y_col='Count',
     user_types=None,
     rolling_avgs=None,
@@ -85,11 +85,35 @@ def plot_months(
     **kwargs,
 ):
     out_name = name
-    if stack_by in {'Gender','User Type','Rideable Type'}:
-        months = df.groupby(['Month',stack_by])[y_col].sum()
+
+    stack_dicts = {
+        'Gender': dict(vals=[ 'U', 'M', 'F', ], filter=genders),
+        'Rideable Type': dict(vals=[ 'unknown', 'electric_bike', 'docked_bike', ], filter=rideable_types),
+        'User Type': dict(vals=[ 'Customer', 'Subscriber', ], filter=user_types),
+    }
+
+    if date_range:
+        start, end = date_range
+        ums = umos.iloc[start:(end+1)]
+    else:
+        start, end = 0, -1
+
+    colors = month_colors[start:] + month_colors[:start]
+
+    if stack_by in stack_dicts:
+        vals = stack_dicts[stack_by]['vals']
+        months = df.groupby(['Month', stack_by])[y_col].sum()
+        month_vals = pd.DataFrame([
+            { 'Month': month, stack_by: val, }
+            for month in umos.tolist()
+            for val in vals
+        ])
+        month_vals = month_vals.set_index([ 'Month', stack_by, ])
+
+        months = month_vals.merge(months, left_index=True, right_index=True, how='left').fillna(0)
         if stack_relative:
             month_totals = df.groupby(['Month'])[y_col].sum().rename('total')
-            months = months.reset_index().merge(month_totals, left_on='Month', right_index=True, how='left').set_index(['Month',stack_by])
+            months = months.reset_index().merge(month_totals, left_on='Month', right_index=True, how='left').set_index(['Month', stack_by])
             months[y_col] = months[y_col] / months['total'] * 100
         idx = months.index.to_frame()
         month = idx.Month.dt.month
@@ -98,40 +122,78 @@ def plot_months(
     else:
         assert stack_by is None
         months = df.groupby(['Month'])[y_col].sum()
+        month_vals = pd.DataFrame([
+            { 'Month': month, }
+            for month in umos.tolist()
+        ])
+        month_vals = month_vals.set_index([ 'Month', ])
+
+        months = month_vals.merge(months, left_index=True, right_index=True, how='left').fillna(0)
         idx = months.index.to_frame()
         month = idx.Month.dt.month
         year = idx.Month.dt.year
         stacked_key = idx.apply(lambda r: calendar.month_abbr[r.Month.month], axis=1).rename('stacked_key')
 
     m = month.rename('m')
-    months = pd.concat([months, stacked_key, m, year.rename('y')], axis=1)
+    months = pd.concat([ months, stacked_key, m, year.rename('y'), ], axis=1)
 
     # make months show up in input (and therefore legend) in order.
     # datetime column 'Month' ensures x-axis is still sorted chronologically
     p = months.reset_index()
-    if stack_by == 'Gender':
-        gender_to_val = {'U':0,'M':2,'F':1}
-        val_to_gender = {v:k for k,v in gender_to_val.items()}
-        p.Gender = p.Gender.apply(lambda g: gender_to_val[g])
-        p = p.sort_values(['m','Gender'])
-        p.Gender = p.Gender.apply(lambda g: val_to_gender[g])
-    elif stack_by == 'Rideable Type':
-        rideable_to_val = {'unknown':0,'electric_bike':1,'docked_bike':2}
-        val_to_rideable = {v:k for k,v in rideable_to_val.items()}
-        p['Rideable Type'] = p['Rideable Type'].apply(lambda g: rideable_to_val[g])
-        p = p.sort_values(['m','Rideable Type'])
-        p['Rideable Type'] = p['Rideable Type'].apply(lambda g: val_to_rideable[g])
-    elif stack_by == 'User Type':
-        usertype_to_val = {'Customer':0,'Subscriber':1,}
-        val_to_usertype = {v:k for k,v in usertype_to_val.items()}
-        p['User Type'] = p['User Type'].apply(lambda g: usertype_to_val[g])
-        p = p.sort_values(['m','User Type'])
-        p['User Type'] = p['User Type'].apply(lambda g: val_to_usertype[g])
+
+    y_col_labels = {
+        'Count': 'Total Rides',
+        'Duration': 'Total Ride Minutes',
+    }
+    y_col_label = y_col_labels[y_col]
+
+    # When stacking values, darken the lower values by these ratios
+    color_set_fades = {
+        2: [      .75, 1, ],
+        3: [ .65, .80, 1, ],
+    }
+
+    if stack_by in stack_dicts:
+        obj = stack_dicts[stack_by]
+        vals = obj['vals']
+        filter = obj['filter']
+        val_to_ord = { val: idx for idx, val in enumerate(vals) }
+        ord_to_val = { v: k for k, v in val_to_ord.items() }
+        p[stack_by] = p[stack_by].apply(lambda v: val_to_ord[v])
+        p = p.sort_values(['m',stack_by])
+        p[stack_by] = p[stack_by].apply(lambda o: ord_to_val[o])
+
+        color_fade_levels = color_set_fades[len(vals)]
+        color_sets = {
+            k: darken(
+                colors, **(
+                    dict()
+                    if fade_level is None
+                    else dict(f=fade_level)
+                )
+            )
+            for k, fade_level
+            in zip(vals, color_fade_levels)
+        }
+        color_sets = [
+            v
+            for k, v in color_sets.items()
+            if not filter or k in filter
+        ]
+        color_discrete_sequence = [
+            c
+            for cc in zip(*color_sets)
+            for c in cc
+        ]
+        labels = { 'stacked_key': f'Month, {stack_by}', y_col: y_col_label, }
     else:
         assert stack_by is None
         p = p.sort_values('m')
+        color_discrete_sequence = colors
+        labels = {'stacked_key': 'Month', y_col: y_col_label, }
 
     # Compute rolling avgs before any date-range restrictions below
+    # TODO: only fill in `stack_by`-appropriate values?
     rolls = []
     roll_colors = {}
     roll_color_bases = {
@@ -165,63 +227,17 @@ def plot_months(
                     name = f'{k} ({r}mo)'
                     v = partial_rolls[k].rename(name)
                     rolls.append(v)
-                    print(roll_color_bases)
+                    #(roll_color_bases)
                     roll_colors[name] = roll_color_bases[k]
                     roll_widths[name] = roll_widths_bases[r]
-
-    y_col_labels = {
-        'Count': 'Total Rides',
-        'Duration': 'Total Ride Minutes',
-    }
-    y_col_label = y_col_labels[y_col]
 
     if stack_relative and stack_by:
         y_col_label += ' (%)'
 
-    if stack_by == 'Gender':
-        color_sets = {
-            'U': darken(month_colors, f=0.65),
-            'F': darken(month_colors, f=0.80),
-            'M': month_colors,
-        }
-        color_sets = [
-            v
-            for k,v in color_sets.items()
-            if not genders or k in genders
-        ]
-        color_discrete_sequence=[
-            c
-            for cc in zip(*color_sets)
-            for c in cc
-        ]
-        labels={'stacked_key': 'Month, Gender',y_col:y_col_label}
-    elif stack_by == 'User Type':
-        color_sets = {
-            'Subscriber': darken(month_colors, f=0.75),
-            'Customer': month_colors,
-        }
-        color_sets = [
-            v
-            for k,v in color_sets.items()
-            if not user_types or k in user_types
-        ]
-        color_discrete_sequence=[
-            c
-            for cc in zip(*color_sets)
-            for c in cc
-        ]
-        labels={'stacked_key': 'Month, User Type',y_col:y_col_label}
-    else:
-        color_discrete_sequence = month_colors
-        labels = {'stacked_key': 'Month',y_col:y_col_label}
-
     if date_range:
-        start, end = date_range
-        ums = umos.iloc[start:(end+1)]
         p = p.merge(ums, on='Month')
         rolls = [ r.reset_index().merge(ums, on='Month').set_index('Month')[r.name] for r in rolls ]
-    else:
-        start, end = 0, -1
+
     start, end = umos.iloc[start], umos.iloc[end]
 
     layout_kwargs = dict(
@@ -379,7 +395,7 @@ def _(region, stack_by, stack_percents, rolling_avgs, rideables, genders, user_t
         stack_by=stack_by,
         stack_relative=stack_relative,
         genders=genders,
-        rideables=rideables,
+        rideable_types=rideables,
         y_col=y_col,
         user_types=user_types,
         rolling_avgs=rolling_avgs,
@@ -409,17 +425,7 @@ controls = {
         options=opts('All','Subscriber','Customer'),
         value='All',
     ),
-    'Rideable Type 🚧': Checklist(
-        id='rideables',
-        options=opts(rideable_type_opts),
-        value=list(rideable_type_opts.values()),
-    ),
-    'Gender 🚧': Checklist(
-        id='genders',
-        options=opts(gender_opts),
-        value=list(gender_opts.values()),
-    ),
-    'Count': RadioItems(
+    'Y-Axis': RadioItems(
         id='y-col',
         options=opts({
             'Rides':'Count',
@@ -462,6 +468,16 @@ controls = {
             value=[],
         )
     ],
+    'Gender 🚧': Checklist(
+        id='genders',
+        options=opts(gender_opts),
+        value=list(gender_opts.values()),
+    ),
+    'Rideable Type 🚧': Checklist(
+        id='rideables',
+        options=opts(rideable_type_opts),
+        value=list(rideable_type_opts.values()),
+    ),
 }
 
 def icon(src, href, title):
@@ -550,7 +566,7 @@ app.layout = Div([
                             - "Gender" information is no longer provided (it is present here through January 2021, after which point all rides are labeled "unknown")
                             - A new "Rideable Type" field was added, containing values `docked_bike` and `electric_bike` 🎉; however, it is mostly incorrect at present:
                               - Prior to February 2021, the field is absent (even though e-citibikes were in widespread use before then)
-                              - Since February 2021, only a tiny number of rides are labeled `electric_bike` (122 in April 2021, 148 in May 2021). This is certainly not accurate!
+                              - Since February 2021, only a tiny number of rides are labeled `electric_bike` (122 in April 2021, 148 in May, 113 in June). This is certainly not accurate!
                                 - One possibile explanation: [electric citibikes were launched in Jersey City and Hoboken around April 2021](https://www.hobokengirl.com/hoboken-jersey-city-citi-bike-share-program/); perhaps those bikes were part of a new fleet that show up as `electric_bike` in the data (where previous e-citibikes didn't).
                                 - These `electric_bike` rides showed up in the default ("NYC") data, not the "JC" data, but it could be all in flux; February through April 2021 were also updated when the May 2021 data release happened in early June.                          
                             - The "User Type" values changed ("Subscriber" → "member", "Customer" → "casual"); I'm using the former/old values here, they seem equivalent.
