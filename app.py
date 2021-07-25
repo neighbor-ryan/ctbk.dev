@@ -52,6 +52,7 @@ s3 = client('s3', config=Config())
 resp = s3.list_objects_v2(Bucket=Bucket, Prefix=Prefix)
 contents = pd.DataFrame(resp['Contents'])
 keys = contents.Key
+keys = keys[keys.str.endswith('.parquet')]
 key = keys.max()
 url = f's3://{Bucket}/{key}'
 print(f'Loading: {url}')

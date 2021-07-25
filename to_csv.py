@@ -62,7 +62,7 @@ def original_to_csv(src_bkt, zip_key, dst_bkt, error='warn', overwrite=False, ds
     ).get('msg', '')
 
 
-@cmd()
+@cmd(help='Read Zip files published by Citibike (per {month,region}), extract a lone CSV from inside each, save')
 @opt('-s','--src-bucket',default='tripdata',help='Source bucket to read Zip files from')
 @opt('-d','--dst-bucket',default='ctbk',help='Destination bucket to write CSV files to')
 @opt('-r','--dst-root',default='csvs',help='Prefix (in destination bucket) to write CSVs udner')
