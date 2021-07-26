@@ -1,5 +1,7 @@
+const webpack = require('webpack');
+
 module.exports = {
-  entry: "./src/index.ts",
+  entry: "./src/index.tsx",
   module: {
     rules: [
       {
@@ -18,4 +20,9 @@ module.exports = {
   devServer: {
     publicPath: "/dist",
   },
+  plugins: [
+    new webpack.DefinePlugin({
+      'process.env.NODE_DEBUG': JSON.stringify(process.env.NODE_DEBUG),
+    })
+  ]
 };
