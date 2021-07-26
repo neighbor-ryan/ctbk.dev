@@ -378,6 +378,12 @@ def _(region, stack_by, stack_percents, rolling_avgs, rideables, genders, user_t
         d = d[d.Region == region]
         title = f'Monthly Citibike{region} Rides'
     if rideables:
+        if 'docked_bike' in rideables:
+            # Pre 2021-02, all rides were labeled "classic_bike"; map those to the newer "docked_bike" designation here.
+            # The "rideable type" data is generally pretty inaccurate; only a tiny number of rides are labeled
+            # `electric_bike`, and all since the new data format ≥2021-02, even though there were many e-bike rides
+            # earlier than that.
+            rideables += ['classic_bike']
         d = d[d['Rideable Type'].isin(rideables)]
     if genders:
         d = d[d.Gender.isin(genders)]
@@ -404,7 +410,8 @@ def _(region, stack_by, stack_percents, rolling_avgs, rideables, genders, user_t
     )
 
 rideable_type_opts = {
-    'Classic': 'docked_bike',
+    # 'Classic': 'classic_bike',
+    'Docked': 'docked_bike',
     'Electric': 'electric_bike',
     'Unknown': 'unknown',
 }
