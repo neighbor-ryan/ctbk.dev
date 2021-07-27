@@ -23,7 +23,9 @@ def option_kv(arg):
 def opts(*args):
     if len(args) == 1 and isinstance(args[0], dict):
         return [
-            { 'label':label, 'value':value }
+            option_kv(dict(label=label, **value))
+            if isinstance(value, dict)
+            else dict(label=label, value=value)
             for label, value in args[0].items()
         ]
     elif len(args) == 1 and isinstance(args[0], Generator):
@@ -32,4 +34,3 @@ def opts(*args):
         return [ option_kv(arg) for arg in args ]
     else:
         return [ option_kv(arg) for arg in args ]
-

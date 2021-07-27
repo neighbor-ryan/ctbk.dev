@@ -248,8 +248,8 @@ def plot_months(
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         yaxis_gridcolor='#DDDDDD',
-        bargap=0,
-        bargroupgap=0,
+        # bargap=0,
+        # bargroupgap=0,
     )
     if stack_by and stack_relative:
         layout_kwargs['yaxis_range'] = [0, 100]
@@ -267,7 +267,11 @@ def plot_months(
     else:
         start_year = start.year
     for year in range(start_year, end.year + 1):
-        mp = mp.add_vline(pd.to_datetime(f'{year-1}-12-20'), line=dict(color='#EEEEEE'), layer='below',)
+        mp = mp.add_vline(
+            pd.to_datetime(f'{year-1}-12-20'),
+            line=dict(color='#555555'),
+            layer='below',
+        )
     for r in rolls:
         mp.add_scatter(
             x=r.index, y=r,
@@ -284,7 +288,8 @@ def plot_months(
             title={
                 'text': title,
                 'x':0.5,
-                'xanchor':'center', 'yanchor':'top',
+                'xanchor': 'center',
+                'yanchor': 'top',
             },
             **layout_kwargs,
         )
@@ -414,9 +419,9 @@ def _(region, stack_by, stack_percents, rolling_avgs, rideables, genders, user_t
 
 rideable_type_opts = {
     # 'Classic': 'classic_bike',
-    'Docked': 'docked_bike',
-    'Electric': 'electric_bike',
-    'Unknown': 'unknown',
+    'Docked': { 'value': 'docked_bike', 'disabled': True, },
+    'Electric': { 'value': 'electric_bike', 'disabled': True, },
+    'Unknown': { 'value': 'unknown', 'disabled': True, },
 }
 
 gender_opts = {
@@ -448,8 +453,8 @@ controls = {
         id='rolling-avgs',
         options=opts({
             '12mo':'12',
-            '6mo':'6',
-            '3mo':'3',
+            # '6mo':'6',
+            # '3mo':'3',
         }),
         value=['12'],
     ),
@@ -466,10 +471,10 @@ controls = {
         RadioItems(
             id='stack-by',
             options=opts({
-                'User Type': 'User Type',
                 'None': 'None',
+                'User Type': 'User Type',
                 'Gender 🚧': 'Gender',
-                'Rideable Type 🚧': 'Rideable Type',
+                'Rideable Type 🚧': { 'value': 'Rideable Type', 'disabled': True, },
             }),
             value='None',
         ),
@@ -487,7 +492,7 @@ controls = {
     'Rideable Type 🚧': Checklist(
         id='rideables',
         options=opts(rideable_type_opts),
-        value=list(rideable_type_opts.values()),
+        value=list([ opt['value'] for opt in rideable_type_opts.values() ]),
     ),
 }
 
@@ -571,11 +576,11 @@ app.layout = Div([
                             Markdown(f'This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 2nd week of each month, covering the previous month).'),
                             Markdown(f'[The GitHub repo](https://github.com/neighbor-ryan/citibike) has more info as well as [planned enhancements](https://github.com/neighbor-ryan/citibike/issues).'),
                         ]),
-                        H3('🚧 Known data-quality issues 🚧'),
+                        H3('🚧 Known data-quality issues 🚧', id="qc"),
                         Markdown('Several things changed in February 2021 (presumably when some backend systems were converted as part of [the Lyft acquistion](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):'),
                         Markdown('''
-                            - "Gender" information is no longer provided (it is present here through January 2021, after which point all rides are labeled "unknown")
-                            - A new "Rideable Type" field was added, containing values `docked_bike` and `electric_bike` 🎉; however, it is mostly incorrect at present:
+                            - "Gender" information is no longer provided (all rides are labeled "unknown" starting February 2021)
+                            - A new "Rideable Type" field was added, containing values `docked_bike` and `electric_bike` 🎉; however, it is mostly incorrect at present, and disabled here:
                               - Prior to February 2021, the field is absent (even though e-citibikes were in widespread use before then)
                               - Since February 2021, only a tiny number of rides are labeled `electric_bike` (122 in April 2021, 148 in May, 113 in June). This is certainly not accurate!
                                 - One possibile explanation: [electric citibikes were launched in Jersey City and Hoboken around April 2021](https://www.hobokengirl.com/hoboken-jersey-city-citi-bike-share-program/); perhaps those bikes were part of a new fleet that show up as `electric_bike` in the data (where previous e-citibikes didn't).
