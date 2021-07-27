@@ -224,6 +224,9 @@ def plot_months(
                 roll_widths[k] = roll_widths_bases[r]
             if stack_by:
                 partial_rolls = p.set_index(['Month',stack_by])[y_col].unstack().rolling(r).mean()
+                if stack_by == 'Gender':
+                    partial_rolls = partial_rolls[partial_rolls.index < pd.to_datetime('2021-02-01')]
+
                 for k in partial_rolls:
                     name = f'{k} ({r}mo)'
                     v = partial_rolls[k].rename(name)
