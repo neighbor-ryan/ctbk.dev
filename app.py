@@ -99,7 +99,7 @@ def plot_months(
     else:
         start, end = 0, -1
 
-    colors = month_colors[start:] + month_colors[:start]
+    colors = [ '#88aaff' ]
 
     if stack_by in stack_dicts:
         vals = stack_dicts[stack_by]['vals']
@@ -252,7 +252,7 @@ def plot_months(
         layout_kwargs['yaxis_range'] = [0, 100]
 
     mp = px.bar(
-        p, x='Month', y=y_col, color='stacked_key',
+        p, x='Month', y=y_col, color=stack_by,
         color_discrete_sequence=color_discrete_sequence,
         labels=labels,
         # barmode='group',
