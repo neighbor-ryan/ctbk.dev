@@ -1,19 +1,19 @@
 # Yet Another Citibike Dashboard
 [ctbk.dev](https://www.ctbk.dev/):
 
-[![Screenshot of dashboard; per-month ride counts going back 8 years, with a 12mo rolling avg showing mostly steady growth](https://user-images.githubusercontent.com/465045/115654571-63396c80-a2ff-11eb-9bc2-acc48debe06c.png)](https://www.ctbk.dev/)
+[![Screenshot of dashboard; per-month ride counts going back 5 years, with a 12mo rolling avg showing mostly steady growth](https://user-images.githubusercontent.com/465045/127218908-91ea5438-276d-4730-8f2b-ed177daf5d5b.png)][ctbk.dev]
 
 - [auto-updates with new data each month](#auto-update)
 - [powered by cleaned, public data (derived from the official Citibike data)](#cleaned-data)
 - Interactive! Filter by:
   - user type (annual "subscriber" vs. daily "customer")
   - gender (male, female, or other/unspecified)
-  - region (NYC or JC)
+  - region (NYC and/or JC)
   - date range (at monthly granularity, back to system launch in June 2013)
 - Stack/Group by:
   - gender
   - user type
-- Toggle 3, 6, or 12mo rolling averages
+- Toggle 12mo rolling averages
 
 ## Cleaned, public data <a id="cleaned-data"></a>
 I fixed some rough edges in [Citibike's published data][citibike system data] and published the results to [the `ctbk` Amazon S3 bucket][`s3://ctbk`].
@@ -24,9 +24,9 @@ Some issues that [`s3://ctbk`] mitigates:
 - Column-name inconsistencies across months (e.g. `User Type` vs. `usertype`) are harmonized
 
 ## Automatic Updating <a id="auto-update"></a>
-Every day, [a GitHub Action runs in this repo](https://github.com/neighbor-ryan/citibike/actions) and checks `s3://tripdata` for a new month's worth of official data. If new data is found, it is cleaned, converted to `.parquet`, and uploaded to `s3://ctbk`.
+Every day, [a GitHub Action runs in this repo](https://github.com/neighbor-ryan/citibike/actions) and checks `s3://tripdata` for a new month of official data. If new data is found, it is cleaned, converted to `.parquet`, and uploaded to `s3://ctbk`.
 
-Additionally, some aggregated/summary statistics are updated, which the dashboard at https://ctbk.dev/ reads, meaning it should stay up to date as new data is published.
+Additionally, some aggregated/summary statistics are updated, which the dashboard at [ctbk.dev] reads, meaning it should stay up to date as new data is published.
 
 At the time of this writing, this process has run successfully once, [adding March 2021 data to the dashboard on April 8, 2021][202103 GHA]:
 ```
@@ -77,3 +77,5 @@ Feel free to [file an issue here](https://github.com/neighbor-ryan/citibike/issu
 [`s3://ctbk`]: https://s3.amazonaws.com/ctbk/index.html
 [Parquet]: https://parquet.apache.org/
 [202103 GHA]: https://github.com/neighbor-ryan/citibike/runs/2304544335?check_suite_focus=true#step:6:104
+
+[ctbk.dev]: https://ctbk.dev/
