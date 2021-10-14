@@ -10,16 +10,16 @@ module.exports = {
         use: "ts-loader",
         exclude: /node_modules/,
       },
-      // {
-      //   test: /\.css$/,
-      //   use: "css-loader",
-      //   exclude: /node_modules/,
-      // },
-      // {
-      //   test: /\.js$/,
-      //   enforce: "pre",
-      //   use: ["source-map-loader"],
-      // },
+      {
+        test: /\.css$/,
+        use: "css-loader",
+        exclude: /node_modules/,
+      },
+      {
+        test: /\.js$/,
+        enforce: "pre",
+        use: ["source-map-loader"],
+      },
     ],
   },
   resolve: {

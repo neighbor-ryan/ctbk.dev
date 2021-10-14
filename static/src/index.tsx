@@ -47,8 +47,8 @@ type State = {
 
 class App extends Component<any, State> {
     async componentDidMount() {
-        //const url = "https://ctbk.s3.amazonaws.com/aggregated/ymrgtb_cd_201306:202109.sqlite";
-        const url = "/assets/ymrgtb_cd_201306:202110.sqlite";
+        const url = "https://ctbk.s3.amazonaws.com/aggregated/ymrgtb_cd_201306:202110.sqlite";
+        // const url = "/assets/ymrgtb_cd_201306:202110.sqlite";
         console.log("Fetching DB…", url);
         const worker = await createDbWorker(
             [
