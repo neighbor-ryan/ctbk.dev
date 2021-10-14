@@ -209,8 +209,8 @@ def plot_months(
     }
     roll_widths = {}
     roll_widths_bases = {
-        3: 2,
-        6: 3,
+         3: 2,
+         6: 3,
         12: 4,
     }
     if rolling_avgs:
@@ -244,22 +244,57 @@ def plot_months(
 
     start, end = umos.iloc[start], umos.iloc[end]
 
+    if stack_by:
+        showlegend = True
+    else:
+        showlegend = False
+
     layout_kwargs = dict(
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         yaxis_gridcolor='#DDDDDD',
+        showlegend=showlegend,
+        font=dict(size=18),
         # bargap=0,
         # bargroupgap=0,
     )
     if stack_by and stack_relative:
         layout_kwargs['yaxis_range'] = [0, 100]
 
+    if stack_by and stack_relative:
+        hover_data = p[y_col].apply(lambda p: '%.1f%%' % p)
+    else:
+        hover_data = p[y_col].apply(lambda v: '%.2fM' % (v / 1e6))
+
+    print('%d vs %d' % (len(p), len(hover_data)))
+    print(hover_data)
+
+    #p['hover_data'] = hover_data
     mp = px.bar(
         p, x='Month', y=y_col, color=stack_by,
         color_discrete_sequence=color_discrete_sequence,
         labels=labels,
+        hover_data={ y_col: hover_data, },
         # barmode='group',
         **kwargs,
+    )
+    mp.update_xaxes(
+        titlefont=dict(size=18),
+        # tickangle=45,
+        tickfont=dict(
+            # family='Rockwell',
+            # color='crimson',
+            size=14,
+        ),
+    )
+    mp.update_yaxes(
+        titlefont=dict(size=18),
+        # tickangle=45,
+        tickfont=dict(
+            # family='Rockwell',
+            # color='crimson',
+            size=14,
+        ),
     )
 
     if start.month > 1:

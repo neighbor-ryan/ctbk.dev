@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom'
 import { Component, createElement } from "react";
 import Plot from 'react-plotly.js';
 import $ from 'jquery';
+// import './index.css';
 
 const workerUrl = new URL(
     "sql.js-httpvfs/dist/sqlite.worker.js",
@@ -12,7 +13,7 @@ const workerUrl = new URL(
 const wasmUrl = new URL("sql.js-httpvfs/dist/sql-wasm.wasm", import.meta.url);
 
 // async function load() {
-//   const url = "https://ctbk.s3.amazonaws.com/aggregated/ymrgtb_cd_201306:202107.sqlite";
+//   const url = "https://ctbk.s3.amazonaws.com/aggregated/ymrgtb_cd_201306:202109.sqlite";
 //   console.log("Fetching DB:", url);
 //   const worker = await createDbWorker(
 //     [
@@ -41,12 +42,14 @@ const wasmUrl = new URL("sql.js-httpvfs/dist/sql-wasm.wasm", import.meta.url);
 
 type State = {
     data: any[] | null
+    region: 'JC' | 'NYC' | 'All'
 }
 
 class App extends Component<any, State> {
     async componentDidMount() {
-        const url = "https://ctbk.s3.amazonaws.com/aggregated/ymrgtb_cd_201306:202107.sqlite";
-        console.log("Fetching DB:", url);
+        //const url = "https://ctbk.s3.amazonaws.com/aggregated/ymrgtb_cd_201306:202109.sqlite";
+        const url = "/assets/ymrgtb_cd_201306:202110.sqlite";
+        console.log("Fetching DB…", url);
         const worker = await createDbWorker(
             [
                 {
@@ -61,26 +64,33 @@ class App extends Component<any, State> {
             workerUrl.toString(),
             wasmUrl.toString()
         );
-
+        console.log("Created worker");
         const data = await worker.db.query(`select * from agg`);
+        console.log("Fetched db:", url);
         this.setState({ data: data })
     }
 
     constructor(props: any) {
         super(props);
-        this.state = { data: null }
+        this.state = { data: null, region: 'JC' }
     }
 
     render() {
-        const data: (null | ({ Month: Date, Count: number }[])) = this.state['data'];
+        const state = this.state;
+        const data: (null | ({ Month: Date, Count: number, Region: 'JC'|'NYC' }[])) = state['data'];
+        const region = state['region'];
         if (!data) {
             return <div>Loading…</div>
         }
         let agg = new Map<string, number>()
         data.forEach((r) => {
+            if (!(region == 'All' || region == r['Region'])) {
+                // console.log('Skipping region:', r['Region']);
+                return;
+            }
             const month: Date = r['Month'];
             const key: string = month.toString();
-            const cur = agg.get(key)
+            const cur = agg.get(key);
             const count = r['Count'];
             if (cur === undefined) {
                 console.log("Month:",month)
@@ -100,21 +110,24 @@ class App extends Component<any, State> {
         // const counts = data.map((r: any) => r['Count'])
         console.log(months, counts)
         return (
-            <Plot
-                data={
-                    [
-                        {
-                            x: months,
-                            y: counts,
-                            type: 'bar',
-                        },
-                    ]
-                }
-                layout={{
-                    //width: 320, height: 240,
-                    title: 'Citibike Rides By Month'
-                }}
-            />
+            <div id="plot">
+                <Plot
+                    data={
+                        [
+                            {
+                                x: months,
+                                y: counts,
+                                type: 'bar',
+                            },
+                        ]
+                    }
+                    layout={{
+                        //width: '100%',
+                        //width: 320, height: 240,
+                        title: 'Citibike Rides By Month'
+                    }}
+                />
+            </div>
         );
     }
 }

@@ -1,4 +1,5 @@
 const webpack = require('webpack');
+// const path = require('path');
 
 module.exports = {
   entry: "./src/index.tsx",
@@ -9,6 +10,16 @@ module.exports = {
         use: "ts-loader",
         exclude: /node_modules/,
       },
+      // {
+      //   test: /\.css$/,
+      //   use: "css-loader",
+      //   exclude: /node_modules/,
+      // },
+      // {
+      //   test: /\.js$/,
+      //   enforce: "pre",
+      //   use: ["source-map-loader"],
+      // },
     ],
   },
   resolve: {
@@ -19,6 +30,8 @@ module.exports = {
   },
   devServer: {
     publicPath: "/dist",
+    // contentBase: path.resolve(__dirname, './assets'),
+    // contentBasePublicPath: '/assets'
   },
   plugins: [
     new webpack.DefinePlugin({
