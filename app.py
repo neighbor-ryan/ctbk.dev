@@ -266,15 +266,15 @@ def plot_months(
     else:
         hover_data = p[y_col].apply(lambda v: '%.2fM' % (v / 1e6))
 
-    print('%d vs %d' % (len(p), len(hover_data)))
-    print(hover_data)
+    # print('%d vs %d' % (len(p), len(hover_data)))
+    # print(hover_data)
 
     #p['hover_data'] = hover_data
     mp = px.bar(
         p, x='Month', y=y_col, color=stack_by,
         color_discrete_sequence=color_discrete_sequence,
         labels=labels,
-        hover_data={ y_col: hover_data, },
+        # hover_data={ y_col: hover_data, },
         # barmode='group',
         **kwargs,
     )
@@ -331,6 +331,7 @@ def plot_months(
     if out_name:
         mp.write_image(f'{out_name}.png')
         mp.write_image(f'{out_name}.svg')
+        mp.write_json(f'{out_name}.json')
     return mp
 
 
