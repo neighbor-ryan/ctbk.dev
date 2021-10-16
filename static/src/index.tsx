@@ -13,9 +13,18 @@ const workerUrl = new URL(
 );
 const wasmUrl = new URL("sql.js-httpvfs/dist/sql-wasm.wasm", import.meta.url);
 
+type Region = 'All' | 'NYC' | 'JC'
+type UserType = 'All' | 'Subscriber' | 'Customer'
+type Row = {
+    Month: Date,
+    Count: number,
+    Region: Region,
+    'User Type': UserType,
+}
 type State = {
-    data: any[] | null
-    region: 'JC' | 'NYC' | 'All'
+    data: null | Row[]
+    region: Region
+    userType: UserType
     json: null | any
 }
 
@@ -57,7 +66,7 @@ class App extends Component<any, State> {
 
     constructor(props: any) {
         super(props);
-        this.state = { data: null, region: 'JC', json: null, }
+        this.state = { data: null, region: 'All', json: null, userType: 'All', }
         this.onRegion = this.onRegion.bind(this);
     }
 
@@ -67,8 +76,8 @@ class App extends Component<any, State> {
 
     render() {
         const state = this.state;
-        const data: (null | ({ Month: Date, Count: number, Region: 'JC'|'NYC' }[])) = state['data'];
-        const region = state['region'];
+        // const data: (null | Row[]) = state['data'];
+        const { data, region, userType } = state;
         console.log("render; region:", region);
         const json = state['json']
         if (json) {
@@ -85,10 +94,15 @@ class App extends Component<any, State> {
         if (!data) {
             return <div>Loading…</div>
         }
+        console.log(data[0])
         let agg = new Map<string, number>()
         data.forEach((r) => {
             if (!(region == 'All' || region == r['Region'])) {
                 // console.log('Skipping region:', r['Region']);
+                return;
+            }
+            if (!(userType == 'All' || userType == r['User Type'])) {
+                console.log('Skipping userType:', r['User Type']);
                 return;
             }
             const month: Date = r['Month'];
@@ -156,10 +170,23 @@ class App extends Component<any, State> {
                         shapes: vlines,
                     }}
                 />
-                <div id="region-controls" onChange={(e: any) => this.setState({ region: e.target.value })}>
-                    <input type="radio" name="region" value="All"></input><label>All</label>
-                    <input type="radio" name="region" value="NYC"></input><label>NYC</label>
-                    <input type="radio" name="region" value="JC"></input><label>JC</label>
+                <div className="no-gutters row">
+                    <div className="control col">
+                        <div className="control-header">Region:</div>
+                        <div id="region" onChange={(e: any) => this.setState({ region: e.target.value })}>
+                            <label><input type="radio" name="region" value="All"></input>All</label>
+                            <label><input type="radio" name="region" value="NYC"></input>NYC</label>
+                            <label><input type="radio" name="region" value="JC"></input>JC</label>
+                        </div>
+                    </div>
+                    <div className="control col">
+                        <div className="control-header">User Type:</div>
+                        <div id="user-type" onChange={(e: any) => this.setState({ userType: e.target.value })}>
+                            <label><input type="radio" name="user_type" value="All"></input>All</label>
+                            <label><input type="radio" name="user_type" value="Subscriber"></input>Subscriber</label>
+                            <label><input type="radio" name="user_type" value="Customer"></input>Customer</label>
+                        </div>
+                    </div>
                 </div>
             </div>
         );
