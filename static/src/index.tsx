@@ -15,16 +15,19 @@ const wasmUrl = new URL("sql.js-httpvfs/dist/sql-wasm.wasm", import.meta.url);
 
 type Region = 'All' | 'NYC' | 'JC'
 type UserType = 'All' | 'Subscriber' | 'Customer'
+type YAxis = 'Rides' | 'Ride minutes'
 type Row = {
-    Month: Date,
-    Count: number,
-    Region: Region,
-    'User Type': UserType,
+    Month: Date
+    Count: number
+    Duration: number
+    Region: Region
+    'User Type': UserType
 }
 type State = {
     data: null | Row[]
     region: Region
     userType: UserType
+    yAxis: YAxis
     json: null | any
 }
 
@@ -66,19 +69,18 @@ class App extends Component<any, State> {
 
     constructor(props: any) {
         super(props);
-        this.state = { data: null, region: 'All', json: null, userType: 'All', }
-        this.onRegion = this.onRegion.bind(this);
-    }
-
-    onRegion(e: any) {
-        console.log("event:", e.target.value);
+        this.state = {
+            data: null,
+            region: 'All',
+            json: null,
+            userType: 'All',
+            yAxis: 'Rides',
+        }
     }
 
     render() {
         const state = this.state;
-        // const data: (null | Row[]) = state['data'];
-        const { data, region, userType } = state;
-        console.log("render; region:", region);
+        const { data, region, userType, yAxis } = state;
         const json = state['json']
         if (json) {
             console.log("found json");
@@ -98,17 +100,15 @@ class App extends Component<any, State> {
         let agg = new Map<string, number>()
         data.forEach((r) => {
             if (!(region == 'All' || region == r['Region'])) {
-                // console.log('Skipping region:', r['Region']);
                 return;
             }
             if (!(userType == 'All' || userType == r['User Type'])) {
-                console.log('Skipping userType:', r['User Type']);
                 return;
             }
             const month: Date = r['Month'];
             const key: string = month.toString();
             const cur = agg.get(key);
-            const count = r['Count'];
+            const count = (yAxis == 'Rides') ? r['Count'] : r['Duration'];
             if (cur === undefined) {
                 //console.log("Month:",month)
                 agg.set(key, count);
@@ -143,6 +143,21 @@ class App extends Component<any, State> {
         const allYears: Array<number> = months.map((m) => new Date(m)).filter((d) => d.getMonth() == 0).map((d) => d.getFullYear());
         const years: Array<number> = [...new Set(allYears)];
         const vlines: Array<Partial<Shape>> = years.map(vline);
+
+        function radios(label: string, choices: string[], selected: string, key: string) {
+            return <div className="control col">
+                <div className="control-header">{label}:</div>
+                <div id="region" onChange={(e: any) => {
+                    let obj: any = {};
+                    obj[key] = e.target.value;
+                    this.setState(obj);
+                }}>
+                    <label><input type="radio" name="region" value="All"></input>All</label>
+                    <label><input type="radio" name="region" value="NYC"></input>NYC</label>
+                    <label><input type="radio" name="region" value="JC"></input>JC</label>
+                </div>
+            </div>
+        }
 
         return (
             <div id="plot">
@@ -185,6 +200,13 @@ class App extends Component<any, State> {
                             <label><input type="radio" name="user_type" value="All"></input>All</label>
                             <label><input type="radio" name="user_type" value="Subscriber"></input>Subscriber</label>
                             <label><input type="radio" name="user_type" value="Customer"></input>Customer</label>
+                        </div>
+                    </div>
+                    <div className="control col">
+                        <div className="control-header">Y-Axis:</div>
+                        <div id="user-type" onChange={(e: any) => this.setState({ yAxis: e.target.value })}>
+                            <label><input type="radio" name="y_axis" value="Rides"></input>Rides</label>
+                            <label><input type="radio" name="y_axis" value="Ride minutes"></input>Ride minutes</label>
                         </div>
                     </div>
                 </div>
