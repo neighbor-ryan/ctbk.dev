@@ -45,7 +45,7 @@ class App extends Component<any, State> {
                 });
         } else {
             // const url = "https://ctbk.s3.amazonaws.com/aggregated/ymrgtb_cd_201306:202110.sqlite";
-            const url = "/assets/ymrgtb_cd_201306:202110.sqlite";
+            const url = "/assets/ymrgtb_cd_201306:202111.sqlite";
             console.log("Fetching DB…", url);
             const worker = await createDbWorker(
                 [
@@ -96,6 +96,7 @@ class App extends Component<any, State> {
         if (!data) {
             return <div>Loading…</div>
         }
+        console.log("Region", region, "User Type", userType, "Y-Axis", yAxis, "First row:")
         console.log(data[0])
         let agg = new Map<string, number>()
         data.forEach((r) => {
@@ -144,18 +145,30 @@ class App extends Component<any, State> {
         const years: Array<number> = [...new Set(allYears)];
         const vlines: Array<Partial<Shape>> = years.map(vline);
 
-        function radios(label: string, choices: string[], selected: string, key: string) {
+        const radios = (label: string, choices: string[], selected: string, key: string) => {
+            let onChange = function(this: App, e: any) {
+                let obj: any = {};
+                obj[key] = e.target.value;
+                this.setState(obj);
+            }
+            onChange = onChange.bind(this)
+
+            const labels = choices.map((choice) => {
+                const key = label + "-" + choice
+                return <label key={key}>
+                    <input
+                        type="radio"
+                        name={key}
+                        value={choice}
+                        checked={choice == selected}
+                        onChange={e => {}}
+                    ></input>
+                    {choice}
+                </label>
+            })
             return <div className="control col">
                 <div className="control-header">{label}:</div>
-                <div id="region" onChange={(e: any) => {
-                    let obj: any = {};
-                    obj[key] = e.target.value;
-                    this.setState(obj);
-                }}>
-                    <label><input type="radio" name="region" value="All"></input>All</label>
-                    <label><input type="radio" name="region" value="NYC"></input>NYC</label>
-                    <label><input type="radio" name="region" value="JC"></input>JC</label>
-                </div>
+                <div id={label} onChange={onChange}>{labels}</div>
             </div>
         }
 
@@ -172,7 +185,9 @@ class App extends Component<any, State> {
                             },
                         },
                     ]}
+                    useResizeHandler
                     layout={{
+                        autosize: true,
                         title: 'Citibike Rides By Month',
                         yaxis: {
                             gridcolor: '#DDDDDD',
@@ -186,29 +201,9 @@ class App extends Component<any, State> {
                     }}
                 />
                 <div className="no-gutters row">
-                    <div className="control col">
-                        <div className="control-header">Region:</div>
-                        <div id="region" onChange={(e: any) => this.setState({ region: e.target.value })}>
-                            <label><input type="radio" name="region" value="All"></input>All</label>
-                            <label><input type="radio" name="region" value="NYC"></input>NYC</label>
-                            <label><input type="radio" name="region" value="JC"></input>JC</label>
-                        </div>
-                    </div>
-                    <div className="control col">
-                        <div className="control-header">User Type:</div>
-                        <div id="user-type" onChange={(e: any) => this.setState({ userType: e.target.value })}>
-                            <label><input type="radio" name="user_type" value="All"></input>All</label>
-                            <label><input type="radio" name="user_type" value="Subscriber"></input>Subscriber</label>
-                            <label><input type="radio" name="user_type" value="Customer"></input>Customer</label>
-                        </div>
-                    </div>
-                    <div className="control col">
-                        <div className="control-header">Y-Axis:</div>
-                        <div id="user-type" onChange={(e: any) => this.setState({ yAxis: e.target.value })}>
-                            <label><input type="radio" name="y_axis" value="Rides"></input>Rides</label>
-                            <label><input type="radio" name="y_axis" value="Ride minutes"></input>Ride minutes</label>
-                        </div>
-                    </div>
+                    {radios("Region", ["All", "NYC", "JC"], region, "region")}
+                    {radios("User Type", ["All", "Subscriber", "Customer"], userType, "userType")}
+                    {radios("Y-Axis", ["Rides", "Ride minutes"], yAxis, "yAxis")}
                 </div>
             </div>
         );
