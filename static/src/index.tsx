@@ -18,6 +18,8 @@ const wasmUrl = new URL("sql.js-httpvfs/dist/sql-wasm.wasm", import.meta.url);
 
 type Region = 'All' | 'NYC' | 'JC'
 type UserType = 'All' | 'Subscriber' | 'Customer'
+type Gender = 'Male' | 'Female' | 'Other / Unspecified'
+const Int2Gender: { [k: number]: Gender } = { 0: 'Other / Unspecified', 1: 'Male', 2: 'Female' }
 type YAxis = 'Rides' | 'Ride minutes'
 type Row = {
     Month: Date
@@ -25,11 +27,13 @@ type Row = {
     Duration: number
     Region: Region
     'User Type': UserType
+    Gender: number
 }
 type State = {
     data: null | Row[]
     region: Region
     userType: UserType
+    genders: Gender[]
     rollingAvgs: number[]
     yAxis: YAxis
     json: null | any
@@ -76,6 +80,7 @@ class App extends Component<any, State> {
         this.state = {
             data: null,
             region: 'All',
+            genders: [ 'Male', 'Female', 'Other / Unspecified', ],
             json: null,
             userType: 'All',
             yAxis: 'Rides',
@@ -85,7 +90,7 @@ class App extends Component<any, State> {
 
     render() {
         const state = this.state;
-        const { data, region, userType, yAxis, rollingAvgs } = state;
+        const { data, region, userType, genders, yAxis, rollingAvgs } = state;
         const json = state['json']
         if (json) {
             console.log("found json");
@@ -109,6 +114,10 @@ class App extends Component<any, State> {
                 return;
             }
             if (!(userType == 'All' || userType == r['User Type'])) {
+                return;
+            }
+            const gender = Int2Gender[r['Gender']]
+            if (genders.indexOf(gender) == -1) {
                 return;
             }
             const month: Date = r['Month'];
@@ -143,10 +152,6 @@ class App extends Component<any, State> {
         const months: string[] = Array.from(agg.keys());
         const counts: number[] = Array.from(agg.values());
         const rollingSeries = rollingAvgs.map((n) => rollingAvg(counts, n))
-
-        // const months = data.map((r: any) => r['Month'])
-        // const counts = data.map((r: any) => r['Count'])
-        //console.log(months, counts)
 
         function vline(year: number): Partial<Shape> {
             const x: string = `${year-1}-12-20`;
@@ -228,6 +233,15 @@ class App extends Component<any, State> {
                         label="Rolling Avg"
                         data={[{ name: "12mo", data: 12, checked: true }]}
                         cb={(rollingAvgs) => this.setState({ rollingAvgs })}
+                    ></Checklist>
+                    <Checklist<Gender>
+                        label="Gender 🚧"
+                        data={[
+                            { name: 'Male', data: 'Male', checked: true },
+                            { name: 'Female', data: 'Female', checked: true },
+                            { name: 'Other / Unspecified', data: 'Other / Unspecified', checked: true },
+                        ]}
+                        cb={(genders) => this.setState({ genders })}
                     ></Checklist>
                 </div>
             </div>
