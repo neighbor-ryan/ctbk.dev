@@ -5,6 +5,7 @@ import { Component, createElement } from "react";
 import Plot from 'react-plotly.js';
 import $ from 'jquery';
 import {Shape} from "plotly.js";
+import * as Plotly from "plotly.js";
 // import './index.css';
 
 const workerUrl = new URL(
@@ -27,12 +28,82 @@ type State = {
     data: null | Row[]
     region: Region
     userType: UserType
+    rollingAvgs: number[]
     yAxis: YAxis
     json: null | any
 }
 
 // const jsonMode = true;
 const jsonMode = false;
+
+type CheckboxData<T> = {
+    name: string
+    data: T
+    checked?: boolean
+}
+
+type ChecklistProps<T> = {
+    label: string
+    data: CheckboxData<T>[]
+    cb: (ts: T[]) => void
+}
+type ChecklistState<T> = { [key: string]: { data: T, checked: boolean } }
+
+
+class Checklist<T> extends Component<ChecklistProps<T>, ChecklistState<T>> {
+    constructor(props: ChecklistProps<T>) {
+        super(props);
+        let obj: { [key: string]: { data: T, checked: boolean } } = {}
+        props.data.forEach((d) => obj[d.name] = { data: d.data, checked: d.checked || false })
+        this.state = obj
+    }
+
+    render() {
+        const [ { label, data, cb }, state ] = [ this.props, this.state ]
+
+        let onChange = function(this: Checklist<T>, e: any) {
+            let newState = {...state}
+            const name = e.target.value
+            const checked: boolean = e.target.checked
+            // console.log("target:", name, "checked:", checked)
+            const { checked: cur, data: elem } = state[name]
+            if (cur == checked) {
+                console.warn("Checkbox", name, "already has value", checked)
+            } else {
+                newState[name] = { data: elem, checked }
+                // console.log("setState", newState)
+                this.setState(newState)
+                const elems =
+                    Object
+                        .keys(newState)
+                        .filter((name) => newState[name].checked)
+                        .map((name) => newState[name].data)
+                cb(elems)
+            }
+        }
+        onChange = onChange.bind(this)
+
+        const labels = data.map((d) => {
+            const { name } = d
+            const checked = state[name].checked
+            return <label key={name}>
+                <input
+                    type="checkbox"
+                    name={name}
+                    value={name}
+                    checked={checked}
+                    onChange={e => {}}
+                ></input>
+                {name}
+            </label>
+        })
+
+        return <div className="control col">
+            <div className="control-header">{label}:</div>
+            <div id={label} onChange={onChange}>{labels}</div>
+        </div>
+    }
+}
 
 class App extends Component<any, State> {
     async componentDidMount() {
@@ -75,12 +146,13 @@ class App extends Component<any, State> {
             json: null,
             userType: 'All',
             yAxis: 'Rides',
+            rollingAvgs: [12],
         }
     }
 
     render() {
         const state = this.state;
-        const { data, region, userType, yAxis } = state;
+        const { data, region, userType, yAxis, rollingAvgs } = state;
         const json = state['json']
         if (json) {
             console.log("found json");
@@ -117,8 +189,28 @@ class App extends Component<any, State> {
                 agg.set(key, cur + count)
             }
         })
+
+        function rollingAvg(vs: number[], n: number): (number|null)[] {
+            let sum: number = 0
+            let avgs: (number|null)[] = []
+            for (let i = 0; i < vs.length; i++) {
+                sum += vs[i]
+                if (i >= n) {
+                    sum -= vs[i-n]
+                    const avg = sum / n
+                    avgs.push(avg)
+                } else {
+                    avgs.push(null)
+                }
+
+            }
+            return avgs
+        }
+
         const months: string[] = Array.from(agg.keys());
         const counts: number[] = Array.from(agg.values());
+        const rollingSeries = rollingAvgs.map((n) => rollingAvg(counts, n))
+
         // const months = data.map((r: any) => r['Month'])
         // const counts = data.map((r: any) => r['Count'])
         //console.log(months, counts)
@@ -145,7 +237,7 @@ class App extends Component<any, State> {
         const years: Array<number> = [...new Set(allYears)];
         const vlines: Array<Partial<Shape>> = years.map(vline);
 
-        const radios = (label: string, choices: string[], selected: string, key: string) => {
+        const inputs = (label: string, choices: string[], selected: string, key: string, checks: Boolean = false) => {
             let onChange = function(this: App, e: any) {
                 let obj: any = {};
                 obj[key] = e.target.value;
@@ -157,7 +249,7 @@ class App extends Component<any, State> {
                 const key = label + "-" + choice
                 return <label key={key}>
                     <input
-                        type="radio"
+                        type={checks ? "checkbox" : "radio"}
                         name={key}
                         value={choice}
                         checked={choice == selected}
@@ -172,22 +264,40 @@ class App extends Component<any, State> {
             </div>
         }
 
+        const bars: Plotly.Data = {
+            name: yAxis,
+            x: months,
+            y: counts,
+            type: 'bar',
+            marker: {
+                color: '#88aaff',
+            },
+        }
+
+        const rollingTraces: Plotly.Data[] = rollingSeries.map(
+            (y) => {
+                return {
+                    name: '12mo avg',
+                    x: months,
+                    y: y,
+                    type: 'scatter',
+                    marker: {
+                        color: '#000',
+                    }
+                }
+            }
+        )
+
+        const traces: Plotly.Data[] = Array.prototype.concat([ bars ], rollingTraces)
+
         return (
             <div id="plot">
                 <Plot
-                    data={[
-                        {
-                            x: months,
-                            y: counts,
-                            type: 'bar',
-                            marker: {
-                                color: '#88aaff',
-                            },
-                        },
-                    ]}
+                    data={traces}
                     useResizeHandler
                     layout={{
                         autosize: true,
+                        showlegend: false,
                         title: 'Citibike Rides By Month',
                         yaxis: {
                             gridcolor: '#DDDDDD',
@@ -201,9 +311,14 @@ class App extends Component<any, State> {
                     }}
                 />
                 <div className="no-gutters row">
-                    {radios("Region", ["All", "NYC", "JC"], region, "region")}
-                    {radios("User Type", ["All", "Subscriber", "Customer"], userType, "userType")}
-                    {radios("Y-Axis", ["Rides", "Ride minutes"], yAxis, "yAxis")}
+                    {inputs("Region", ["All", "NYC", "JC"], region, "region")}
+                    {inputs("User Type", ["All", "Subscriber", "Customer"], userType, "userType")}
+                    {inputs("Y-Axis", ["Rides", "Ride minutes"], yAxis, "yAxis")}
+                    <Checklist
+                        label="Rolling Avg"
+                        data={[{ name: "12mo", data: 12, checked: true }]}
+                        cb={(rollingAvgs) => this.setState({ rollingAvgs })}
+                    ></Checklist>
                 </div>
             </div>
         );
