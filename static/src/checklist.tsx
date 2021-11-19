@@ -4,6 +4,7 @@ type CheckboxData<T> = {
     name: string
     data: T
     checked?: boolean
+    disabled?: boolean
 }
 
 type ChecklistProps<T> = {
@@ -48,7 +49,7 @@ export class Checklist<T> extends Component<ChecklistProps<T>, ChecklistState<T>
         onChange = onChange.bind(this)
 
         const labels = data.map((d) => {
-            const { name } = d
+            const { name, disabled } = d
             const checked = state[name].checked
             return <label key={name}>
                 <input
@@ -56,6 +57,7 @@ export class Checklist<T> extends Component<ChecklistProps<T>, ChecklistState<T>
                     name={name}
                     value={name}
                     checked={checked}
+                    disabled={disabled}
                     onChange={e => {}}
                 ></input>
                 {name}

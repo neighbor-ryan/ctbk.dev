@@ -20,6 +20,14 @@ type Region = 'All' | 'NYC' | 'JC'
 type UserType = 'All' | 'Subscriber' | 'Customer'
 type Gender = 'Male' | 'Female' | 'Other / Unspecified'
 const Int2Gender: { [k: number]: Gender } = { 0: 'Other / Unspecified', 1: 'Male', 2: 'Female' }
+type RideableType = 'Docked' | 'Electric' | 'Unknown'
+const NormalizeRideableType: { [k: string]: RideableType } = {
+    'docked_bike': 'Docked',
+    'classic_bike': 'Docked',
+    'electric_bike': 'Electric',
+    'unknown': 'Unknown',
+    'motivate_dockless_bike': 'Unknown',
+}
 type YAxis = 'Rides' | 'Ride minutes'
 type Row = {
     Month: Date
@@ -28,12 +36,14 @@ type Row = {
     Region: Region
     'User Type': UserType
     Gender: number
+    'Rideable Type': string
 }
 type State = {
     data: null | Row[]
     region: Region
     userType: UserType
     genders: Gender[]
+    rideableTypes: RideableType[]
     rollingAvgs: number[]
     yAxis: YAxis
     json: null | any
@@ -81,6 +91,7 @@ class App extends Component<any, State> {
             data: null,
             region: 'All',
             genders: [ 'Male', 'Female', 'Other / Unspecified', ],
+            rideableTypes: [ 'Docked', 'Electric', 'Unknown', ],
             json: null,
             userType: 'All',
             yAxis: 'Rides',
@@ -90,7 +101,7 @@ class App extends Component<any, State> {
 
     render() {
         const state = this.state;
-        const { data, region, userType, genders, yAxis, rollingAvgs } = state;
+        const { data, region, userType, genders, rideableTypes, yAxis, rollingAvgs } = state;
         const json = state['json']
         if (json) {
             console.log("found json");
@@ -111,21 +122,25 @@ class App extends Component<any, State> {
         let agg = new Map<string, number>()
         data.forEach((r) => {
             if (!(region == 'All' || region == r['Region'])) {
-                return;
+                return
             }
             if (!(userType == 'All' || userType == r['User Type'])) {
-                return;
+                return
             }
             const gender = Int2Gender[r['Gender']]
             if (genders.indexOf(gender) == -1) {
-                return;
+                return
+            }
+            const rideableType = NormalizeRideableType[r['Rideable Type']]
+            if (rideableTypes.indexOf(rideableType) == -1) {
+                console.warn("Dropping", r['Count'], "rides from with unrecognized rideable type", r['Rideable Type'], r)
+                return
             }
             const month: Date = r['Month'];
             const key: string = month.toString();
             const cur = agg.get(key);
             const count = (yAxis == 'Rides') ? r['Count'] : r['Duration'];
             if (cur === undefined) {
-                //console.log("Month:",month)
                 agg.set(key, count);
             } else {
                 agg.set(key, cur + count)
@@ -242,6 +257,15 @@ class App extends Component<any, State> {
                             { name: 'Other / Unspecified', data: 'Other / Unspecified', checked: true },
                         ]}
                         cb={(genders) => this.setState({ genders })}
+                    ></Checklist>
+                    <Checklist<RideableType>
+                        label="Rideable Type"
+                        data={[
+                            { name: 'Docked', data: 'Docked', checked: true, disabled: true },
+                            { name: 'Electric', data: 'Electric', checked: true, disabled: true },
+                            { name: 'Unknown', data: 'Unknown', checked: true, disabled: true },
+                        ]}
+                        cb={(rideableTypes) => this.setState({ rideableTypes })}
                     ></Checklist>
                 </div>
             </div>
