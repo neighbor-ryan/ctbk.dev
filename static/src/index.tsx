@@ -58,6 +58,7 @@ type State = {
     userType: UserType
     genders: Gender[]
     stackBy: StackBy
+    stackRelative: boolean
     rideableTypes: RideableType[]
     rollingAvgs: number[]
     yAxis: YAxis
@@ -76,6 +77,97 @@ function order<T>(u: { [k: string]: T }) {
         },
         {}
     );
+}
+
+function sum(arr: number[]) {
+    return arr.reduce((a, b) => a + b, 0)
+}
+
+function sumValues(o: { [k: string]: number }) {
+    return sum(values(o))
+}
+
+function rollingAvg(vs: number[], n: number): (number|null)[] {
+    let sum: number = 0
+    let avgs: (number|null)[] = []
+    for (let i = 0; i < vs.length; i++) {
+        sum += vs[i]
+        if (i >= n) {
+            sum -= vs[i-n]
+            const avg = sum / n
+            avgs.push(avg)
+        } else {
+            avgs.push(null)
+        }
+    }
+    return avgs
+}
+
+// For stacked graphs with 1, 2, or 3 stacked features, darken the base color by these ratios
+const colorSetFades: { [k: number]: number[] } = {
+    1: [           1, ],
+    2: [      .75, 1, ],
+    3: [ .65, .80, 1, ],
+}
+
+// Hexadecimal character color for rolling average traces in stacked graphs
+const stackRollColorDicts = {
+    'None': {
+        '': '0',
+    },
+    'User Type': {
+        'Customer': 'D',
+        'Subscriber': '7',
+    },
+    'Gender': {
+        'Male': '6',
+        'Female': 'D',
+        'Other / Unspecified': 'E',
+    },
+    'Rideable Type': {
+        'Docked': 'E',
+        'Electric': 'D',
+        'Unknown': '6',
+    },
+}
+
+// Hex-color utilities
+function pad(num: number, size: number){
+    return ('0' + num.toString(16)).substr(-size);
+}
+function darken(c: string, f = 0.5): string {
+    return '#' + [
+        c.substr(1, 2),
+        c.substr(3, 2),
+        c.substr(5, 2)
+    ]
+        .map((s) =>
+            pad(
+                Math.round(
+                    parseInt(s, 16) * f
+                ),
+                2
+            )
+        )
+        .join('')
+}
+
+function vline(year: number): Partial<Shape> {
+    const x: string = `${year-1}-12-20`;
+    return {
+        layer: 'below',
+        type: 'line',
+        x0: x,
+        y0: 0,
+        x1: x,
+        yref: 'paper',
+        y1: 1,//00000,
+        line: {
+            color: '#555555',
+            // width: 1.5,
+            // dash: 'dot'
+        }
+    }
 }
 
 class App extends Component<any, State> {
@@ -119,6 +211,7 @@ class App extends Component<any, State> {
             genders: [ 'Male', 'Female', 'Other / Unspecified', ],
             rideableTypes: [ 'Docked', 'Electric', 'Unknown', ],
             stackBy: 'None',
+            stackRelative: false,
             json: null,
             userType: 'All',
             yAxis: 'Rides',
@@ -129,7 +222,7 @@ class App extends Component<any, State> {
 
     render() {
         const state = this.state;
-        const { data, region, userType, genders, rideableTypes, stackBy, yAxis, rollingAvgs, showLegend } = state;
+        const { data, region, userType, genders, rideableTypes, stackBy, stackRelative, yAxis, rollingAvgs, showLegend } = state;
         const json = state['json']
         if (json) {
             console.log("found json");
@@ -148,9 +241,14 @@ class App extends Component<any, State> {
         console.log("Region", region, "User Type", userType, "Y-Axis", yAxis, "First row:")
         console.log(data[0])
 
-        const yAxisLabel = yAxisLabelDict[yAxis].yAxis
-        const yHoverLabel = yAxisLabelDict[yAxis].hoverLabel
-        const title = yAxisLabelDict[yAxis].title
+        let yAxisLabel = yAxisLabelDict[yAxis].yAxis
+        let yHoverLabel = yAxisLabelDict[yAxis].hoverLabel
+        let title = yAxisLabelDict[yAxis].title
+        if (stackRelative) {
+            yAxisLabel += ' (%)'
+            yHoverLabel += ' (%)'
+            title += ` (%, by ${stackBy})`
+        }
 
         const filtered =
             data
@@ -186,6 +284,9 @@ class App extends Component<any, State> {
         const stackKeys = stackKeyDict[stackBy]
         const showlegend = showLegend == null ? (stackBy != 'None') : showLegend
 
+        // Build multi-index in both orders:
+        // - month -> stackVal -> count
+        // - stackVal -> month -> count
         let monthsData: { [month: string]: { [stackVal: string]: number }} = {}
         let stacksData: { [stackVal: string]: { [month: string]: number }} = {};
         filtered.forEach((r) => {
@@ -213,123 +314,93 @@ class App extends Component<any, State> {
             cur[month] += count
         })
 
+        // Sort months within each index
         monthsData = order(monthsData)
         stacksData = fromEntries(stackKeys.map((stackVal) => [ stackVal, order(stacksData[stackVal]) ]))
+        const months: string[] = Arr(keys(monthsData))
 
-        function rollingAvg(vs: number[], n: number): (number|null)[] {
-            let sum: number = 0
-            let avgs: (number|null)[] = []
-            for (let i = 0; i < vs.length; i++) {
-                sum += vs[i]
-                if (i >= n) {
-                    sum -= vs[i-n]
-                    const avg = sum / n
-                    avgs.push(avg)
-                } else {
-                    avgs.push(null)
-                }
-            }
-            return avgs
-        }
-
-        const colorSetFades: { [k: number]: number[] } = {
-            1: [ 1 ],
-            2: [      .75, 1, ],
-            3: [ .65, .80, 1, ],
-        }
-
-        function pad(num: number, size: number){
-            return ('0' + num.toString(16)).substr(-size);
-        }
-        function darken(c: string, f = 0.5): string {
-            return '#' + [
-                c.substr(1, 2),
-                c.substr(3, 2),
-                c.substr(5, 2)
-            ]
-                .map((s) =>
-                    pad(
-                        Math.round(
-                            parseInt(s, 16) * f
-                        ),
-                        2
+        if (stackRelative) {
+            const monthTotals = fromEntries(
+                entries(monthsData)
+                    .map(
+                        ([month, stackVals]) => [ month, sumValues(stackVals) ]
                     )
-                )
-                .join('')
-        }
-
-        let barData: { month: string, stackBy?: string, value: number }[] = []
-        for (const [month, obj] of entries(monthsData)) {
-            for (const stackKey of stackKeys) {
-                const value = obj[stackKey] || 0
-                let datum: { month: string, stackBy?: string, value: number } = { month, value }
-                if (stackKey != '') {
-                    datum['stackBy'] = stackKey
-                }
-                barData.push(datum)
-            }
+            )
+            monthsData = fromEntries(
+                entries(monthsData)
+                    .map(
+                        ([month, stackVals]) => [
+                            month,
+                            fromEntries(
+                                entries(stackVals)
+                                    .map(
+                                        ([ stackVal, count ]) => [ stackVal, count / monthTotals[month] * 100]
+                                    )
+                            )
+                        ]
+                    )
+            )
+            stacksData = fromEntries(
+                entries(stacksData)
+                    .map(
+                        ([stackVal, values]) => [
+                            stackVal,
+                            fromEntries(
+                                entries(values)
+                                    .map(
+                                        ([ month, count ]) => [ month, count / monthTotals[month] * 100 ]
+                                    )
+                            )
+                        ]
+                    )
+            )
         }
 
         const fades = colorSetFades[stackKeys.length]
         const baseColor = '#88aaff'
 
-        const months: string[] = Arr(keys(monthsData))
-        const totals: number[] = values(monthsData).map((stackData) => values(stackData).reduce((a, b) => a + b), 0)
-        const barTraces: Plotly.Data[] = entries(stacksData).map(([stackVal, values], idx) => {
-            const x = months
-            const y = months.map((month) => values[month] || 0)
-            const name = stackVal || yHoverLabel
-            const fade = fades[idx]
-            const traceColor = darken(baseColor, fade)
-            console.log("trace", name, "color", traceColor)
-            return {
-                x, y, name,
-                type: 'bar',
-                marker: {
-                    color: traceColor,
-                },
-            }
-        })
+        const barTraces: Plotly.Data[] =
+            entries(stacksData)
+                .map(([stackVal, values], idx) => {
+                    const x = months
+                    const y = months.map((month) => values[month] || 0)
+                    const name = stackVal || yHoverLabel
+                    const fade = fades[idx]
+                    const color = darken(baseColor, fade)
+                    console.log("trace", name, "color", color)
+                    return {
+                        x, y, name,
+                        type: 'bar',
+                        marker: { color, },
+                    }
+                })
 
-        const rollingSeries0: ((number | null)[])[][] =
-            values(stacksData)
+        let rollingSeries: ((number | null)[])[] = []
+        rollingSeries = rollingSeries.concat(
+            ...values(stacksData)
                 .map((months) => {
-                    console.log("stacks:", months)
+                    //console.log("stacks:", months)
                     let vals = values(months)
                     if (stackBy == 'Gender') {
-                        vals = entries(months).filter(([ month, _ ]) => new Date(month) < new Date('2021-02-01')).map(([ _, vals ]) => vals)
+                        // Gender data became 100% "Other / Unspecified" from February 2021; don't bother with per-entry
+                        // rolling averages from that point onward
+                        const cutoff = new Date('2021-02-01')
+                        vals =
+                            entries(months)
+                                .filter(([ month, _ ]) => new Date(month) < cutoff)
+                                .map(([ _, vals ]) => vals)
                     }
                     return rollingAvgs.map(
                         (n) =>
                             rollingAvg(vals, n)
                     )
                 })
+        )
 
-        console.log("rollingSeries0", rollingSeries0)
-        let rollingSeries: ((number | null)[])[] = []
-        rollingSeries = rollingSeries.concat(...rollingSeries0)
-
-        if (stackBy != 'None') {
+        if (stackBy != 'None' && !stackRelative) {
+            const totals: number[] = values(monthsData).map((stackData) => sumValues(stackData))
             const rollingTotals = rollingAvgs.map((n) => rollingAvg(totals, n))
             rollingSeries = rollingSeries.concat(rollingTotals)
-        }
-
-        function vline(year: number): Partial<Shape> {
-            const x: string = `${year-1}-12-20`;
-            return {
-                layer: 'below',
-                type: 'line',
-                x0: x,
-                y0: 0,
-                x1: x,
-                yref: 'paper',
-                y1: 1,//00000,
-                line: {
-                    color: '#555555',
-                    // width: 1.5,
-                    // dash: 'dot'
-                }
-            }
         }
 
         const allYears: Array<number> =
@@ -340,45 +411,22 @@ class App extends Component<any, State> {
         const years: Array<number> = [...new Set(allYears)];
         const vlines: Array<Partial<Shape>> = years.map(vline);
 
-        const stackRollDicts = {
-            'None': {
-               '': '0',
-            },
-            'User Type': {
-                'Customer': 'D',
-                'Subscriber': '7',
-            },
-            'Gender': {
-                'Male': '6',
-                'Female': 'D',
-                'Other / Unspecified': 'E',
-            },
-            'Rideable Type': {
-                'Docked': 'E',
-                'Electric': 'D',
-                'Unknown': '6',
-            },
-        }
-        let stackRollDict: { [k: string]: string } = stackRollDicts[stackBy]
-        stackRollDict['Total'] = '0'
+        let stackRollColorDict: { [k: string]: string } = stackRollColorDicts[stackBy]
+        stackRollColorDict['Total'] = '0'  // Black
         const rollingTraces: Plotly.Data[] = rollingSeries.map(
             (y, idx) => {
                 const stackVal = stackKeys[idx] || 'Total'
                 const name = stackVal == 'Total' ? '12mo avg' : `${stackVal} (12mo)`
-                const char = stackRollDict[stackVal]
-                const traceColor = '#' + char + char + char + char + char + char
-                console.log("rolling color:", idx, stackVal, char, traceColor)
+                const char = stackRollColorDict[stackVal]
+                const color = '#' + char + char + char + char + char + char
+                console.log("rolling color:", idx, stackVal, char, color)
                 return {
                     name,
                     x: months,
                     y,
                     type: 'scatter',
-                    marker: {
-                        color: traceColor,
-                    },
-                    line: {
-                        width: 4,
-                    },
+                    marker: { color, },
+                    line: { width: 4, },
                 }
             }
         )
@@ -428,7 +476,7 @@ class App extends Component<any, State> {
                                 cb={
                                     (checked) => {
                                         console.log("legend checkbox:", checked)
-                                        return this.setState({ showLegend: checked })
+                                        this.setState({ showLegend: checked })
                                     }
                                 }
                             />
@@ -444,6 +492,19 @@ class App extends Component<any, State> {
                         ]}
                         cb={(stackBy) => this.setState({ stackBy })}
                         choice="None"
+                        extra={
+                            <Checkbox
+                                id="stack-relative"
+                                label="Percentages"
+                                checked={stackRelative}
+                                cb={
+                                    (checked) => {
+                                        console.log("percentage checked:", checked)
+                                        this.setState({ stackRelative: checked })
+                                    }
+                                }
+                            />
+                        }
                     />
                     <Checklist<Gender>
                         label="Gender 🚧"

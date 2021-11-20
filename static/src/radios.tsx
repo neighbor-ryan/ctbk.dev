@@ -1,4 +1,4 @@
-import React, {Component} from "react";
+import React, {Component, ReactElement} from "react";
 
 type Option<T> = {
     label?: string
@@ -11,6 +11,7 @@ type Props<T extends string> = {
     options: (Option<T> | T)[]
     choice: T
     cb: (choice: T) => void
+    extra?: ReactElement<any, any>
 }
 
 type State<T extends string> = { choice: T }
@@ -28,7 +29,7 @@ export class Radios<T extends string> extends Component<Props<T>, State<T>> {
         this.props.cb(choice)
     }
     render() {
-        const [ { label, options }, { choice } ] = [ this.props, this.state ]
+        const [ { label, options, extra }, { choice } ] = [ this.props, this.state ]
         const labels = options.map((option) => {
             const { label: text, data: name, disabled } =
                 typeof option === 'string'
@@ -48,7 +49,8 @@ export class Radios<T extends string> extends Component<Props<T>, State<T>> {
         })
         return <div className="control col">
             <div className="control-header">{label}:</div>
-            <div id={label} onChange={this.onChange}>{labels}</div>
+            <div id={label} className="sub-control" onChange={this.onChange}>{labels}</div>
+            {extra}
         </div>
     }
 }
