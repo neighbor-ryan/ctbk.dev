@@ -354,13 +354,14 @@ class App extends Component<any, State> {
         const rollingTraces: Plotly.Data[] = rollingSeries.map(
             (y, idx) => {
                 const stackVal = stackKeys[idx] || 'Total'
+                const name = stackVal == 'Total' ? '12mo avg' : `${stackVal} (12mo)`
                 const char = stackRollDict[stackVal]
                 const traceColor = '#' + char + char + char + char + char + char
                 console.log("rolling color:", idx, stackVal, char, traceColor)
                 return {
-                    name: `12mo avg (${stackVal})`,
+                    name,
                     x: months,
-                    y: y,
+                    y,
                     type: 'scatter',
                     marker: {
                         color: traceColor,
@@ -374,24 +375,38 @@ class App extends Component<any, State> {
 
         const traces: Plotly.Data[] = barTraces.concat(rollingTraces)
 
+        const yAxisLabelDict = {
+            'Rides': { yAxis: 'Total Rides', title: 'Citibike Rides per Month', },
+            'Ride minutes': { yAxis: 'Total Ride Minutes', title: 'Citibike Ride Minutes per Month', },
+        }
+        const yAxisLabel = yAxisLabelDict[yAxis].yAxis
+        const title = yAxisLabelDict[yAxis].title
+        const showlegend = stackType != 'None'
+
         return (
             <div id="plot">
                 <Plot
                     data={traces}
                     useResizeHandler
                     layout={{
+                        titlefont: { size: 18 },
                         autosize: true,
                         barmode: 'stack',
-                        showlegend: stackType != 'None',
-                        title: 'Citibike Rides By Month',
+                        showlegend,
+                        title,
+                        xaxis: {
+                            title: 'Month',
+                            tickfont: { size: 14 },
+                            titlefont: { size: 14 },
+                        },
                         yaxis: {
                             gridcolor: '#DDDDDD',
+                            title: yAxisLabel,
+                            tickfont: { size: 14 },
+                            titlefont: { size: 14 },
                         },
                         paper_bgcolor: 'rgba(0,0,0,0)',
                         plot_bgcolor: 'rgba(0,0,0,0)',
-                        font: {
-                            size: 18,
-                        },
                         shapes: vlines,
                     }}
                 />
