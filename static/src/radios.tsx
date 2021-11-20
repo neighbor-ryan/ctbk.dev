@@ -1,6 +1,7 @@
 import React, {Component} from "react";
 
 type Option<T> = {
+    label?: string
     data: T
     disabled?: boolean
 }
@@ -29,7 +30,10 @@ export class Radios<T extends string> extends Component<Props<T>, State<T>> {
     render() {
         const [ { label, options }, { choice } ] = [ this.props, this.state ]
         const labels = options.map((option) => {
-            const { data: name, disabled } = typeof option === 'string' ? { data: option, disabled: false } : option
+            const { label: text, data: name, disabled } =
+                typeof option === 'string'
+                    ? { label: option, data: option, disabled: false }
+                    : option
             return <label key={name}>
                 <input
                     type="radio"
@@ -39,7 +43,7 @@ export class Radios<T extends string> extends Component<Props<T>, State<T>> {
                     disabled={disabled}
                     onChange={e => {}}
                 ></input>
-                {name}
+                {text}
             </label>
         })
         return <div className="control col">

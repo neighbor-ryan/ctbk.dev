@@ -35,7 +35,7 @@ const NormalizeRideableType: { [k: string]: RideableType } = {
     'motivate_dockless_bike': 'Unknown',
 }
 
-type StackBy = 'None' | 'User Type' | 'Gender 🚧' | 'Rideable Type 🚧'
+type StackBy = 'None' | 'User Type' | 'Gender' | 'Rideable Type'
 
 type YAxis = 'Rides' | 'Ride minutes'
 const yAxisLabelDict = {
@@ -177,29 +177,21 @@ class App extends Component<any, State> {
                     return true
                 })
 
-        type StackType = 'None' | 'User Type' | 'Gender' | 'Rideable Type'
-        const stackTypeDict: { [k: string]: StackType} = {
-            'None': 'None',
-            'User Type': 'User Type',
-            'Gender 🚧': 'Gender',
-            'Rideable Type 🚧': 'Rideable Type'
-        }
-        const stackType: StackType = stackTypeDict[stackBy]
         const stackKeyDict = {
             'None': [''],
             'User Type': ['Customer', 'Subscriber'],
             'Gender': ['Other / Unspecified', 'Male', 'Female'],
             'Rideable Type': ['Docked', 'Electric', 'Unknown'],
         }
-        const stackKeys = stackKeyDict[stackType]
-        const showlegend = showLegend == null ? (stackType != 'None') : showLegend
+        const stackKeys = stackKeyDict[stackBy]
+        const showlegend = showLegend == null ? (stackBy != 'None') : showLegend
 
         let monthsData: { [month: string]: { [stackVal: string]: number }} = {}
         let stacksData: { [stackVal: string]: { [month: string]: number }} = {};
         filtered.forEach((r) => {
             const date: Date = r['Month'];
             const month: string = date.toString();
-            const stackVal: Gender | UserType | RideableType | '' = stackType == 'None' ? '' : r[stackType]
+            const stackVal: Gender | UserType | RideableType | '' = stackBy == 'None' ? '' : r[stackBy]
             const count = (yAxis == 'Rides') ? r['Count'] : r['Duration'];
 
             if (!(month in monthsData)) {
@@ -304,7 +296,7 @@ class App extends Component<any, State> {
                 .map((months) => {
                     console.log("stacks:", months)
                     let vals = values(months)
-                    if (stackType == 'Gender') {
+                    if (stackBy == 'Gender') {
                         vals = entries(months).filter(([ month, _ ]) => new Date(month) < new Date('2021-02-01')).map(([ _, vals ]) => vals)
                     }
                     return rollingAvgs.map(
@@ -317,7 +309,7 @@ class App extends Component<any, State> {
         let rollingSeries: ((number | null)[])[] = []
         rollingSeries = rollingSeries.concat(...rollingSeries0)
 
-        if (stackType != 'None') {
+        if (stackBy != 'None') {
             const rollingTotals = rollingAvgs.map((n) => rollingAvg(totals, n))
             rollingSeries = rollingSeries.concat(rollingTotals)
         }
@@ -367,7 +359,7 @@ class App extends Component<any, State> {
                 'Unknown': '6',
             },
         }
-        let stackRollDict: { [k: string]: string } = stackRollDicts[stackType]
+        let stackRollDict: { [k: string]: string } = stackRollDicts[stackBy]
         stackRollDict['Total'] = '0'
         const rollingTraces: Plotly.Data[] = rollingSeries.map(
             (y, idx) => {
@@ -421,9 +413,9 @@ class App extends Component<any, State> {
                     }}
                 />
                 <div className="no-gutters row">
-                    <Radios<Region> label="Region" options={["All", "NYC", "JC"]} cb={(region) => this.setState({ region })} choice="All" />
-                    <Radios<UserType> label="User Type" options={["All", "Subscriber", "Customer"]} cb={(userType) => this.setState({ userType })} choice="All" />
-                    <Radios<YAxis> label="Y Axis" options={["Rides", "Ride minutes"]} cb={(yAxis) => this.setState({ yAxis })} choice="Rides" />
+                    <Radios label="Region" options={["All", "NYC", "JC"]} cb={(region) => this.setState({ region })} choice="All" />
+                    <Radios label="User Type" options={["All", "Subscriber", "Customer"]} cb={(userType) => this.setState({ userType })} choice="All" />
+                    <Radios label="Y Axis" options={["Rides", "Ride minutes"]} cb={(yAxis) => this.setState({ yAxis })} choice="Rides" />
                     <Checklist
                         label="Rolling Avg"
                         data={[{ name: "12mo", data: 12, checked: true }]}
@@ -441,10 +433,18 @@ class App extends Component<any, State> {
                                 }
                             />
                         }
-                    ></Checklist>
-                    <Radios<StackBy>
-                        label="Stack by" options={["None", "User Type", "Gender 🚧", { data: "Rideable Type 🚧", disabled: true }]} cb={(stackBy) => this.setState({ stackBy })} choice="None"
-                    ></Radios>
+                    />
+                    <Radios
+                        label="Stack by"
+                        options={[
+                            "None",
+                            "User Type",
+                            { label: "Gender 🚧", data: "Gender", },
+                            { label: "Rideable Type 🚧", data: "Rideable Type", disabled: true }
+                        ]}
+                        cb={(stackBy) => this.setState({ stackBy })}
+                        choice="None"
+                    />
                     <Checklist<Gender>
                         label="Gender 🚧"
                         data={[
@@ -453,7 +453,7 @@ class App extends Component<any, State> {
                             { name: 'Other / Unspecified', data: 'Other / Unspecified', checked: true },
                         ]}
                         cb={(genders) => this.setState({ genders })}
-                    ></Checklist>
+                    />
                     <Checklist<RideableType>
                         label="Rideable Type 🚧"
                         data={[
@@ -462,8 +462,7 @@ class App extends Component<any, State> {
                             { name: 'Unknown', data: 'Unknown', checked: true, disabled: true },
                         ]}
                         cb={(rideableTypes) => this.setState({ rideableTypes })}
-                    ></Checklist>
-
+                    />
                 </div>
             </div>
         );
