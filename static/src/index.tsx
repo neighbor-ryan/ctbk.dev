@@ -8,7 +8,11 @@ import {Shape} from "plotly.js";
 import * as Plotly from "plotly.js";
 import {Checklist} from "./checklist";
 import {Radios} from "./radios";
-// import './index.css';
+
+const { entries, assign, values, keys, fromEntries } = Object
+const concat = Array.prototype.concat
+const Arr = Array.from
+
 
 const workerUrl = new URL(
     "sql.js-httpvfs/dist/sqlite.worker.js",
@@ -28,6 +32,7 @@ const NormalizeRideableType: { [k: string]: RideableType } = {
     'unknown': 'Unknown',
     'motivate_dockless_bike': 'Unknown',
 }
+type StackBy = 'None' | 'User Type' | 'Gender 🚧' | 'Rideable Type 🚧'
 type YAxis = 'Rides' | 'Ride minutes'
 type Row = {
     Month: Date
@@ -43,6 +48,7 @@ type State = {
     region: Region
     userType: UserType
     genders: Gender[]
+    stackBy: StackBy
     rideableTypes: RideableType[]
     rollingAvgs: number[]
     yAxis: YAxis
@@ -51,6 +57,16 @@ type State = {
 
 // const jsonMode = true;
 const jsonMode = false;
+
+function order<T>(u: { [k: string]: T }) {
+    return keys(u).sort().reduce(
+        (o: { [k: string]: T }, k: string) => {
+            o[k] = u[k];
+            return o;
+        },
+        {}
+    );
+}
 
 class App extends Component<any, State> {
     async componentDidMount() {
@@ -92,6 +108,7 @@ class App extends Component<any, State> {
             region: 'All',
             genders: [ 'Male', 'Female', 'Other / Unspecified', ],
             rideableTypes: [ 'Docked', 'Electric', 'Unknown', ],
+            stackBy: 'None',
             json: null,
             userType: 'All',
             yAxis: 'Rides',
@@ -101,7 +118,7 @@ class App extends Component<any, State> {
 
     render() {
         const state = this.state;
-        const { data, region, userType, genders, rideableTypes, yAxis, rollingAvgs } = state;
+        const { data, region, userType, genders, rideableTypes, stackBy, yAxis, rollingAvgs } = state;
         const json = state['json']
         if (json) {
             console.log("found json");
@@ -119,33 +136,77 @@ class App extends Component<any, State> {
         }
         console.log("Region", region, "User Type", userType, "Y-Axis", yAxis, "First row:")
         console.log(data[0])
-        let agg = new Map<string, number>()
-        data.forEach((r) => {
-            if (!(region == 'All' || region == r['Region'])) {
-                return
-            }
-            if (!(userType == 'All' || userType == r['User Type'])) {
-                return
-            }
-            const gender = Int2Gender[r['Gender']]
-            if (genders.indexOf(gender) == -1) {
-                return
-            }
-            const rideableType = NormalizeRideableType[r['Rideable Type']]
-            if (rideableTypes.indexOf(rideableType) == -1) {
-                console.warn("Dropping", r['Count'], "rides from with unrecognized rideable type", r['Rideable Type'], r)
-                return
-            }
-            const month: Date = r['Month'];
-            const key: string = month.toString();
-            const cur = agg.get(key);
+
+        const filtered =
+            data
+                .map((r) => {
+                    // Normalize gender, rideable type
+                    const { Gender, 'Rideable Type': rideableType, ...rest } = r
+                    return { Gender: Int2Gender[Gender], 'Rideable Type': NormalizeRideableType[rideableType], ...rest }
+                })
+                .filter((r) => {
+                    // Apply filters
+                    if (!(region == 'All' || region == r.Region)) {
+                        return false
+                    }
+                    if (!(userType == 'All' || userType == r['User Type'])) {
+                        return false
+                    }
+                    if (genders.indexOf(r.Gender) == -1) {
+                        return false
+                    }
+                    if (rideableTypes.indexOf(r['Rideable Type']) == -1) {
+                        console.warn("Dropping", r['Count'], "rides from with unrecognized rideable type", r['Rideable Type'], r)
+                        return false
+                    }
+                    return true
+                })
+
+        type StackType = 'None' | 'User Type' | 'Gender' | 'Rideable Type'
+        const stackTypeDict: { [k: string]: StackType} = {
+            'None': 'None',
+            'User Type': 'User Type',
+            'Gender 🚧': 'Gender',
+            'Rideable Type 🚧': 'Rideable Type'
+        }
+        const stackType: StackType = stackTypeDict[stackBy]
+        const stackKeyDict = {
+            'None': [''],
+            'User Type': ['Customer', 'Subscriber'],
+            'Gender': ['Other / Unspecified', 'Male', 'Female'],
+            'Rideable Type': ['Docked', 'Electric', 'Unknown'],
+        }
+        const stackKeys = stackKeyDict[stackType]
+
+        let monthsData: { [month: string]: { [stackVal: string]: number }} = {}
+        let stacksData: { [stackVal: string]: { [month: string]: number }} = {};
+        filtered.forEach((r) => {
+            const date: Date = r['Month'];
+            const month: string = date.toString();
+            const stackVal: Gender | UserType | RideableType | '' = stackType == 'None' ? '' : r[stackType]
             const count = (yAxis == 'Rides') ? r['Count'] : r['Duration'];
-            if (cur === undefined) {
-                agg.set(key, count);
-            } else {
-                agg.set(key, cur + count)
+
+            if (!(month in monthsData)) {
+                monthsData[month] = {}
             }
+            let cur = monthsData[month]
+            if (!(stackVal in cur)) {
+                cur[stackVal] = 0
+            }
+            cur[stackVal] += count
+
+            if (!(stackVal in stacksData)) {
+               stacksData[stackVal] = {}
+            }
+            cur = stacksData[stackVal]
+            if (!(month in cur)) {
+                cur[month] = 0
+            }
+            cur[month] += count
         })
+
+        monthsData = order(monthsData)
+        stacksData = fromEntries(stackKeys.map((stackVal) => [ stackVal, order(stacksData[stackVal]) ]))
 
         function rollingAvg(vs: number[], n: number): (number|null)[] {
             let sum: number = 0
@@ -159,14 +220,89 @@ class App extends Component<any, State> {
                 } else {
                     avgs.push(null)
                 }
-
             }
             return avgs
         }
 
-        const months: string[] = Array.from(agg.keys());
-        const counts: number[] = Array.from(agg.values());
-        const rollingSeries = rollingAvgs.map((n) => rollingAvg(counts, n))
+        const colorSetFades: { [k: number]: number[] } = {
+            1: [ 1 ],
+            2: [      .75, 1, ],
+            3: [ .65, .80, 1, ],
+        }
+
+        function pad(num: number, size: number){
+            return ('0' + num.toString(16)).substr(-size);
+        }
+        function darken(c: string, f = 0.5): string {
+            return '#' + [
+                c.substr(1, 2),
+                c.substr(3, 2),
+                c.substr(5, 2)
+            ]
+                .map((s) =>
+                    pad(
+                        Math.round(
+                            parseInt(s, 16) * f
+                        ),
+                        2
+                    )
+                )
+                .join('')
+        }
+
+        let barData: { month: string, stackBy?: string, value: number }[] = []
+        for (const [month, obj] of entries(monthsData)) {
+            for (const stackKey of stackKeys) {
+                const value = obj[stackKey] || 0
+                let datum: { month: string, stackBy?: string, value: number } = { month, value }
+                if (stackKey != '') {
+                    datum['stackBy'] = stackKey
+                }
+                barData.push(datum)
+            }
+        }
+
+        const fades = colorSetFades[stackKeys.length]
+        const baseColor = '#88aaff'
+
+        const months: string[] = Arr(keys(monthsData))
+        const totals: number[] = values(monthsData).map((stackData) => values(stackData).reduce((a, b) => a + b), 0)
+        const barTraces: Plotly.Data[] = entries(stacksData).map(([stackVal, values], idx) => {
+            const x = months
+            const y = months.map((month) => values[month] || 0)
+            const name = stackVal || '???'
+            const fade = fades[idx]
+            const traceColor = darken(baseColor, fade)
+            console.log("trace", name, "color", traceColor)
+            return {
+                x, y, name,
+                type: 'bar',
+                marker: {
+                    color: traceColor,
+                },
+            }
+        })
+
+        const rollingSeries0: ((number | null)[])[][] =
+            values(stacksData)
+                .map((months) => {
+                    console.log("stacks:", months)
+                    let vals = values(months)
+                    if (stackType == 'Gender') {
+                        vals = entries(months).filter(([ month, _ ]) => new Date(month) < new Date('2021-02-01')).map(([ _, vals ]) => vals)
+                    }
+                    return rollingAvgs.map(
+                        (n) =>
+                            rollingAvg(vals, n)
+                    )
+                })
+
+        console.log("rollingSeries0", rollingSeries0)
+        let rollingSeries: ((number | null)[])[] = []
+        rollingSeries = rollingSeries.concat(...rollingSeries0)
+
+        const rollingTotals = rollingAvgs.map((n) => rollingAvg(totals, n))
+        rollingSeries = rollingSeries.concat(rollingTotals)
 
         function vline(year: number): Partial<Shape> {
             const x: string = `${year-1}-12-20`;
@@ -194,31 +330,49 @@ class App extends Component<any, State> {
         const years: Array<number> = [...new Set(allYears)];
         const vlines: Array<Partial<Shape>> = years.map(vline);
 
-        const bars: Plotly.Data = {
-            name: yAxis,
-            x: months,
-            y: counts,
-            type: 'bar',
-            marker: {
-                color: '#88aaff',
+        const stackRollDicts = {
+            'None': {
+               '': '0',
+            },
+            'User Type': {
+                'Customer': 'D',
+                'Subscriber': '7',
+            },
+            'Gender': {
+                'Male': '6',
+                'Female': 'D',
+                'Other / Unspecified': 'E',
+            },
+            'Rideable Type': {
+                'Docked': 'E',
+                'Electric': 'D',
+                'Unknown': '6',
             },
         }
-
+        let stackRollDict: { [k: string]: string } = stackRollDicts[stackType]
+        stackRollDict['Total'] = '0'
         const rollingTraces: Plotly.Data[] = rollingSeries.map(
-            (y) => {
+            (y, idx) => {
+                const stackVal = stackKeys[idx] || 'Total'
+                const char = stackRollDict[stackVal]
+                const traceColor = '#' + char + char + char + char + char + char
+                console.log("rolling color:", idx, stackVal, char, traceColor)
                 return {
-                    name: '12mo avg',
+                    name: `12mo avg (${stackVal})`,
                     x: months,
                     y: y,
                     type: 'scatter',
                     marker: {
-                        color: '#000',
-                    }
+                        color: traceColor,
+                    },
+                    line: {
+                        width: 4,
+                    },
                 }
             }
         )
 
-        const traces: Plotly.Data[] = Array.prototype.concat([ bars ], rollingTraces)
+        const traces: Plotly.Data[] = barTraces.concat(rollingTraces)
 
         return (
             <div id="plot">
@@ -227,7 +381,8 @@ class App extends Component<any, State> {
                     useResizeHandler
                     layout={{
                         autosize: true,
-                        showlegend: false,
+                        barmode: 'stack',
+                        showlegend: stackType != 'None',
                         title: 'Citibike Rides By Month',
                         yaxis: {
                             gridcolor: '#DDDDDD',
@@ -249,6 +404,9 @@ class App extends Component<any, State> {
                         data={[{ name: "12mo", data: 12, checked: true }]}
                         cb={(rollingAvgs) => this.setState({ rollingAvgs })}
                     ></Checklist>
+                    <Radios<StackBy>
+                        label="Stack by" options={["None", "User Type", "Gender 🚧", { data: "Rideable Type 🚧", disabled: true }]} cb={(stackBy) => this.setState({ stackBy })} choice="None"
+                    ></Radios>
                     <Checklist<Gender>
                         label="Gender 🚧"
                         data={[
@@ -259,7 +417,7 @@ class App extends Component<any, State> {
                         cb={(genders) => this.setState({ genders })}
                     ></Checklist>
                     <Checklist<RideableType>
-                        label="Rideable Type"
+                        label="Rideable Type 🚧"
                         data={[
                             { name: 'Docked', data: 'Docked', checked: true, disabled: true },
                             { name: 'Electric', data: 'Electric', checked: true, disabled: true },

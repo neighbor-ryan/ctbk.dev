@@ -1,8 +1,13 @@
 import React, {Component} from "react";
 
+type Option<T> = {
+    data: T
+    disabled?: boolean
+}
+
 type Props<T extends string> = {
     label: string
-    options: T[]
+    options: (Option<T> | T)[]
     choice: T
     cb: (choice: T) => void
 }
@@ -23,13 +28,15 @@ export class Radios<T extends string> extends Component<Props<T>, State<T>> {
     }
     render() {
         const [ { label, options }, { choice } ] = [ this.props, this.state ]
-        const labels = options.map((name) => {
+        const labels = options.map((option) => {
+            const { data: name, disabled } = typeof option === 'string' ? { data: option, disabled: false } : option
             return <label key={name}>
                 <input
                     type="radio"
                     name={label + '-' + name}
                     value={name}
                     checked={name == choice}
+                    disabled={disabled}
                     onChange={e => {}}
                 ></input>
                 {name}
