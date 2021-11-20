@@ -1,4 +1,5 @@
-import React, {Component} from "react";
+import React, {Component, ReactElement} from "react";
+import {Checkbox} from "./checkbox";
 
 type CheckboxData<T> = {
     name: string
@@ -11,6 +12,7 @@ type ChecklistProps<T> = {
     label: string
     data: CheckboxData<T>[]
     cb: (ts: T[]) => void
+    extra?: ReactElement<any, any>
 }
 type ChecklistState<T> = { [key: string]: { data: T, checked: boolean } }
 
@@ -24,7 +26,7 @@ export class Checklist<T> extends Component<ChecklistProps<T>, ChecklistState<T>
     }
 
     render() {
-        const [ { label, data, cb }, state ] = [ this.props, this.state ]
+        const [ { label, data, cb, extra }, state ] = [ this.props, this.state ]
 
         let onChange = function(this: Checklist<T>, e: any) {
             let newState = {...state}
@@ -66,7 +68,8 @@ export class Checklist<T> extends Component<ChecklistProps<T>, ChecklistState<T>
 
         return <div className="control col">
             <div className="control-header">{label}:</div>
-            <div id={label} onChange={onChange}>{labels}</div>
+            <div id={label} onChange={onChange} className="sub-control">{labels}</div>
+            {extra}
         </div>
     }
 }

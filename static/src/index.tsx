@@ -8,9 +8,9 @@ import {Shape} from "plotly.js";
 import * as Plotly from "plotly.js";
 import {Checklist} from "./checklist";
 import {Radios} from "./radios";
+import {Checkbox} from "./checkbox";
 
-const { entries, assign, values, keys, fromEntries } = Object
-const concat = Array.prototype.concat
+const { entries, values, keys, fromEntries } = Object
 const Arr = Array.from
 
 
@@ -22,8 +22,10 @@ const wasmUrl = new URL("sql.js-httpvfs/dist/sql-wasm.wasm", import.meta.url);
 
 type Region = 'All' | 'NYC' | 'JC'
 type UserType = 'All' | 'Subscriber' | 'Customer'
+
 type Gender = 'Male' | 'Female' | 'Other / Unspecified'
 const Int2Gender: { [k: number]: Gender } = { 0: 'Other / Unspecified', 1: 'Male', 2: 'Female' }
+
 type RideableType = 'Docked' | 'Electric' | 'Unknown'
 const NormalizeRideableType: { [k: string]: RideableType } = {
     'docked_bike': 'Docked',
@@ -32,8 +34,15 @@ const NormalizeRideableType: { [k: string]: RideableType } = {
     'unknown': 'Unknown',
     'motivate_dockless_bike': 'Unknown',
 }
+
 type StackBy = 'None' | 'User Type' | 'Gender 🚧' | 'Rideable Type 🚧'
+
 type YAxis = 'Rides' | 'Ride minutes'
+const yAxisLabelDict = {
+    'Rides': { yAxis: 'Total Rides', title: 'Citibike Rides per Month', hoverLabel: 'Rides' },
+    'Ride minutes': { yAxis: 'Total Ride Minutes', title: 'Citibike Ride Minutes per Month', hoverLabel: 'Minutes', },
+}
+
 type Row = {
     Month: Date
     Count: number
@@ -53,6 +62,7 @@ type State = {
     rollingAvgs: number[]
     yAxis: YAxis
     json: null | any
+    showLegend: boolean | null
 }
 
 // const jsonMode = true;
@@ -113,12 +123,13 @@ class App extends Component<any, State> {
             userType: 'All',
             yAxis: 'Rides',
             rollingAvgs: [12],
+            showLegend: null,
         }
     }
 
     render() {
         const state = this.state;
-        const { data, region, userType, genders, rideableTypes, stackBy, yAxis, rollingAvgs } = state;
+        const { data, region, userType, genders, rideableTypes, stackBy, yAxis, rollingAvgs, showLegend } = state;
         const json = state['json']
         if (json) {
             console.log("found json");
@@ -136,6 +147,10 @@ class App extends Component<any, State> {
         }
         console.log("Region", region, "User Type", userType, "Y-Axis", yAxis, "First row:")
         console.log(data[0])
+
+        const yAxisLabel = yAxisLabelDict[yAxis].yAxis
+        const yHoverLabel = yAxisLabelDict[yAxis].hoverLabel
+        const title = yAxisLabelDict[yAxis].title
 
         const filtered =
             data
@@ -177,6 +192,7 @@ class App extends Component<any, State> {
             'Rideable Type': ['Docked', 'Electric', 'Unknown'],
         }
         const stackKeys = stackKeyDict[stackType]
+        const showlegend = showLegend == null ? (stackType != 'None') : showLegend
 
         let monthsData: { [month: string]: { [stackVal: string]: number }} = {}
         let stacksData: { [stackVal: string]: { [month: string]: number }} = {};
@@ -270,7 +286,7 @@ class App extends Component<any, State> {
         const barTraces: Plotly.Data[] = entries(stacksData).map(([stackVal, values], idx) => {
             const x = months
             const y = months.map((month) => values[month] || 0)
-            const name = stackVal || '???'
+            const name = stackVal || yHoverLabel
             const fade = fades[idx]
             const traceColor = darken(baseColor, fade)
             console.log("trace", name, "color", traceColor)
@@ -301,8 +317,10 @@ class App extends Component<any, State> {
         let rollingSeries: ((number | null)[])[] = []
         rollingSeries = rollingSeries.concat(...rollingSeries0)
 
-        const rollingTotals = rollingAvgs.map((n) => rollingAvg(totals, n))
-        rollingSeries = rollingSeries.concat(rollingTotals)
+        if (stackType != 'None') {
+            const rollingTotals = rollingAvgs.map((n) => rollingAvg(totals, n))
+            rollingSeries = rollingSeries.concat(rollingTotals)
+        }
 
         function vline(year: number): Partial<Shape> {
             const x: string = `${year-1}-12-20`;
@@ -375,14 +393,6 @@ class App extends Component<any, State> {
 
         const traces: Plotly.Data[] = barTraces.concat(rollingTraces)
 
-        const yAxisLabelDict = {
-            'Rides': { yAxis: 'Total Rides', title: 'Citibike Rides per Month', },
-            'Ride minutes': { yAxis: 'Total Ride Minutes', title: 'Citibike Ride Minutes per Month', },
-        }
-        const yAxisLabel = yAxisLabelDict[yAxis].yAxis
-        const title = yAxisLabelDict[yAxis].title
-        const showlegend = stackType != 'None'
-
         return (
             <div id="plot">
                 <Plot
@@ -418,6 +428,19 @@ class App extends Component<any, State> {
                         label="Rolling Avg"
                         data={[{ name: "12mo", data: 12, checked: true }]}
                         cb={(rollingAvgs) => this.setState({ rollingAvgs })}
+                        extra={
+                            <Checkbox
+                                id="showlegend"
+                                label="Legend"
+                                checked={showlegend}
+                                cb={
+                                    (checked) => {
+                                        console.log("legend checkbox:", checked)
+                                        return this.setState({ showLegend: checked })
+                                    }
+                                }
+                            />
+                        }
                     ></Checklist>
                     <Radios<StackBy>
                         label="Stack by" options={["None", "User Type", "Gender 🚧", { data: "Rideable Type 🚧", disabled: true }]} cb={(stackBy) => this.setState({ stackBy })} choice="None"
@@ -440,6 +463,7 @@ class App extends Component<any, State> {
                         ]}
                         cb={(rideableTypes) => this.setState({ rideableTypes })}
                     ></Checklist>
+
                 </div>
             </div>
         );
