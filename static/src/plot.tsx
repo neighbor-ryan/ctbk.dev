@@ -17,6 +17,7 @@ import {
     useEnumQueryParam
 } from "./search-params";
 import _ from "lodash";
+import {Filter} from "./query";
 
 const { entries, values, keys, fromEntries } = Object
 const Arr = Array.from
@@ -36,6 +37,9 @@ const UserTypes: [UserType, string][] = [ ['All', 'a'], ['Subscriber', 's'], ['C
 
 type Gender = 'Male' | 'Female' | 'Other / Unspecified'
 const Int2Gender: { [k: number]: Gender } = { 0: 'Other / Unspecified', 1: 'Male', 2: 'Female' }
+// Gender data became 100% "Other / Unspecified" from February 2021; don't bother with per-entry
+// rolling averages from that point onward
+const GenderRollingAvgCutoff = new Date('2021-02-01')
 
 type RideableType = 'Docked' | 'Electric' | 'Unknown'
 const RideableTypes: RideableType[] = ['Docked' , 'Electric' , 'Unknown']
@@ -117,17 +121,18 @@ function filterEntries<T>(o: { [k: string]: T }, fn: (k: string, t: T) => boolea
     return fromEntries(entries(o).filter(([ k, t ]) => fn(k, t)))
 }
 
-function rollingAvg(vs: number[], n: number): (number|null)[] {
-    let sum: number = 0
-    let avgs: (number|null)[] = []
+function rollingAvg<T>(vs: T[], n: number, fn?: (t: T) => number, ): [T, number | null][] {
+    let avgs: [ T, number | null, ][] = []
+    const f: (t: T) => number = fn ? (n => fn(n)) : (n => n as any as number)
+    let sum = 0
     for (let i = 0; i < vs.length; i++) {
-        sum += vs[i]
+        sum += f(vs[i])
         if (i >= n) {
-            sum -= vs[i-n]
+            sum -= f(vs[i-n])
             const avg = sum / n
-            avgs.push(avg)
+            avgs.push([ vs[i], avg, ])
         } else {
-            avgs.push(null)
+            avgs.push([ vs[i], null, ])
         }
     }
     return avgs
@@ -200,23 +205,8 @@ function vline(year: number): Partial<Shape> {
     }
 }
 
-const Char2Gender: { [k: string]: Gender } = { 'm': 'Male', 'f': 'Female', 'u': 'Other / Unspecified', }
-const Gender2Char: { [k in Gender]: string } = { 'Male': 'm', 'Female': 'f', 'Other / Unspecified': 'u', }
 const GenderChars: [ Gender, string ][] = [ ['Male', 'm'], ['Female', 'f'], ['Other / Unspecified', 'u'], ]
 const Genders: Gender[] = ['Male' , 'Female' , 'Other / Unspecified']
-// const gendersQueryState = queryState<Gender[]>({
-//     defaultValue: [ 'Male', 'Female', 'Other / Unspecified', ],
-//     parse: queryParam => queryParam.split('').map(ch => { return Char2Gender[ch] }),
-//     render: value => value.map(gender => Gender2Char[gender]).join(''),
-// })
-
-// const Char2Rideable: { [k: string]: RideableType } = { 'd': 'Docked', 'e': 'Electric', 'u': 'Unknown' }
-// const Rideable2Char: { [k in RideableType]: string } = { 'Docked': 'd', 'Electric': 'e', 'Unknown': 'u', }
-// const rideablesQueryState = queryState<RideableType[]>({
-//     defaultValue: [ 'Docked', 'Electric', 'Unknown', ],
-//     parse: queryParam => queryParam.split('').map(ch => { return Char2Rideable[ch] }),
-//     render: value => value.map(rideableType => Rideable2Char[rideableType]).join(''),
-// })
 
 const StartDate = moment('2013-06-01').toDate()
 const Date2Query = (d: Date | undefined) => d ? moment(d).format('YYMM') : ''
@@ -225,42 +215,25 @@ const Query2Date = (s: string) => {
     const month = s.substring(2, 4)
     return moment(`${year}-${month}-01`).toDate()
 }
-// const DateRange2Dates = (dateRange: DateRange): { start: Date, end: Date, } => {
-//     if (dateRange == 'All') {
-//         return { start: StartDate, end: new Date }
-//     }
-//     else if (typeof dateRange === 'string') {
-//         let start: Date = new Date
-//         if (dateRange[dateRange.length - 1] != 'y') {
-//             throw Error(`Unrecognized date range string: ${dateRange}`)
-//         }
-//         const numYears = parseInt(dateRange.substr(0, dateRange.length - 1))
-//         start.setFullYear(start.getFullYear() - numYears)
-//         return { start, end: new Date }
-//     } else {
-//         const {start, end} = dateRange
-//         return { start: start || StartDate, end: end || new Date }
-//     }
-// }
-// const dateRangeQueryState = queryState<DateRange>({
-//     defaultValue: 'All',
-//     parse: queryParam => {
-//         if ([ 'All', '1y', '2y', '3y', '4y', '5y', ].indexOf(queryParam) != -1) {
-//             return queryParam as DateRange
-//         } else {
-//             const [start, end] = queryParam.split('-').map(d => d ? Query2Date(d) : undefined)
-//             return {start, end} as DateRange
-//         }
-//     },
-//     render: dateRange => {
-//         if (typeof dateRange === 'string') {
-//             return dateRange
-//         } else {
-//             const {start, end} = dateRange
-//             return `${Date2Query(start)}-${Date2Query(end)}`
-//         }
-//     },
-// })
+const DateRange2Dates = (dateRange: DateRange, end?: Date): { start: Date, end: Date, } => {
+    end = end ? end : new Date
+    if (dateRange == 'All') {
+        return { start: StartDate, end }
+    }
+    else if (typeof dateRange === 'string') {
+        let start: Date = new Date(end)
+        if (dateRange[dateRange.length - 1] != 'y') {
+            throw Error(`Unrecognized date range string: ${dateRange}`)
+        }
+        const numYears = parseInt(dateRange.substr(0, dateRange.length - 1))
+        start.setFullYear(start.getFullYear() - numYears)
+        console.log(`subtracted ${numYears} years: ${start}, ${end}`)
+        return { start, end }
+    } else {
+        const {start, end: e } = dateRange
+        return { start: start || StartDate, end: e || end }
+    }
+}
 
 export function dateRangeParam(
     {
@@ -349,9 +322,14 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
     useEffect(
         () => {
             console.log("fetching…")
+            // This fetch seems like a good place to push-down the `dateRange` filter. However, rolling avgs are not in
+            // the database, but are computed later in the outer render() flow here, and need to look backward from the
+            // `start` date. Additionally, the latest data is often up to 6 weeks old (each month is typically released
+            // about 2 weeks into the next month), and it's better for e.g. a "1yr" plot to show 12mos of data than 1
+            // calendar year that's missing the 2 most recent months' entries.
+            // The table is very small so fetching it all and slicing in memory below is fine.
             worker.fetch<Row>({
                 table: 'agg',
-                // TODO: date range?
             }).then(setData)
         },
         [ worker, ],
@@ -462,54 +440,72 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
         )
     }
 
-    // let start: Date = new Date(StartDate)
-    // let end: Date = new Date()
-    // if (dateRange != 'All') {
-    //     if (typeof dateRange === 'string') {
-    //         if (dateRange[dateRange.length - 1] != 'y') {
-    //             throw Error(`Unrecognized date range string: ${dateRange}`)
-    //         }
-    //         const numYears = parseInt(dateRange.substr(0, dateRange.length - 1))
-    //         end.setFullYear(end.getFullYear() - numYears)
-    //     } else {
-    //         ({ start, end } = dateRange)
-    //     }
-    //     function filterMonth(month: string, _: any): boolean {
-    //         const date = new Date(month)
-    //         return start <= date && date < end
-    //     }
-    //     monthsData = filterEntries(monthsData, filterMonth)
-    //     stacksData = mapValues(
-    //         stacksData,
-    //     (stackVal, months) => filterEntries(months, filterMonth)
-    //     )
-    // }
+    // If `end` isn't set, default to 1d after the latest fetched data point (since it's generally treated as an
+    // exclusive bound)
+    const last = moment(_.max(data.map(r => new Date(r.Month)))).add(1, 'd').toDate()
+    const { start, end } = DateRange2Dates(dateRange, last)
 
-    let rollingSeries: ((number | null)[])[] = []
+    // Compute a (trailing) rolling average for:
+    // - [each time-window length in `rollingAvgs`] (typically just [12])], x
+    // - [each stacked value (e.g. "Male", "Female", "Other / Unspecified")]
+    let rollingSeries: (number | null)[][] = []
     rollingSeries = rollingSeries.concat(
         ...values(stacksData)
             .map((months) => {
-                //console.log("stacks:", months)
-                let vals = values(months)
+                let vals: { month: Date, v: number }[] =
+                    entries(months)
+                        .map(
+                            ([ month, v ]) => { return { month: new Date(month), v } }
+                        )
                 if (stackBy == 'Gender') {
-                    // Gender data became 100% "Other / Unspecified" from February 2021; don't bother with per-entry
-                    // rolling averages from that point onward
-                    const cutoff = new Date('2021-02-01')
-                    vals =
-                        entries(months)
-                            .filter(([ month, _ ]) => new Date(month) < cutoff)
-                            .map(([ _, vals ]) => vals)
+                    vals = vals.filter(({ month }) => month < GenderRollingAvgCutoff)
                 }
-                return rollingAvgs.map((n) => rollingAvg(vals, n))
+                return (
+                    rollingAvgs
+                        .map(n =>
+                            rollingAvg(vals, n, ({ v }) => v)
+                                .filter(([ { month }, avg ]) => start <= month && month < end)
+                                .map(([ _, avg ]) => avg)
+                        )
+                )
             })
     )
 
+    // In stacked mode, compute an extra "total" series
     if (stackBy != 'None' && !stackRelative) {
-        const totals: number[] = values(monthsData).map((stackData) => sumValues(stackData))
-        const rollingTotals = rollingAvgs.map((n) => rollingAvg(totals, n))
+        const totals: { month: Date, total: number }[] = (
+            entries(monthsData)
+                .map(([ month, stackData ]) => {
+                    return { month: new Date(month), total: sumValues(stackData) }
+                })
+        )
+        const rollingTotals =
+            rollingAvgs.map(n =>
+                rollingAvg(totals, n, ({ total }) => total)
+                    .filter(([ { month }, avg ]) => start <= month && month < end)
+                    .map(([ _, avg ]) => avg)
+            )
         rollingSeries = rollingSeries.concat(rollingTotals)
     }
 
+    // Filter months
+
+    const filterMonth = (month: string) => {
+        const d = new Date(month)
+        return start <= d && d < end
+    }
+    const filterMonthKey = <T,>() => (( month: string, t: T ) => filterMonth(month))
+
+    months = months.filter(filterMonth)
+
+    stacksData = mapValues(
+        stacksData,
+        (stackVal, months) => filterEntries(months, filterMonthKey())
+    )
+
+    monthsData = filterEntries(monthsData, filterMonthKey())
+
+    // Vertical lines for each year boundary
     const allYears: Array<number> =
         months
             .map((m) => new Date(m))
@@ -518,6 +514,7 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
     const years: Array<number> = [...new Set(allYears)];
     const vlines: Array<Partial<Shape>> = years.map(vline);
 
+    // Create Plotly trace data, including colors (when stacking)
     let stackRollColorDict: { [k: string]: string } = stackRollColorDicts[stackBy]
     stackRollColorDict['Total'] = '0'  // Black
     const rollingTraces: Plotly.Data[] = rollingSeries.map(
@@ -537,6 +534,8 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
             }
         }
     )
+
+    // Bar data (including color fades when stacking)
 
     const fades = colorSetFades[stackKeys.length]
     const baseColor = '#88aaff'
@@ -561,6 +560,7 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
 
     return (
         <div id="plot">
+            {/* Main plot: bar graph + rolling avg line(s) */}
             <Plot
                 data={traces}
                 useResizeHandler
@@ -584,8 +584,24 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
                     paper_bgcolor: 'rgba(0,0,0,0)',
                     plot_bgcolor: 'rgba(0,0,0,0)',
                     shapes: vlines,
+                    margin: { b: 30 },
                 }}
             />
+            {/* DateRange controls */}
+            <div className="no-gutters row date-controls">
+                {
+                    ([ , "1y" , "2y" , "3y" , "4y" , "5y" , "All", ] as (DateRange & string)[]).map(dr =>
+                        <input type="button"
+                            key={dr}
+                            value={dr}
+                            className="date-range-button"
+                            onClick={() => setDateRange( dr) }
+                            disabled={dateRange ==  dr}
+                        />
+                    )
+                }
+            </div>
+            {/* Other radio/checklist configs */}
             <div className="no-gutters row">
                 <Radios label="Region" options={["All", "NYC", "JC"]} cb={setRegion} choice={region} />
                 <Radios label="User Type" options={["All", "Subscriber", "Customer"]} cb={setUserType} choice={userType} />
@@ -644,7 +660,3 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
         </div>
     );
 }
-
-// $(document).ready(function () {
-//     ReactDOM.render(<App />, document.getElementById('root'));
-// });

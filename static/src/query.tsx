@@ -1,6 +1,6 @@
 import { Sort } from "./sorts";
 
-export type Filter = { column: string, value: string, prefix?: boolean, suffix?: boolean }
+export type Filter = { column: string, value: string, prefix?: boolean, suffix?: boolean, op?: string }
 
 export function build(
     {
@@ -26,13 +26,17 @@ export function build(
     if (filters?.length) {
         query += ' WHERE'
         let first = true
-        for (const { column, value, prefix, suffix, } of filters) {
+        for (let { column, value, prefix, suffix, op = 'LIKE' } of filters) {
+            // prefix/suffix only relevant to "LIKE" ops, and default to `true` (`value` is a prefix and a suffix, i.e.
+            // an exact match; `prefix: false` inserts a wildcard "%" in front, `suffix: false` in back)
+            prefix = prefix === undefined ? true : prefix
+            suffix = suffix === undefined ? true : suffix
             if (!first) query += ' AND'
             first = false
             const like = (prefix ? '' : '%') + value + (suffix ? '' : '%')
-            // TODO: escape values; normally this would be a serious vulnerability, but this is a static site reading a
-            //  read-only SQLite database, so believed to be benign
-            query += ` ${column} LIKE "${like}"`
+            // TODO: escape values; normally not doing so would be a serious vulnerability, but this is a static site
+            //  reading a read-only SQLite database, so believed to be benign
+            query += ` ${column} ${op} "${like}"`
         }
     }
     if (sorts?.length) {
