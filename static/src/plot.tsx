@@ -6,17 +6,22 @@ import {Checklist} from "./checklist";
 import {Radios} from "./radios";
 import {Checkbox} from "./checkbox";
 import {DefaultChunkSize, Worker} from "./worker";
-import {useQueryParam, QueryParamConfig, createEnumParam, QueryParamConfig} from 'use-query-params';
+import {
+    useQueryParam,
+    QueryParamConfig,
+    createEnumParam,
+    DelimitedNumericArrayParam
+} from 'use-query-params';
 import createPersistedState from 'use-persisted-state';
-// import {
-//     boolQueryState, numbersQueryState, QueryState,
-//     queryState,
-//     stringQueryState,
-//     stringyQueryState,
-//     useQueryState,
-//     useStringyQueryState
-// } from "./search-params";
 import moment from 'moment';
+import {
+    boolParam,
+    HandleUnexpectedValue,
+    returnDefaultOrError,
+    useEnumMultiParam,
+    useEnumQueryParam
+} from "./search-params";
+import _ from "lodash";
 
 const { entries, values, keys, fromEntries } = Object
 const Arr = Array.from
@@ -38,6 +43,8 @@ type Gender = 'Male' | 'Female' | 'Other / Unspecified'
 const Int2Gender: { [k: number]: Gender } = { 0: 'Other / Unspecified', 1: 'Male', 2: 'Female' }
 
 type RideableType = 'Docked' | 'Electric' | 'Unknown'
+const RideableTypes: RideableType[] = ['Docked' , 'Electric' , 'Unknown']
+const RideableTypeChars: [ RideableType, string ][] = [['Docked','d'] , ['Electric','e'] , ['Unknown','u']]
 const NormalizeRideableType: { [k: string]: RideableType } = {
     'docked_bike': 'Docked',
     'classic_bike': 'Docked',
@@ -200,19 +207,21 @@ function vline(year: number): Partial<Shape> {
 
 const Char2Gender: { [k: string]: Gender } = { 'm': 'Male', 'f': 'Female', 'u': 'Other / Unspecified', }
 const Gender2Char: { [k in Gender]: string } = { 'Male': 'm', 'Female': 'f', 'Other / Unspecified': 'u', }
-const gendersQueryState = queryState<Gender[]>({
-    defaultValue: [ 'Male', 'Female', 'Other / Unspecified', ],
-    parse: queryParam => queryParam.split('').map(ch => { return Char2Gender[ch] }),
-    render: value => value.map(gender => Gender2Char[gender]).join(''),
-})
+const GenderChars: [ Gender, string ][] = [ ['Male', 'm'], ['Female', 'f'], ['Other / Unspecified', 'u'], ]
+const Genders: Gender[] = ['Male' , 'Female' , 'Other / Unspecified']
+// const gendersQueryState = queryState<Gender[]>({
+//     defaultValue: [ 'Male', 'Female', 'Other / Unspecified', ],
+//     parse: queryParam => queryParam.split('').map(ch => { return Char2Gender[ch] }),
+//     render: value => value.map(gender => Gender2Char[gender]).join(''),
+// })
 
-const Char2Rideable: { [k: string]: RideableType } = { 'd': 'Docked', 'e': 'Electric', 'u': 'Unknown' }
-const Rideable2Char: { [k in RideableType]: string } = { 'Docked': 'd', 'Electric': 'e', 'Unknown': 'u', }
-const rideablesQueryState = queryState<RideableType[]>({
-    defaultValue: [ 'Docked', 'Electric', 'Unknown', ],
-    parse: queryParam => queryParam.split('').map(ch => { return Char2Rideable[ch] }),
-    render: value => value.map(rideableType => Rideable2Char[rideableType]).join(''),
-})
+// const Char2Rideable: { [k: string]: RideableType } = { 'd': 'Docked', 'e': 'Electric', 'u': 'Unknown' }
+// const Rideable2Char: { [k in RideableType]: string } = { 'Docked': 'd', 'Electric': 'e', 'Unknown': 'u', }
+// const rideablesQueryState = queryState<RideableType[]>({
+//     defaultValue: [ 'Docked', 'Electric', 'Unknown', ],
+//     parse: queryParam => queryParam.split('').map(ch => { return Char2Rideable[ch] }),
+//     render: value => value.map(rideableType => Rideable2Char[rideableType]).join(''),
+// })
 
 const StartDate = moment('2013-06-01').toDate()
 const Date2Query = (d: Date | undefined) => d ? moment(d).format('YYMM') : ''
@@ -221,58 +230,121 @@ const Query2Date = (s: string) => {
     const month = s.substring(2, 4)
     return moment(`${year}-${month}-01`).toDate()
 }
-const DateRange2Dates = (dateRange: DateRange): { start: Date, end: Date, } => {
-    if (dateRange == 'All') {
-        return { start: StartDate, end: new Date }
-    }
-    else if (typeof dateRange === 'string') {
-        let start: Date = new Date
-        if (dateRange[dateRange.length - 1] != 'y') {
-            throw Error(`Unrecognized date range string: ${dateRange}`)
-        }
-        const numYears = parseInt(dateRange.substr(0, dateRange.length - 1))
-        start.setFullYear(start.getFullYear() - numYears)
-        return { start, end: new Date }
-    } else {
-        const {start, end} = dateRange
-        return { start: start || StartDate, end: end || new Date }
+// const DateRange2Dates = (dateRange: DateRange): { start: Date, end: Date, } => {
+//     if (dateRange == 'All') {
+//         return { start: StartDate, end: new Date }
+//     }
+//     else if (typeof dateRange === 'string') {
+//         let start: Date = new Date
+//         if (dateRange[dateRange.length - 1] != 'y') {
+//             throw Error(`Unrecognized date range string: ${dateRange}`)
+//         }
+//         const numYears = parseInt(dateRange.substr(0, dateRange.length - 1))
+//         start.setFullYear(start.getFullYear() - numYears)
+//         return { start, end: new Date }
+//     } else {
+//         const {start, end} = dateRange
+//         return { start: start || StartDate, end: end || new Date }
+//     }
+// }
+// const dateRangeQueryState = queryState<DateRange>({
+//     defaultValue: 'All',
+//     parse: queryParam => {
+//         if ([ 'All', '1y', '2y', '3y', '4y', '5y', ].indexOf(queryParam) != -1) {
+//             return queryParam as DateRange
+//         } else {
+//             const [start, end] = queryParam.split('-').map(d => d ? Query2Date(d) : undefined)
+//             return {start, end} as DateRange
+//         }
+//     },
+//     render: dateRange => {
+//         if (typeof dateRange === 'string') {
+//             return dateRange
+//         } else {
+//             const {start, end} = dateRange
+//             return `${Date2Query(start)}-${Date2Query(end)}`
+//         }
+//     },
+// })
+
+export function dateRangeParam(
+    {
+        defaultValue = 'All',
+        handleUnexpectedValue = "Warn",
+    }: {
+        defaultValue?: DateRange,
+        handleUnexpectedValue?: HandleUnexpectedValue,
+    } = {}
+): QueryParamConfig<DateRange> {
+    const eq = _.isEqual
+    return {
+        encode(value: DateRange): string | (string | null)[] | null | undefined {
+            if (eq(value, defaultValue)) return undefined
+            if (typeof value === 'string') return value
+            const {start, end} = value
+            return `${Date2Query(start)}-${Date2Query(end)}`
+        },
+        decode(value: string | (string | null)[] | null | undefined): DateRange {
+            if (value === undefined) return defaultValue
+            if (value === null) return returnDefaultOrError(value, 'All', handleUnexpectedValue)
+            if (typeof value === 'string') {
+                if (['All', '1y', '2y', '3y', '4y', '5y',].indexOf(value) != -1) {
+                    return value as DateRange
+                } else {
+                    const [start, end] = value.split('-').map(d => d ? Query2Date(d) : undefined)
+                    return {start, end} as DateRange
+                }
+            } else {
+                return returnDefaultOrError(value, 'All', handleUnexpectedValue)
+            }
+        },
+        equals(l: DateRange, r: DateRange): boolean { return eq(l, r) }
     }
 }
-const dateRangeQueryState = queryState<DateRange>({
-    defaultValue: 'All',
-    parse: queryParam => {
-        if ([ 'All', '1y', '2y', '3y', '4y', '5y', ].indexOf(queryParam) != -1) {
-            return queryParam as DateRange
-        } else {
-            const [start, end] = queryParam.split('-').map(d => d ? Query2Date(d) : undefined)
-            return {start, end} as DateRange
-        }
-    },
-    render: dateRange => {
-        if (typeof dateRange === 'string') {
-            return dateRange
-        } else {
-            const {start, end} = dateRange
-            return `${Date2Query(start)}-${Date2Query(end)}`
-        }
-    },
-})
 
+export function numberArrayParam(
+    {
+        defaultValue = [],
+        handleUnexpectedValue = "Warn",
+    }: {
+        defaultValue?: number[],
+        handleUnexpectedValue?: HandleUnexpectedValue,
+    } = {}
+): QueryParamConfig<number[]> {
+    const eq = _.isEqual
+    return {
+        encode(value: number[]): string | (string | null)[] | null | undefined {
+            if (eq(value, defaultValue)) return undefined
+            return value.map(v => v.toString()).join(',')
+        },
+        decode(value: string | (string | null)[] | null | undefined): number[] {
+            if (value === undefined) return defaultValue
+            if (value === null) return returnDefaultOrError(value, defaultValue, handleUnexpectedValue)
+            if (typeof value === 'string') {
+                return value.split(',').map(parseInt)
+            } else {
+                const arrays: number[][] = value.map(v => this.decode(v))
+                return arrays[arrays.length - 1]
+            }
+        },
+        equals(l: number[], r: number[]): boolean { return eq(l, r) }
+    }
+}
 export function App({ url, worker }: { url: String, worker: Worker, }) {
     const [ data, setData ] = useState<Row[] | null>(null)
 
     const [ region, setRegion ] = useEnumQueryParam<Region>('r', Regions)
-    const [ yAxis, setYAxis ] = useEnumQueryParam<YAxis>('y', YAxes)//useStringyQueryState<YAxis>('y','Rides')
+    const [ yAxis, setYAxis ] = useEnumQueryParam<YAxis>('y', YAxes)
     const [ userType, setUserType ] = useEnumQueryParam<UserType>('u',UserTypes)
     const [ stackBy, setStackBy ] = useEnumQueryParam<StackBy>('s', StackBys)
 
     const [ stackRelative, setStackRelative ] = useQueryParam('rel', boolParam())
 
-    const [ genders, setGenders ] = useQueryState<Gender[]>('g', gendersQueryState)
-    const [ rideableTypes, setRideableTypes ] = useQueryState<RideableType[]>('rt', rideablesQueryState)
+    const [ genders, setGenders ] = useEnumMultiParam<Gender>('g', { entries: GenderChars, defaultValue: Genders })
+    const [ rideableTypes, setRideableTypes ] = useEnumMultiParam<RideableType>('rt', { entries: RideableTypeChars, defaultValue: RideableTypes })
 
-    const [ dateRange, setDateRange ] = useQueryState<DateRange>('d', dateRangeQueryState)
-    const [ rollingAvgs, setRollingAvgs ] = useQueryState<number[]>('rolling', numbersQueryState)
+    const [ dateRange, setDateRange ] = useQueryParam<DateRange>('d', dateRangeParam())
+    const [ rollingAvgs, setRollingAvgs ] = useQueryParam<number[]>('rolling', numberArrayParam({ defaultValue: [12] }))
 
     const [ showLegend, setShowLegend ] = useShowLegend(true)
 
