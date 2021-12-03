@@ -30,9 +30,9 @@ const workerUrl = new URL(
 const wasmUrl = new URL("sql.js-httpvfs/dist/sql-wasm.wasm", import.meta.url);
 
 type Region = 'All' | 'NYC' | 'JC'
-const Regions: Region[] = [ 'All', 'NYC', 'JC', ]
+const Regions: [Region, string][] = [ ['All','all'], ['NYC','nyc'], ['JC','jc'], ]
 type UserType = 'All' | 'Subscriber' | 'Customer'
-const UserTypes: UserType[] = [ 'All', 'Subscriber', 'Customer', ]
+const UserTypes: [UserType, string][] = [ ['All', 'a'], ['Subscriber', 's'], ['Customer','c'], ]
 
 type Gender = 'Male' | 'Female' | 'Other / Unspecified'
 const Int2Gender: { [k: number]: Gender } = { 0: 'Other / Unspecified', 1: 'Male', 2: 'Female' }
@@ -335,7 +335,7 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
 
     const [ stackRelative, setStackRelative ] = useQueryParam('rel', boolParam())
 
-    const [ genders, setGenders ] = useEnumMultiParam<Gender>('g', { entries: GenderChars, defaultValue: Genders })
+    const [ genders, setGenders ] = useEnumMultiParam<Gender>('g', { entries: GenderChars, defaultValue: Genders, delimiter: '' })
     const [ rideableTypes, setRideableTypes ] = useEnumMultiParam<RideableType>('rt', { entries: RideableTypeChars, defaultValue: RideableTypes })
 
     const [ dateRange, setDateRange ] = useQueryParam<DateRange>('d', dateRangeParam())
@@ -436,7 +436,7 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
 
     // Sort months within each index
     monthsData = order(monthsData)
-    stacksData = fromEntries(stackKeys.map((stackVal) => [ stackVal, order(stacksData[stackVal]) ]))
+    stacksData = fromEntries(stackKeys.map((stackVal) => [ stackVal, order(stacksData[stackVal] || {}) ]))
     let months: string[] = Arr(keys(monthsData))
 
     if (stackBy && stackRelative) {
@@ -587,12 +587,12 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
                 }}
             />
             <div className="no-gutters row">
-                <Radios label="Region" options={["All", "NYC", "JC"]} cb={setRegion} choice="All" />
-                <Radios label="User Type" options={["All", "Subscriber", "Customer"]} cb={setUserType} choice="All" />
-                <Radios label="Y Axis" options={["Rides", "Ride minutes"]} cb={setYAxis} choice="Rides" />
+                <Radios label="Region" options={["All", "NYC", "JC"]} cb={setRegion} choice={region} />
+                <Radios label="User Type" options={["All", "Subscriber", "Customer"]} cb={setUserType} choice={userType} />
+                <Radios label="Y Axis" options={["Rides", "Ride minutes"]} cb={setYAxis} choice={yAxis} />
                 <Checklist
                     label="Rolling Avg"
-                    data={[{ name: "12mo", data: 12, checked: true }]}
+                    data={[{ name: "12mo", data: 12, checked: rollingAvgs.includes(12) }]}
                     cb={setRollingAvgs}
                     extra={
                         <Checkbox
@@ -612,7 +612,7 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
                         { label: "Rideable Type 🚧", data: "Rideable Type", disabled: true }
                     ]}
                     cb={setStackBy}
-                    choice="None"
+                    choice={stackBy}
                     extra={
                         <Checkbox
                             id="stack-relative"
@@ -625,18 +625,18 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
                 <Checklist<Gender>
                     label="Gender 🚧"
                     data={[
-                        { name: 'Male', data: 'Male', checked: true },
-                        { name: 'Female', data: 'Female', checked: true },
-                        { name: 'Other / Unspecified', data: 'Other / Unspecified', checked: true },
+                        { name: 'Male', data: 'Male', checked: genders.includes('Male') },
+                        { name: 'Female', data: 'Female', checked: genders.includes('Female') },
+                        { name: 'Other / Unspecified', data: 'Other / Unspecified', checked: genders.includes('Other / Unspecified') },
                     ]}
                     cb={setGenders}
                 />
                 <Checklist<RideableType>
                     label="Rideable Type 🚧"
                     data={[
-                        { name: 'Docked', data: 'Docked', checked: true, disabled: true },
-                        { name: 'Electric', data: 'Electric', checked: true, disabled: true },
-                        { name: 'Unknown', data: 'Unknown', checked: true, disabled: true },
+                        { name: 'Docked', data: 'Docked', checked: rideableTypes.includes('Docked'), disabled: true },
+                        { name: 'Electric', data: 'Electric', checked: rideableTypes.includes('Electric'), disabled: true },
+                        { name: 'Unknown', data: 'Unknown', checked: rideableTypes.includes('Unknown'), disabled: true },
                     ]}
                     cb={setRideableTypes}
                 />
