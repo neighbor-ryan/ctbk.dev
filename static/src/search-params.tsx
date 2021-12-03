@@ -1,5 +1,6 @@
 import {QueryParamConfig, useQueryParam} from "use-query-params";
 import _ from "lodash";
+const { isArray } = Array
 
 export type HandleUnexpectedValue = 'Default' | 'Warn' | 'Throw'
 
@@ -25,15 +26,20 @@ export function enumParam<D extends string>(
         defaultValue,
         handleUnexpectedValue = 'Warn',
     }: {
-        values: D[],
+        values: (D | [ D, string ])[],
         handleUnexpectedValue?: HandleUnexpectedValue,
         defaultValue?: D,
     }
 ): QueryParamConfig<D> {
-    const defValue = defaultValue === undefined ? values[0] : defaultValue
+    const vals: { d: D, s: string}[] = values.map(v => isArray(v) ? { d: v[0], s: v[1], } : { d: v, s: v, })
+    const defValue = defaultValue === undefined ? vals[0].d : defaultValue
     return {
         encode(value: D): string | (string | null)[] | null | undefined {
-            return value == defValue ? undefined : value
+            if (value == defValue) return undefined
+            const s = vals.find(({ d, s }) => value == d)?.s
+            return (s === undefined)
+                ? returnDefaultOrError(value, undefined, handleUnexpectedValue)
+                : s
         },
         decode(value: string | (string | null)[] | null | undefined): D {
             if (value === undefined) return defValue
@@ -41,7 +47,7 @@ export function enumParam<D extends string>(
                 return returnDefaultOrError(value, defValue, handleUnexpectedValue)
             }
             if (typeof value === 'string') {
-                const found = values.find(v => v == value)
+                const found = vals.find(({ d, s }) => s == value)?.d
                 return (found === undefined) ? returnDefaultOrError(value, defValue, handleUnexpectedValue) : found
             } else {
                 const ds: D[] = value.map(v => values.find(d => d == v)).filter((d): d is D => d !== undefined)
@@ -50,7 +56,9 @@ export function enumParam<D extends string>(
                     return returnDefaultOrError(value, defValue, handleUnexpectedValue)
                 }
                 const last = ds[length - 1]
-                return (length > 1) ? returnDefaultOrError(value, last, handleUnexpectedValue) : last
+                return (length > 1)
+                    ? returnDefaultOrError(value, last, handleUnexpectedValue)
+                    : last
             }
         },
     }
@@ -132,7 +140,7 @@ export function boolParam(
     }
 }
 
-export function useEnumQueryParam<T extends string>(k: string, values: T[]) {
+export function useEnumQueryParam<T extends string>(k: string, values: (T | [ T, string ])[]) {
     return useQueryParam<T>(k, enumParam<T>({ values }))
 }
 

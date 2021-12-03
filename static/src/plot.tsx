@@ -5,13 +5,8 @@ import {Shape} from "plotly.js";
 import {Checklist} from "./checklist";
 import {Radios} from "./radios";
 import {Checkbox} from "./checkbox";
-import {DefaultChunkSize, Worker} from "./worker";
-import {
-    useQueryParam,
-    QueryParamConfig,
-    createEnumParam,
-    DelimitedNumericArrayParam
-} from 'use-query-params';
+import {Worker} from "./worker";
+import {QueryParamConfig, useQueryParam} from 'use-query-params';
 import createPersistedState from 'use-persisted-state';
 import moment from 'moment';
 import {
@@ -54,12 +49,12 @@ const NormalizeRideableType: { [k: string]: RideableType } = {
 }
 
 type StackBy = 'None' | 'User Type' | 'Gender' | 'Rideable Type'
-const StackBys: StackBy[] = [ 'None', 'Gender', 'User Type', 'Rideable Type', ]
+const StackBys: [StackBy, string][] = [ ['None', 'n'], ['Gender','g'], ['User Type','u'], ['Rideable Type','r'], ]
 
 type DateRange = 'All' | '1y' | '2y' | '3y' | '4y' | '5y' | { start?: Date, end?: Date }
 
 type YAxis = 'Rides' | 'Ride minutes'
-const YAxes: YAxis[] = [ 'Rides', 'Ride minutes', ]
+const YAxes: [YAxis, string][] = [ ['Rides', 'r'], ['Ride minutes', 'm'], ]
 const yAxisLabelDict = {
     'Rides': { yAxis: 'Total Rides', title: 'Citibike Rides per Month', hoverLabel: 'Rides' },
     'Ride minutes': { yAxis: 'Total Ride Minutes', title: 'Citibike Ride Minutes per Month', hoverLabel: 'Minutes', },
