@@ -1,4 +1,0 @@
-mount:
-- home:/home
-sudo: true
-
