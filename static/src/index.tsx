@@ -1,11 +1,11 @@
 import {HashRouter, Location, Route, Routes, useLocation, useNavigate} from "react-router-dom";
-import React, {ReactElement, ReactNode, useState,} from 'react';
+import React, {useState,} from 'react';
 import ReactDOM from 'react-dom'
 
 import $ from 'jquery';
 import {App} from "./plot";
 import {Worker} from "./worker";
-import { QueryParamProvider } from "use-query-params";
+import {QueryParamProvider} from "use-query-params";
 
 /**
  * This is the main thing you need to use to adapt the react-router v6
@@ -36,7 +36,7 @@ const RouteAdapter: React.FC = ({ children }) => {
 };
 
 function Router() {
-    const [ url, setUrl ] = useState("/assets/ymrgtb_cd_201306:202111.sqlite");
+    const [ url, setUrl ] = useState("../assets/ymrgtb_cd_201306:202111.sqlite");
     const [ worker, setWorker ] = useState<Worker>(new Worker({ url, }))
 
     return (

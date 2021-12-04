@@ -1,8 +1,7 @@
 const webpack = require('webpack');
-// const path = require('path');
 
 module.exports = {
-  entry: "./src/index.tsx",
+  entry: "./src/entry.tsx",
   module: {
     rules: [
       {

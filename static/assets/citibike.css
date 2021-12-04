@@ -1,0 +1,48 @@
+body{
+  /*font-size: 1.6em;*/
+}
+.row {
+  padding: 0 2em;
+}
+.control {
+  /*margin: 0 2em;*/
+}
+.control label {
+  display: block;
+  margin: 0;
+}
+.control label > input {
+  margin-right: 0.3em;
+}
+.control-header {
+  font-weight: bold;
+}
+#date-range {
+  margin-bottom: 1.3em;
+}
+
+img.icon {
+  width: 2em;
+}
+
+.footer {
+  margin-top: 1em;
+}
+button,input.button {
+  font-size: 1em;
+  margin-left: 1em;
+  padding: 0 0.5em;
+  border: 1px solid #bbb;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+#date-range {
+  margin-top: 0.7em;
+}
+.sub-control {
+  margin-bottom: 0.6em
+}
+#showlegend {
+  font-weight: bold;
+}

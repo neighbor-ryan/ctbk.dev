@@ -1,0 +1,9 @@
+paths:
+  - index.html
+  - favicon.ico
+  - dist/bundle.js
+  - dist/257fb50677e11621f8a0.js
+  - dist/fd38fda4d9036372d1aa.wasm
+  - assets/index.css
+  - assets/citibike.css
+dst: s3://ctbk/static/

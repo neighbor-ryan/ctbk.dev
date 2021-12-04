@@ -31,5 +31,9 @@
   },
   "browser": {
     "buffer": false
+  },
+  "scripts": {
+    "build": "node_modules/.bin/webpack",
+    "sync": "./sync.py -nn"
   }
 }
