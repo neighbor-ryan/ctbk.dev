@@ -256,7 +256,7 @@ export function dateRangeParam(
             if (value === undefined) return defaultValue
             if (value === null) return returnDefaultOrError(value, 'All', handleUnexpectedValue)
             if (typeof value === 'string') {
-                if (['All', '1y', '2y', '3y', '4y', '5y',].indexOf(value) != -1) {
+                if (['All', '1y', '2y', '3y', '4y', '5y',].includes(value)) {
                     return value as DateRange
                 } else {
                     const [start, end] = value.split('-').map(d => d ? Query2Date(d) : undefined)
@@ -316,7 +316,7 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
 
     const [ showLegend, setShowLegend ] = useShowLegend(true)
 
-    console.log("Region", region, "User Type", userType, "Y-Axis", yAxis, "First row:")
+    console.log("Region", region, "User Type", userType, "Y-Axis", yAxis, "Date range:", dateRange, "First row:")
     console.log(data && data[0])
 
     useEffect(
@@ -562,6 +562,15 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
         <div id="plot">
             {/* Main plot: bar graph + rolling avg line(s) */}
             <Plot
+                onDoubleClick={() => setDateRange('All')}
+                onRelayout={e => {
+                    if (!('xaxis.range[0]' in e && 'xaxis.range[1]' in e)) return
+                    let [ start, end ] = [ e['xaxis.range[0]'], e['xaxis.range[1]'], ].map(s => s ? new Date(s) : undefined)
+                    start = start ? moment(start).subtract(1, 'month').toDate() : start
+                    const dateRange = (!start && !end) ? 'All' : { start, end, }
+                    console.log("relayout:", e, start, end, dateRange,)
+                    setDateRange(dateRange)
+                }}
                 data={traces}
                 useResizeHandler
                 layout={{
