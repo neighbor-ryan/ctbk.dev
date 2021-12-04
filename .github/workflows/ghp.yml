@@ -19,8 +19,9 @@ jobs:
         run: |
           cd static
           npm run build
-          mkdir built
-          cp -r index.html favicon.ico dist assets/*.css assets/*.sqlite built/
+          mkdir -p built/assets
+          cp -r index.html favicon.ico dist built/
+          cp assets/*.css assets/*.sqlite built/assets/
       - name: Deploy to GH Page
         uses: JamesIves/github-pages-deploy-action@4.1.1
         with:
