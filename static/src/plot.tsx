@@ -1,4 +1,5 @@
 import React, {useEffect, useState} from 'react';
+import ReactMarkdown from 'react-markdown'
 import Plot from 'react-plotly.js';
 import * as Plotly from "plotly.js";
 import {Shape} from "plotly.js";
@@ -558,6 +559,12 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
 
     const traces: Plotly.Data[] = barTraces.concat(rollingTraces)
 
+    function icon(src: string, href: string, title: string) {
+        return <a href={href} title={title}>
+            <img className="icon" src={`/assets/${src}.png`} />
+        </a>
+    }
+
     return (
         <div id="plot">
             {/* Main plot: bar graph + rolling avg line(s) */}
@@ -665,6 +672,35 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
                     ]}
                     cb={setRideableTypes}
                 />
+            </div>
+            <div className="no-gutters row">
+                <div className="col-md-12">
+                    <ReactMarkdown>{`
+## About
+Use the controls above to filter the plot by region, user type, gender, or date, group/stack by user type or gender, and toggle aggregation of rides or total ride minutes.
+
+This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 2nd week of each month, covering the previous month).
+
+[The GitHub repo](https://github.com/neighbor-ryan/citibike) has more info as well as [planned enhancements](https://github.com/neighbor-ryan/citibike/issues).
+                    `}</ReactMarkdown>
+                    <h3 id="qc">🚧 Known data-quality issues 🚧</h3>
+                    <ReactMarkdown>{`
+Several things changed in February 2021 (presumably when some backend systems were converted as part of [the Lyft acquistion](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):
+- "Gender" information is no longer provided (all rides are labeled "unknown" starting February 2021)
+- A new "Rideable Type" field was added, containing values \`docked_bike\` and \`electric_bike\` 🎉; however, it is mostly incorrect at present, and disabled here:
+  - Prior to February 2021, the field is absent (even though e-citibikes were in widespread use before then)
+  - Since February 2021, only a tiny number of rides are labeled \`electric_bike\` (122 in April 2021, 148 in May, 113 in June). This is certainly not accurate!
+    - One possibile explanation: [electric citibikes were launched in Jersey City and Hoboken around April 2021](https://www.hobokengirl.com/hoboken-jersey-city-citi-bike-share-program/); perhaps those bikes were part of a new fleet that show up as \`electric_bike\` in the data (where previous e-citibikes didn't).
+    - These \`electric_bike\` rides showed up in the default ("NYC") data, not the "JC" data, but it could be all in flux; February through April 2021 were also updated when the May 2021 data release happened in early June.
+- The "User Type" values changed ("Subscriber" → "member", "Customer" → "casual"); I'm using the former/old values here, they seem equivalent.
+                    `}</ReactMarkdown>
+                    <div className="footer">
+                        Code: { icon(     'gh', 'https://github.com/neighbor-ryan/citibike#readme',    'GitHub logo') }
+                        Data: { icon(     's3',         'https://s3.amazonaws.com/ctbk/index.html', 'Amazon S3 logo') }
+                      Author: { icon('twitter',                  'https://twitter.com/RunsAsCoded',   'Twitter logo') }
+                    </div>
+
+                </div>
             </div>
         </div>
     );
