@@ -1,53 +1,48 @@
-# Yet Another Citibike Dashboard
-[ctbk.dev](https://www.ctbk.dev/):
+# [ctbk.dev](https://ctbk.dev/): Citibike Dashboard
 
-[![Screenshot of dashboard; per-month ride counts going back 5 years, with a 12mo rolling avg showing mostly steady growth](https://user-images.githubusercontent.com/465045/127218908-91ea5438-276d-4730-8f2b-ed177daf5d5b.png)][ctbk.dev]
+[![Screenshot of dashboard; per-month ride counts going back 5 years, with a 12mo rolling avg showing mostly steady growth](./screenshot.png)][ctbk.dev]
 
 - [auto-updates with new data each month](#auto-update)
 - [powered by cleaned, public data (derived from the official Citibike data)](#cleaned-data)
-- Interactive! Filter by:
+- Interactive! Filter/Stack by:
   - user type (annual "subscriber" vs. daily "customer")
-  - gender (male, female, or other/unspecified)
+  - gender (male, female, other/unspecified; historical data up to Feb 2021 only)
   - region (NYC and/or JC)
   - date range (at monthly granularity, back to system launch in June 2013)
-- Stack/Group by:
-  - gender
-  - user type
-- Toggle 12mo rolling averages
+- URL syncs with plot controls, for ease of linking to specific views, e.g.:
+  - JC only: [ctbk.dev#?r=jc](https://ctbk.dev/#?r=jc)
+  - Ride minute %, by gender:
+    [![](./gender-percents-minutes.png)][gender pcts plot]
+    [ctbk.dev#?d=1406-2101&g=mf&pct&s=g&y=m][gender pcts plot]; Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
+
 
 ## Cleaned, public data <a id="cleaned-data"></a>
 I fixed some rough edges in [Citibike's published data][citibike system data] and published the results to [the `ctbk` Amazon S3 bucket][`s3://ctbk`].
 
 Some issues that [`s3://ctbk`] mitigates:
-- Original CSV's are converted to [Parquet] (a compressed format that is also aware of columns' types, which can save some headache; also works around other issues like inconsistent `\n` vs. `\r\n` line endings)
-- Original CSV's come in `.zip` files that typically only contain one `.csv` file. However, that CSV is often inconsistently named, and sometimes other files are also mistakenly included in the `.zip` (e.g. `.DS_Store` macOS metadata from the machine where the `.zip` was created)
-- Column-name inconsistencies across months (e.g. `User Type` vs. `usertype`) are harmonized
+- Convert original CSV's to [Parquet]
+  - compressed, column-type-aware format saves some headache
+  - works around issues like inconsistent `\n` vs. `\r\n` line endings
+- Unzip+Normalize `.zip`s containing CSV's (which are sometimes inconsistently-named or contain erroneous extra files like `.DS_Store` macOS metadata)
+- Harmonize column names across months (e.g. `User Type` vs. `usertype`)
 
 ## Automatic Updating <a id="auto-update"></a>
-Every day, [a GitHub Action runs in this repo](https://github.com/neighbor-ryan/citibike/actions) and checks `s3://tripdata` for a new month of official data. If new data is found, it is cleaned, converted to `.parquet`, and uploaded to `s3://ctbk`.
+Every day, [a GitHub Action in this repo](https://github.com/neighbor-ryan/ctbk.dev/actions):
+- checks `s3://tripdata` for a new month of official data
+- if new data is found, it gets cleaned, converted to `.parquet`, and uploaded to `s3://ctbk`.
 
-Additionally, some aggregated/summary statistics are updated, which the dashboard at [ctbk.dev] reads, meaning it should stay up to date as new data is published.
+Additionally, aggregated statistics are updated, which the [ctbk.dev] app reads, meaning it should stay up to date as new data is published.
 
-At the time of this writing, this process has run successfully once, [adding March 2021 data to the dashboard on April 8, 2021][202103 GHA]:
+As of December 2021, this process has run successfully for 8 months ([most recently on November 6, processing October 2021 data][202110 GHA]):
 ```
 …
-Found s3://ctbk/202101-citibike-tripdata.parquet; skipping
-Found s3://ctbk/202102-citibike-tripdata.parquet; skipping
-Wrote s3://ctbk/202103-citibike-tripdata.parquet
-Found s3://ctbk/JC-201509-citibike-tripdata.parquet; skipping
-Found s3://ctbk/JC-201510-citibike-tripdata.parquet; skipping
-…
-Found s3://ctbk/JC-202101-citibike-tripdata.parquet; skipping
-Found s3://ctbk/JC-202102-citibike-tripdata.parquet; skipping
-Wrote s3://ctbk/JC-202103-citibike-tripdata.parquet
-…
-Found s3://ctbk/JC-202101-citibike-tripdata.parquet; skipping
-Found s3://ctbk/JC-202102-citibike-tripdata.parquet; skipping
-JC-202103-citibike-tripdata.csv.zip: zip names: ['JC-202103-citibike-tripdata.csv', '__MACOSX/._JC-202103-citibike-tripdata.csv']
-…
-Found s3://ctbk/202101-citibike-tripdata.parquet; skipping
-Found s3://ctbk/202102-citibike-tripdata.parquet; skipping
-202103-citibike-tripdata.csv.zip: zip names: ['202103-citibike-tripdata.csv', '__MACOSX/._202103-citibike-tripdata.csv']
+Aggregating: s3://ctbk/normalized/202109.parquet
+Aggregating: s3://ctbk/normalized/202110.parquet
+Computing: s3://ctbk/aggregated/ymrgtb_cd_201306:202111.parquet
+Wrote s3://ctbk/aggregated/ymrgtb_cd_201306:202111.parquet
+Computing: s3://ctbk/aggregated/ymrgtb_cd_201306:202111.sqlite
+Upload /tmp/tmp_pnfpl1s to ctbk:aggregated/ymrgtb_cd_201306:202111.sqlite
+Wrote s3://ctbk/aggregated/ymrgtb_cd_201306:202111.sqlite
 ```
 
 ## Prior Art
@@ -76,6 +71,7 @@ Feel free to [file an issue here](https://github.com/neighbor-ryan/citibike/issu
 [citibike s3 index]: https://s3.amazonaws.com/tripdata/index.html
 [`s3://ctbk`]: https://s3.amazonaws.com/ctbk/index.html
 [Parquet]: https://parquet.apache.org/
-[202103 GHA]: https://github.com/neighbor-ryan/citibike/runs/2304544335?check_suite_focus=true#step:6:104
+[202110 GHA]: https://github.com/neighbor-ryan/ctbk.dev/runs/4125143693#step:6:396
 
 [ctbk.dev]: https://ctbk.dev/
+[gender pcts plot]: https://ctbk.dev#?d=1406-2101&g=mf&pct&s=g&y=m
