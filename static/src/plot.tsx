@@ -307,7 +307,7 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
     const [ userType, setUserType ] = useEnumQueryParam<UserType>('u',UserTypes)
     const [ stackBy, setStackBy ] = useEnumQueryParam<StackBy>('s', StackBys)
 
-    const [ stackRelative, setStackRelative ] = useQueryParam('rel', boolParam())
+    const [ stackRelative, setStackRelative ] = useQueryParam('pct', boolParam())
 
     const [ genders, setGenders ] = useEnumMultiParam<Gender>('g', { entries: GenderChars, defaultValue: Genders, delimiter: '' })
     const [ rideableTypes, setRideableTypes ] = useEnumMultiParam<RideableType>('rt', { entries: RideableTypeChars, defaultValue: RideableTypes })
