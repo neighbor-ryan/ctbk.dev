@@ -596,6 +596,7 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
                         title: yAxisLabel,
                         tickfont: { size: 14 },
                         titlefont: { size: 14 },
+                        range: stackRelative ? [ 0, 100, ] : undefined,
                     },
                     paper_bgcolor: 'rgba(0,0,0,0)',
                     plot_bgcolor: 'rgba(0,0,0,0)',
