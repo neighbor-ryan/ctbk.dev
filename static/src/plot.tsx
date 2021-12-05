@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import ReactMarkdown from 'react-markdown'
+const Markdown = ReactMarkdown
 import Plot from 'react-plotly.js';
 import * as Plotly from "plotly.js";
 import {Shape} from "plotly.js";
@@ -299,6 +300,7 @@ export function numberArrayParam(
         equals(l: number[], r: number[]): boolean { return eq(l, r) }
     }
 }
+
 export function App({ url, worker }: { url: String, worker: Worker, }) {
     const [ data, setData ] = useState<Row[] | null>(null)
 
@@ -627,15 +629,14 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
                     label="Rolling Avg"
                     data={[{ name: "12mo", data: 12, checked: rollingAvgs.includes(12) }]}
                     cb={setRollingAvgs}
-                    extra={
-                        <Checkbox
-                            id="showlegend"
-                            label="Legend"
-                            checked={showlegend}
-                            cb={setShowLegend}
-                        />
-                    }
-                />
+                >
+                    <Checkbox
+                        id="showlegend"
+                        label="Legend"
+                        checked={showlegend}
+                        cb={setShowLegend}
+                    />
+                </Checklist>
                 <Radios
                     label="Stack by"
                     options={[
@@ -646,15 +647,14 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
                     ]}
                     cb={setStackBy}
                     choice={stackBy}
-                    extra={
-                        <Checkbox
-                            id="stack-relative"
-                            label="Percentages"
-                            checked={stackRelative}
-                            cb={setStackRelative}
-                        />
-                    }
-                />
+                >
+                    <Checkbox
+                        id="stack-relative"
+                        label="Percentages"
+                        checked={stackRelative}
+                        cb={setStackRelative}
+                    />
+                </Radios>
                 <Checklist<Gender>
                     label="Gender 🚧"
                     data={[
@@ -676,31 +676,32 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
             </div>
             <div className="no-gutters row">
                 <div className="col-md-12">
-                    <ReactMarkdown>{`
+                    <Markdown>{`
 ## About
-Use the controls above to filter the plot by region, user type, gender, or date, group/stack by user type or gender, and toggle aggregation of rides or total ride minutes.
+Use the controls above to filter/stack by region, user type, gender, or date, and toggle aggregation of rides or total ride minutes, e.g.:
+- [JC only](#?r=jc)
+- [Ride minute %'s, Male vs. Female](#?d=1406-2101&g=mf&pct&s=g&y=m) (Jun 2014 - January 2021, the window where 12mo rolling avgs are possible)
 
 This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 2nd week of each month, covering the previous month).
 
-[The GitHub repo](https://github.com/neighbor-ryan/citibike) has more info as well as [planned enhancements](https://github.com/neighbor-ryan/citibike/issues).
-                    `}</ReactMarkdown>
-                    <h3 id="qc">🚧 Known data-quality issues 🚧</h3>
-                    <ReactMarkdown>{`
-Several things changed in February 2021 (presumably when some backend systems were converted as part of [the Lyft acquistion](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):
-- "Gender" information is no longer provided (all rides are labeled "unknown" starting February 2021)
-- A new "Rideable Type" field was added, containing values \`docked_bike\` and \`electric_bike\` 🎉; however, it is mostly incorrect at present, and disabled here:
+[The GitHub repo](https://github.com/neighbor-ryan/ctbk.dev) has more info as well as [planned enhancements](https://github.com/neighbor-ryan/ctbk.dev/issues).
+                    `}</Markdown>
+                    <h3 id="qc">🚧 Data-quality issues 🚧</h3>
+                    <Markdown>{`
+Several things changed in February 2021 (presumably as part of [the Lyft acquistion](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):
+- "Gender" information no longer provided (all rides labeled "unknown" starting February 2021)
+- A new "Rideable Type" field was added, containing values \`docked_bike\` and \`electric_bike\` 🎉; however, it is mostly incorrect at present, and disabled above:
   - Prior to February 2021, the field is absent (even though e-citibikes were in widespread use before then)
-  - Since February 2021, only a tiny number of rides are labeled \`electric_bike\` (122 in April 2021, 148 in May, 113 in June). This is certainly not accurate!
-    - One possibile explanation: [electric citibikes were launched in Jersey City and Hoboken around April 2021](https://www.hobokengirl.com/hoboken-jersey-city-citi-bike-share-program/); perhaps those bikes were part of a new fleet that show up as \`electric_bike\` in the data (where previous e-citibikes didn't).
+  - Since February 2021, only a tiny number of rides are labeled \`electric_bike\` (122 in April 2021, 148 in May, 113 in June); this is certainly not accurate!
+    - One possible explanation: [electric citibikes were launched in Jersey City and Hoboken around April 2021](https://www.hobokengirl.com/hoboken-jersey-city-citi-bike-share-program/); perhaps those bikes were part of a new fleet that show up as \`electric_bike\` in the data (while extant NYC e-citibikes don't).
     - These \`electric_bike\` rides showed up in the default ("NYC") data, not the "JC" data, but it could be all in flux; February through April 2021 were also updated when the May 2021 data release happened in early June.
 - The "User Type" values changed ("Subscriber" → "member", "Customer" → "casual"); I'm using the former/old values here, they seem equivalent.
-                    `}</ReactMarkdown>
+                    `}</Markdown>
                     <div className="footer">
-                        Code: { icon(     'gh', 'https://github.com/neighbor-ryan/citibike#readme',    'GitHub logo') }
+                        Code: { icon(     'gh', 'https://github.com/neighbor-ryan/ctbk.dev#readme',    'GitHub logo') }
                         Data: { icon(     's3',         'https://s3.amazonaws.com/ctbk/index.html', 'Amazon S3 logo') }
                       Author: { icon('twitter',                  'https://twitter.com/RunsAsCoded',   'Twitter logo') }
                     </div>
-
                 </div>
             </div>
         </div>

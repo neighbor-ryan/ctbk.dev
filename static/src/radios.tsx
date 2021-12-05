@@ -1,4 +1,4 @@
-import React, {Component, ReactElement} from "react";
+import React, {ReactNode} from "react";
 
 type Option<T> = {
     label?: string
@@ -6,51 +6,38 @@ type Option<T> = {
     disabled?: boolean
 }
 
-type Props<T extends string> = {
-    label: string
-    options: (Option<T> | T)[]
-    choice: T
-    cb: (choice: T) => void
-    extra?: ReactElement<any, any>
-}
-
-type State<T extends string> = { choice: T }
-
-export class Radios<T extends string> extends Component<Props<T>, State<T>> {
-    constructor(props: Props<T>) {
-        super(props);
-        this.state = { choice: props.choice }
-        this.onChange = this.onChange.bind(this)
+export function Radios<T extends string>(
+    { label, options, choice, cb, children }: {
+        label: string
+        options: (Option<T> | T)[]
+        choice: T
+        cb: (choice: T) => void
+        children?: ReactNode
     }
-    onChange(e: any) {
-        const choice = e.target.value;
-        console.log("new choice:", choice)
-        this.setState({ choice });
-        this.props.cb(choice)
-    }
-    render() {
-        const [ { label, options, extra }, { choice } ] = [ this.props, this.state ]
-        const labels = options.map((option) => {
-            const { label: text, data: name, disabled } =
-                typeof option === 'string'
-                    ? { label: option, data: option, disabled: false }
-                    : option
-            return <label key={name}>
+) {
+    const labels = options.map(option => {
+        const { label: text, data: name, disabled } =
+            typeof option === 'string'
+                ? { label: option, data: option, disabled: false }
+                : option
+        return (
+            <label key={name}>
                 <input
                     type="radio"
                     name={label + '-' + name}
                     value={name}
                     checked={name == choice}
                     disabled={disabled}
-                    onChange={e => {}}
-                ></input>
+                    onChange={e => {
+                    }}
+                />
                 {text}
             </label>
-        })
-        return <div className="control col">
-            <div className="control-header">{label}:</div>
-            <div id={label} className="sub-control" onChange={this.onChange}>{labels}</div>
-            {extra}
-        </div>
-    }
+        )
+    })
+    return <div className="control col">
+        <div className="control-header">{label}:</div>
+        <div id={label} className="sub-control" onChange={(e: any) => cb(e.target.value)}>{labels}</div>
+        {children}
+    </div>
 }

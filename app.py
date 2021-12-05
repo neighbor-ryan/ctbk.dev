@@ -610,7 +610,7 @@ app.layout = Div([
                         Div([
                             Markdown(f'Use the controls above to filter the plot by region, user type, gender, or date, group/stack by user type or gender, and toggle aggregation of rides or total ride minutes.'),
                             Markdown(f'This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 2nd week of each month, covering the previous month).'),
-                            Markdown(f'[The GitHub repo](https://github.com/neighbor-ryan/citibike) has more info as well as [planned enhancements](https://github.com/neighbor-ryan/citibike/issues).'),
+                            Markdown(f'[The GitHub repo](https://github.com/neighbor-ryan/ctbk.dev) has more info as well as [planned enhancements](https://github.com/neighbor-ryan/ctbk.dev/issues).'),
                         ]),
                         H3('🚧 Known data-quality issues 🚧', id="qc"),
                         Markdown('Several things changed in February 2021 (presumably when some backend systems were converted as part of [the Lyft acquistion](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):'),
@@ -624,7 +624,7 @@ app.layout = Div([
                             - The "User Type" values changed ("Subscriber" → "member", "Customer" → "casual"); I'm using the former/old values here, they seem equivalent.
                         '''),
                         Div([
-                            'Code: ',icon('gh', 'https://github.com/neighbor-ryan/citibike#readme', 'GitHub logo'),' ',
+                            'Code: ',icon('gh', 'https://github.com/neighbor-ryan/ctbk.dev#readme', 'GitHub logo'),' ',
                             'Data: ',icon('s3', 'https://s3.amazonaws.com/ctbk/index.html', 'Amazon S3 logo'),' ',
                             'Author: ',icon('twitter', 'https://twitter.com/RunsAsCoded', 'Twitter logo'),' ',
                         ]),

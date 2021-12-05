@@ -55,7 +55,7 @@ My hope is that this dashboard will solve both of these issues, by:
 - providing 5-10 orthogonal, common-sense toggles that let you easily answer a large number of basic system-level questions
 
 ## Feedback / Contributing
-Feel free to [file an issue here](https://github.com/neighbor-ryan/citibike/issues) with any comments, bug reports, or feedback!
+Feel free to [file an issue here](https://github.com/neighbor-ryan/ctbk.dev/issues) with any comments, bug reports, or feedback!
 
 [ckran-20210305]: https://towardsdatascience.com/exploring-the-effects-of-the-pandemic-on-nyc-bike-share-usage-ab79f67ac2df
 [toddschneider-20160113]: https://toddwschneider.com/posts/a-tale-of-twenty-two-million-citi-bikes-analyzing-the-nyc-bike-share-system/
