@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import ReactMarkdown from 'react-markdown'
+import ReactTooltip from 'react-tooltip';
 const Markdown = ReactMarkdown
 import Plot from 'react-plotly.js';
 import * as Plotly from "plotly.js";
@@ -567,6 +568,14 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
         </a>
     }
 
+    const GenderLabel =
+        <span>
+            Gender
+            <span data-tip data-for="gender-label-tooltip">
+                <img className="warning icon" src="./assets/warning.png"/>
+            </span>
+        </span>
+
     return (
         <div id="plot">
             {/* Main plot: bar graph + rolling avg line(s) */}
@@ -642,8 +651,10 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
                     options={[
                         "None",
                         "User Type",
-                        { label: "Gender 🚧", data: "Gender", },
-                        { label: "Rideable Type 🚧", data: "Rideable Type", disabled: true }
+                        {
+                            label: GenderLabel,
+                            data: "Gender",
+                        },
                     ]}
                     cb={setStackBy}
                     choice={stackBy}
@@ -656,7 +667,7 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
                     />
                 </Radios>
                 <Checklist<Gender>
-                    label="Gender 🚧"
+                    label={GenderLabel}
                     data={[
                         { name: 'Male', data: 'Male', checked: genders.includes('Male') },
                         { name: 'Female', data: 'Female', checked: genders.includes('Female') },
@@ -664,15 +675,10 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
                     ]}
                     cb={setGenders}
                 />
-                <Checklist<RideableType>
-                    label="Rideable Type 🚧"
-                    data={[
-                        { name: 'Docked', data: 'Docked', checked: rideableTypes.includes('Docked'), disabled: true },
-                        { name: 'Electric', data: 'Electric', checked: rideableTypes.includes('Electric'), disabled: true },
-                        { name: 'Unknown', data: 'Unknown', checked: rideableTypes.includes('Unknown'), disabled: true },
-                    ]}
-                    cb={setRideableTypes}
-                />
+                <ReactTooltip id="gender-label-tooltip" className="label-tooltip">
+                    <div>Gender data no longer published</div>
+                    <div>(as of February 2021)</div>
+                </ReactTooltip>
             </div>
             <div className="no-gutters row">
                 <div className="col-md-12">

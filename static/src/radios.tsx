@@ -1,7 +1,7 @@
 import React, {ReactNode} from "react";
 
 type Option<T> = {
-    label?: string
+    label?: string | ReactNode
     data: T
     disabled?: boolean
 }

@@ -12,7 +12,7 @@ type CheckboxData<T> = {
 
 export function Checklist<T>(
     { label, data, cb, children, }: {
-        label: string
+        label: string | ReactNode
         data: CheckboxData<T>[]
         cb: (ts: T[]) => void
         children?: ReactNode
@@ -70,7 +70,7 @@ export function Checklist<T>(
 
     return <div className="control col">
         <div className="control-header">{label}:</div>
-        <div id={label} onChange={onChange} className="sub-control">{labels}</div>
+        <div onChange={onChange} className="sub-control">{labels}</div>
         {children}
     </div>
 }

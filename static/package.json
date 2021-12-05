@@ -11,6 +11,7 @@
     "react-markdown": "^7.1.1",
     "react-plotly.js": "^2.5.1",
     "react-router-dom": "^6.0.2",
+    "react-tooltip": "^4.2.21",
     "sql.js-httpvfs": "^0.8.8",
     "stream": "^0.0.2",
     "use-persisted-state": "^0.3.3",
