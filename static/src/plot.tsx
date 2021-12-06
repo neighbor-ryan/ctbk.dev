@@ -577,7 +577,7 @@ export function App({ url, worker }: { url: String, worker: Worker, }) {
         </span>
 
     return (
-        <div id="plot">
+        <div id="plot" className="container">
             {/* Main plot: bar graph + rolling avg line(s) */}
             <Plot
                 onDoubleClick={() => setDateRange('All')}
