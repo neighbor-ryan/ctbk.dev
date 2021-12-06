@@ -1,0 +1,29 @@
+name: S3 staging
+on:
+  push:
+    branches:
+      - dev
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: static
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+      - name: Install
+        run: |
+          pip install awscli s3cmd
+          npm install
+      - name: Build
+        run: npm run build
+      - name: Sync
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.s3_ctbk_dev_access_key }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.s3_ctbk_dev_secret_key }}
+        run: |
+          npm run sync
+          npm run fix-mime-type

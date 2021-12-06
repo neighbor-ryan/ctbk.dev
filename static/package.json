@@ -37,7 +37,7 @@
   "scripts": {
     "build": "node_modules/.bin/webpack",
     "dev": "node_modules/.bin/webpack --mode=development -w",
-    "sync": "./sync.py -nn",
-    "fix-mime-type": "s3cmd --acl-public --no-preserve --add-header='Cache-Control:public, max-age=86400' --mime-type='application/json; charset=utf-8' put dist/bundle.js s3://ctbk/static/dist/"
+    "sync": "python sync.py",
+    "fix-mime-type": "./fix-mime-type.sh"
   }
 }
