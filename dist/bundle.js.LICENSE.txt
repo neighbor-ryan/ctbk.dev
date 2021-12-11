@@ -38,6 +38,13 @@ object-assign
 /*!
  * The buffer module from node.js, for the browser.
  *
+ * @author   Feross Aboukhadijeh <http://feross.org>
+ * @license  MIT
+ */
+
+/*!
+ * The buffer module from node.js, for the browser.
+ *
  * @author   Feross Aboukhadijeh <https://feross.org>
  * @license  MIT
  */
@@ -74,6 +81,8 @@ object-assign
     v0.8.1 (c) Kyle Simpson
     MIT License: http://getify.mit-license.org
 */
+
+/*! https://mths.be/punycode v1.3.2 by @mathias */
 
 /**
  * @license
