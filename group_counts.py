@@ -209,29 +209,39 @@ def main(
             raise RuntimeError(f'Unrecognized format: {fmt}')
 
     def convert(fmt):
-        name = "_".join([
+        abs_name = "_".join([
             agg_keys_label,
             values_label,
             f'{start}:{end}',
         ])
-        name += f'.{fmt}'
+        abs_name += f'.{fmt}'
 
-        if dst_root:
-            dst_key = f'{dst_root}/{name}'
-        else:
-            dst_key = name
+        def put(name):
+            if dst_root:
+                dst_key = f'{dst_root}/{name}'
+            else:
+                dst_key = name
 
-        dst = f's3://{dst_bucket}/{dst_key}'
-        print(f'Computing: {dst}')
+            dst = f's3://{dst_bucket}/{dst_key}'
+            print(f'Computing: {dst}')
 
-        result = convert_file(
-            write,
-            dst=dst,
-            fmt=fmt,
-            public=public,
-            overwrite=overwrite,
-        )
-        print(result.get('msg'))
+            result = convert_file(
+                write,
+                dst=dst,
+                fmt=fmt,
+                public=public,
+                overwrite=overwrite,
+            )
+            print(result.get('msg'))
+
+        put(abs_name)
+        if start is None and end is None:
+            latest_name = "_".join([
+                agg_keys_label,
+                values_label,
+            ])
+            latest_name += f'.{fmt}'
+            put(latest_name)
 
     if parquet:
         convert('parquet')
