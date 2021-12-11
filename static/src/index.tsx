@@ -5,12 +5,11 @@ import ReactDOM from 'react-dom'
 import $ from 'jquery';
 import {App} from "./plot";
 import {S3Tree} from "./s3tree";
-import {Worker} from "./worker";
 import {QueryParamProvider} from "use-query-params";
 import {RouteAdapter} from "./route-adapter";
 
 function Router() {
-    const [ url, setUrl ] = useState("../assets/ymrgtb_cd_201306:202111.sqlite");
+    const [ url, setUrl ] = useState("../assets/ymrgtb_cd.sqlite");
 
     return (
         <HashRouter>
