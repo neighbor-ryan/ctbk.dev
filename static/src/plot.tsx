@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import ReactMarkdown from 'react-markdown'
 import ReactTooltip from 'react-tooltip';
 const Markdown = ReactMarkdown
@@ -302,7 +302,8 @@ export function numberArrayParam(
     }
 }
 
-export function App({ url, worker }: { url: String, worker: Worker, }) {
+export function App({ url }: { url: string, }) {
+    const worker = useMemo(() => new Worker({ url, }), [ url, ])
     const [ data, setData ] = useState<Row[] | null>(null)
 
     const [ region, setRegion ] = useEnumQueryParam<Region>('r', Regions)

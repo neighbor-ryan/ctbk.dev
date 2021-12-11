@@ -94,7 +94,8 @@
             var GB = 1000000000;
 
             // replace last /index.html to get bucket root
-            var bucketUrl = document.location.href.replace(/\/[^\/]+$/, '');
+            var bucketUrl = 'https://ctbk.s3.amazonaws.com/';
+            //var bucketUrl = document.location.href.replace(/\/[^\/]+$/, '');
             var compiledTemplate;
 
             // return e.g. 1.2KB, 1.3MB, 2GB, etc.
@@ -136,7 +137,7 @@
 
             function onAjaxSuccess(xml) {
                 var listBucketResult = $(xml).find('ListBucketResult');
-
+                console.log(listBucketResult);
                 // set a reasonable title instead of "Bucket loading"
                 var title = 'Index of bucket "' + listBucketResult.find('Name').text() + '"';
                 document.title = title;
