@@ -16,8 +16,7 @@ function Router() {
             <QueryParamProvider ReactRouterRoute={RouteAdapter}>
                 <Routes>
                     <Route path="" element={<App url={url} />} />
-                    <Route path="s3/:bucket" element={<S3Tree />} />
-                    <Route path="s3/:bucket/:key" element={<S3Tree />} />
+                    <Route path="s3" element={<S3Tree />} />
                 </Routes>
             </QueryParamProvider>
         </HashRouter>

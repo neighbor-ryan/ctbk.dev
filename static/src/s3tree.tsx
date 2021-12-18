@@ -1,13 +1,20 @@
 import React, {useEffect, useMemo, useState,} from "react";
 import AWS from 'aws-sdk';
-import moment from 'moment'
+import moment, {Duration, DurationInputArg2, Moment} from 'moment'
 import {ListObjectsV2Output, ListObjectsV2Request, Object} from "aws-sdk/clients/s3";
-import {Link, useLocation, useParams} from "react-router-dom";
-import _ from "lodash";
+import {Link, useLocation} from "react-router-dom";
+import _, {entries} from "lodash";
+import {useQueryParam} from "use-query-params";
+import {QueryParamConfig} from "serialize-query-params/lib/types";
 
 const { ceil, floor, max, min } = Math
 
 type Row = Object
+
+type Cache = {
+    pages: ListObjectsV2Output[]
+    timestamp: Moment
+}
 
 class S3Bucket {
     pageSize: number = 1000
@@ -15,17 +22,41 @@ class S3Bucket {
     end: number | undefined = undefined
     endCb?: (end: number) => void
     s3?: AWS.S3
+    cache?: Cache
+    cacheKey: string
+    ttl?: Duration
 
     constructor(
         readonly bucket: string,
         readonly region: string,
-        readonly IdentityPoolId: string,
         readonly key?: string,
+        readonly IdentityPoolId?: string,
+        ttl?: string,
     ) {
         AWS.config.region = region;
-        AWS.config.credentials = new AWS.CognitoIdentityCredentials({ IdentityPoolId, });
-
+        if (IdentityPoolId) {
+            AWS.config.credentials = new AWS.CognitoIdentityCredentials({ IdentityPoolId, });
+        }
         this.s3 = new AWS.S3({});
+        const cacheKeyObj = key ? { bucket, key } : { bucket }
+        this.cacheKey = JSON.stringify(cacheKeyObj)
+        const cacheStr = localStorage.getItem(this.cacheKey)
+        console.log(`Cache:`, cacheKeyObj, `${this.cacheKey} (key: ${key})`)
+        if (cacheStr) {
+            const { pages, timestamp } = JSON.parse(cacheStr)
+            this.cache = { pages, timestamp: moment(timestamp), }
+        }
+        if (ttl) {
+            const groups = ttl.match(/(?<n>\d+)(?<unit>.*)/)?.groups
+            if (!groups) {
+                throw Error(`Unrecognized ttl: ${ttl}`)
+            }
+            const n = parseInt(groups.n)
+            const unit: DurationInputArg2 = groups.unit as DurationInputArg2
+            this.ttl = moment.duration(n, unit)
+        } else {
+            this.ttl = moment.duration(1, 'd')
+        }
     }
 
     get(start: number, end: number): Promise<Row[]> {
@@ -58,8 +89,33 @@ class S3Bucket {
         )
     }
 
+    saveCache() {
+        if (!this.cache) {
+            localStorage.removeItem(this.cacheKey)
+        } else {
+            localStorage.setItem(this.cacheKey, JSON.stringify(this.cache))
+        }
+    }
+
     getPage(pageIdx: number): Promise<ListObjectsV2Output> {
-        const { pagePromises, } = this
+        const { pagePromises, cache, bucket, key, } = this
+        console.log(`Fetcher ${bucket} (${key}):`, cache)
+        if (cache) {
+            const { pages, timestamp } = cache
+            const { ttl } = this
+            const now = moment()
+            if (timestamp.add(ttl) < now) {
+                console.log(`Cache purge (${timestamp} + ${ttl} < ${now}):`, this.cache)
+                this.cache = undefined
+                this.saveCache()
+            } else {
+                if (pageIdx in pages) {
+                    console.log(`Cache hit: ${pageIdx} (timestamp ${this.cache?.timestamp})`)
+                    return Promise.resolve(pages[pageIdx])
+                }
+                console.log(`Cache miss: ${pageIdx} (timestamp ${this.cache?.timestamp})`)
+            }
+        }
         if (pageIdx < pagePromises.length) {
             return pagePromises[pageIdx]
         }
@@ -67,13 +123,14 @@ class S3Bucket {
     }
 
     nextPage(): Promise<ListObjectsV2Output> {
-        const { bucket, key, s3, pageSize, } = this
+        const { bucket, key, s3, pageSize, IdentityPoolId, } = this
         const Prefix = key ? (key[key.length - 1] == '/' ? key : (key + '/')) : key
         if (!s3) {
             throw Error("S3 client not initialized")
         }
         let continuing: Promise<string | undefined>
         const numPages = this.pagePromises.length
+        const pageIdx = numPages
         if (numPages) {
             continuing =
                 this.pagePromises[numPages - 1]
@@ -89,6 +146,7 @@ class S3Bucket {
         } else {
             continuing = Promise.resolve(undefined)
         }
+
         const page = continuing.then(ContinuationToken => {
             const params: ListObjectsV2Request = {
                 Bucket: bucket,
@@ -98,13 +156,32 @@ class S3Bucket {
                 ContinuationToken,
             };
             console.log(`Fetching page idx ${numPages}`)
-            //debugger
-            return s3.listObjectsV2(params).promise().then(page => {
+            const timestamp = moment()
+            const pagePromise: Promise<ListObjectsV2Output> =
+                IdentityPoolId ?
+                    s3.listObjectsV2(params).promise() :
+                    s3.makeUnauthenticatedRequest('listObjectsV2', params).promise()
+            return pagePromise.then(page => {
                 const truncated = page.IsTruncated
                 const numItems = page.Contents?.length
                 console.log(
                     `Got page idx ${numPages} (${numItems} items, truncated ${truncated}, continuation ${page.NextContinuationToken})`
                 )
+                if (!this.cache) {
+                    let pages = []
+                    pages[pageIdx] = page
+                    this.cache = { pages, timestamp, }
+                    console.log("Fresh cache:", this.cache)
+                    this.saveCache()
+                } else {
+                    this.cache.pages[pageIdx] = page
+                    console.log(`Cache page idx ${pageIdx}:`, page)
+                    if (timestamp < this.cache.timestamp) {
+                        console.log(`Cache page idx ${pageIdx}: timestamp ${this.cache.timestamp} → ${timestamp}`)
+                        this.cache.timestamp = timestamp
+                    }
+                    this.saveCache()
+                }
                 if (!truncated) {
                     this.end = numPages * pageSize + (numItems || 0)
                     if (this.endCb) {
@@ -119,10 +196,54 @@ class S3Bucket {
     }
 }
 
+export const defaultReplaceChars = { '%2F': '/', '%21': '!', }
+
+const stringParam: QueryParamConfig<string> = {
+    encode: (value: string) => value,
+    decode: (value: string | (string | null)[] | null | undefined) => {
+        if (typeof value === 'string') {
+            return value
+        }
+        if (!value) return ''
+        if (!value.length) return ''
+        return value[value.length - 1] || ''
+    }
+}
+
+function rstrip(s: string, suffix: string): string {
+    if (s.substring(s.length - suffix.length, s.length) == suffix) {
+        return rstrip(s.substring(0, s.length - suffix.length), suffix)
+    } else {
+        return s
+    }
+}
+
 export function S3Tree({}) {
     const location = useLocation()
-    const { bucket: bucketParam, key, } = useParams()
-    const bucket = bucketParam || 'ctbk'
+
+    function buildQueryString(o: { [k: string]: string }, searchParams?: URLSearchParams,) {
+        let sp: URLSearchParams
+        if (!searchParams) {
+            const { search: query } = location;
+            sp = new URLSearchParams(query)
+        } else {
+            sp = searchParams
+        }
+        entries(o).forEach(([ k, v ]) => {
+            sp.set(k, v)
+        })
+        let queryString = sp.toString()
+        const replaceChars = defaultReplaceChars
+        //replaceChars = replaceChars || defaultReplaceChars
+        Object.entries(replaceChars).forEach(([ k, v ]) => {
+            queryString = queryString.replaceAll(k, v)
+        })
+        return queryString
+    }
+
+    const [ path, setPath ] = useQueryParam('p', stringParam)
+    const [ bucket, ...rest ] = useMemo(() => path.split('/'), [ path ] )
+    const key = rest.join('/')
 
     const [ page, setPage ] = useState<ListObjectsV2Output | null>(null)
     if (page && (page?.Name != bucket || ((page?.Prefix || key) && page?.Prefix?.replace(/\/$/, '') != key?.replace(/\/$/, '')))) {
@@ -130,27 +251,18 @@ export function S3Tree({}) {
         setPage(null)
         return <div>hmm…</div>
     }
-    // if (location.state && page) {
-    //     console.log("found location.state and page, nulling")
-    //     setPage(null)
-    //     console.log("hmm?")
-    // }
 
     console.log(`Initializing, bucket ${bucket} key ${key}, page size ${page?.Contents?.length}, location.state ${location.state}`)
     const region = 'us-east-1'
-    const IdentityPoolId = Array.from('969d5e153efb-f898-70c4-f48f-2f6c1079:1-tsae-su').reverse().join('')
     const fetcher = useMemo(() => {
-        // setPage(null)
         console.log(`new fetcher for bucket ${bucket} (key ${key}), page`, page)
-        return new S3Bucket(bucket, region, IdentityPoolId, key)
+        return new S3Bucket(bucket, region, key,)
     }, [ bucket, key ])
 
     const [ pageIdx, setPageIdx ] = useState(0)
 
     useEffect(
         () => {
-            // console.log("nulling page")
-            // setPage(null)
             fetcher.getPage(pageIdx).then(setPage)
         },
         [ fetcher, pageIdx, bucket, key, ]
@@ -160,16 +272,14 @@ export function S3Tree({}) {
         return <div>Fetching {bucket}, page {pageIdx}…</div>
     }
 
-    // const contents = (page?.Contents || []) //as Row[]
     console.log("Rows:", page)
 
-    // const columns = [
-    //     { Header: ''}
-    // ]
+    const normedKey = key ? rstrip(key, '/') : key
+    const keyPieces = normedKey ? normedKey.split('/') : []
 
     const ancestors =
         ([] as string[])
-            .concat(key ? key.split('/') : [])
+            .concat(keyPieces)
             .reduce<{ path: string, name: string }[]>(
                 (prvs, nxt) => {
                     const parent = prvs[prvs.length - 1].path
@@ -183,11 +293,10 @@ export function S3Tree({}) {
 
     function stripPrefix(k: string) {
         const pcs = k.split('/')
-        const prefix = key ? key.split('/') : []
-        if (!_.isEqual(prefix, pcs.slice(0, prefix.length))) {
-            throw new Error(`Key ${k} doesn't start with prefix ${prefix.join("/")}`)
+        if (!_.isEqual(keyPieces, pcs.slice(0, keyPieces.length))) {
+            throw new Error(`Key ${k} doesn't start with prefix ${keyPieces.join("/")}`)
         }
-        return pcs.slice(prefix.length).join('/')
+        return pcs.slice(keyPieces.length).join('/')
     }
 
     return (
@@ -195,11 +304,11 @@ export function S3Tree({}) {
             <div className="row">
                 <ul className="breadcrumb">
                     {
-                        ancestors.map(({ path, name }) =>
-                            <li key={path}>
-                                <Link to={`/s3/${path}`}>{name}</Link>
+                        ancestors.map(({ path, name }) => {
+                            return <li key={path}>
+                                <Link to={{ search: buildQueryString({ p: rstrip(path, '/')}) }}>{name}</Link>
                             </li>
-                        )
+                        })
                     }
                 </ul>
             </div>
@@ -208,25 +317,28 @@ export function S3Tree({}) {
                     <thead>
                     <tr>
                         <th key="parent">Parent</th>
-                        <th key="key">Key</th>
+                        <th key="name">Name</th>
                         <th key="size">Size</th>
                         <th key="mtime">Modified</th>
                     </tr>
                     </thead>
                     <tbody>{
-                        (page?.CommonPrefixes || []).map(({ Prefix }) =>
-                            <tr key={Prefix}>
-                                <td key="parent">{parent}</td>
-                                <td key="key"><Link to={`/s3/${bucket}/${Prefix}`}>{Prefix}</Link></td>
+                        (page?.CommonPrefixes || []).map(({ Prefix }) => {
+                            const prefix = Prefix ? rstrip(Prefix, '/') : ''
+                            const pieces = prefix.split('/')
+                            const name = pieces[pieces.length - 1]
+                            return <tr key={Prefix}>
+                                <td key="parent">{rstrip(parent, '/')}</td>
+                                <td key="name"><Link to={{search: buildQueryString({ p: `${bucket}/${prefix}`}) }}>{name}</Link></td>
                                 <td key="size"/>
                                 <td key="mtime"/>
                             </tr>
-                        )
+                        })
                     }{
                         (page?.Contents || []).map(({ Key, Size, LastModified, }) =>
                             <tr key={Key}>
-                                <td key="parent">{parent}</td>
-                                <td key="key">{Key ? stripPrefix(Key) : ""}</td>
+                                <td key="parent">{rstrip(parent, '/')}</td>
+                                <td key="name">{Key ? stripPrefix(Key) : ""}</td>
                                 <td key="size">{Size}</td>
                                 <td key="mtime">{moment(LastModified).format('YYYY-MM-DD')}</td>
                             </tr>
