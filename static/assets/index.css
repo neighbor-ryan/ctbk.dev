@@ -76,3 +76,18 @@ button,input.button {
 #gender-label-tooltip {
     padding: 0.3rem 0.5rem 0.5rem;
 }
+
+table.files td,th {
+    text-align: right;
+    padding-right: 1rem;
+}
+table.files td {
+    font-family: monospace;
+}
+
+/* Add a slash symbol (/) before/behind each list item */
+ul.breadcrumb li+li:before {
+    padding: 0.2em;
+    color: black;
+    content: "/";
+}
