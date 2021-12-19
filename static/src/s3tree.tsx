@@ -316,7 +316,6 @@ export function S3Tree({}) {
                 <table className="files">
                     <thead>
                     <tr>
-                        <th key="parent">Parent</th>
                         <th key="name">Name</th>
                         <th key="size">Size</th>
                         <th key="mtime">Modified</th>
@@ -328,7 +327,6 @@ export function S3Tree({}) {
                             const pieces = prefix.split('/')
                             const name = pieces[pieces.length - 1]
                             return <tr key={Prefix}>
-                                <td key="parent">{rstrip(parent, '/')}</td>
                                 <td key="name"><Link to={{search: buildQueryString({ p: `${bucket}/${prefix}`}) }}>{name}</Link></td>
                                 <td key="size"/>
                                 <td key="mtime"/>
@@ -337,7 +335,6 @@ export function S3Tree({}) {
                     }{
                         (page?.Contents || []).map(({ Key, Size, LastModified, }) =>
                             <tr key={Key}>
-                                <td key="parent">{rstrip(parent, '/')}</td>
                                 <td key="name">{Key ? stripPrefix(Key) : ""}</td>
                                 <td key="size">{Size}</td>
                                 <td key="mtime">{moment(LastModified).format('YYYY-MM-DD')}</td>
