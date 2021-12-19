@@ -1,5 +1,6 @@
-boto3
-botocore
+aiobotocore==2.0.1
+boto3==1.19.8
+botocore==1.22.8
 click
 dash
 dash-bootstrap-components
@@ -7,11 +8,11 @@ dask[dataframe]
 gunicorn
 kaleido
 lxml
-pandas
+pandas==1.3.5
 plotly
 python-dateutil
-pyarrow
-s3fs
+pyarrow==6.0.1
+s3fs==2021.11.1
 sqlalchemy
-jedi==0.17.2
-utz>=0.3.17
+#jedi==0.17.2
+#utz>=0.3.17
