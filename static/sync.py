@@ -42,6 +42,8 @@ def main(dst, dry_run, paths):
     for path in paths:
         cmd += [ '--include', path ]
 
+    cmd += [ '--cache-control', 'max-age=0,public', ]
+
     cmd += [ dir, dst ]
     run(cmd)
 
