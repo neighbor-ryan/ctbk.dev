@@ -185,7 +185,7 @@ export function S3Tree({}) {
 
     return (
         <div className="container">
-            <div className="row">
+            <div className="header row">
                 <ul className="breadcrumb">
                     {
                         ancestors.map(({ path, name }) => {
@@ -195,9 +195,11 @@ export function S3Tree({}) {
                         })
                     }
                 </ul>
-                <span>{numChildren} children</span>,&nbsp;
-                <span>total size {totalSize ? renderSize(totalSize, 'iec') : ''}</span>,&nbsp;
-                <span>last modified {moment(mtime).format('YYYY-MM-DD')}</span>
+                <span className="metadata">
+                    <span className="metadatum">{numChildren} children,&nbsp;</span>
+                    <span className="metadatum">total size {totalSize ? renderSize(totalSize, 'iec') : ''},&nbsp;</span>
+                    <span className="metadatum">last modified {moment(mtime).format('YYYY-MM-DD')}</span>
+                </span>
                 <button className="clear-cache" onClick={() => fetcher.clearCache()}>Clear cache</button>
             </div>
             <div className="row">

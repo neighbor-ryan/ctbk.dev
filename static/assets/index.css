@@ -89,6 +89,23 @@ table.files-list td {
     font-family: monospace;
 }
 
+.header.row {
+    margin-bottom: 1rem;
+}
+
+ul.breadcrumb {
+    margin-bottom: 0;
+}
+
+.header .metadata {
+    margin-top: .75rem;
+    margin-left: 1rem;
+}
+
+.header .metadatum {
+    /*line-height: 1rem;*/
+}
+
 /* Add a slash symbol (/) before/behind each list item */
 ul.breadcrumb li+li:before {
     padding: 0.2em;
