@@ -77,11 +77,15 @@ button,input.button {
     padding: 0.3rem 0.5rem 0.5rem;
 }
 
-table.files td,th {
+.files-list {
+    margin-bottom: 1rem;
+}
+
+table.files-list td,th {
     text-align: right;
     padding-right: 1rem;
 }
-table.files td {
+table.files-list td {
     font-family: monospace;
 }
 
@@ -90,4 +94,16 @@ ul.breadcrumb li+li:before {
     padding: 0.2em;
     color: black;
     content: "/";
+}
+
+.goto-page {
+    margin-right: 0.5rem;
+}
+.page-number {
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
+}
+
+.pagination button {
+    margin-right: 0.2rem;
 }
