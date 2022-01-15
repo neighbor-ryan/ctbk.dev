@@ -321,8 +321,8 @@ export function App({ url }: { url: string, }) {
 
     const [ showLegend, setShowLegend ] = useShowLegend(true)
 
-    console.log("Region", region, "User Type", userType, "Y-Axis", yAxis, "Date range:", dateRange, "First row:")
-    console.log(data && data[0])
+    console.log("Region", region, "User Type", userType, "Y-Axis", yAxis, "Date range:", dateRange, "Last row:")
+    console.log(data && data[data.length - 1])
 
     useEffect(
         () => {
