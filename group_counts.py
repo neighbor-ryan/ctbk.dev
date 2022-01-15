@@ -133,6 +133,9 @@ def main(
     start,
     end,
 ):
+    # When running without a specified range, also upload/overwrite a default/mutable ("latest") version of the output
+    # data
+    put_latest = start is None and end is None
     if start is None:
         start = Month(2013, 6)
     else:
@@ -235,7 +238,7 @@ def main(
             print(result.get('msg'))
 
         put(abs_name)
-        if start is None and end is None:
+        if put_latest:
             latest_name = "_".join([
                 agg_keys_label,
                 values_label,
