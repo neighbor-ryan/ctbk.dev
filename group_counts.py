@@ -219,7 +219,7 @@ def main(
         ])
         abs_name += f'.{fmt}'
 
-        def put(name):
+        def put(name, overwrite=overwrite):
             if dst_root:
                 dst_key = f'{dst_root}/{name}'
             else:
@@ -244,7 +244,7 @@ def main(
                 values_label,
             ])
             latest_name += f'.{fmt}'
-            put(latest_name)
+            put(latest_name, overwrite=True)
 
     if parquet:
         convert('parquet')
