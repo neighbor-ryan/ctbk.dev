@@ -8,8 +8,10 @@ import {S3Tree} from "./s3tree";
 import {QueryParamProvider} from "use-query-params";
 import {RouteAdapter} from "./route-adapter";
 
+const DEFAULT_AGGREGATED_URL = 'https://ctbk.s3.amazonaws.com/aggregated/ymrgtb_cd.sqlite'
+
 function Router() {
-    const [ url, setUrl ] = useState("../assets/ymrgtb_cd.sqlite");
+    const [ url, setUrl ] = useState(DEFAULT_AGGREGATED_URL);
 
     return (
         <HashRouter>
