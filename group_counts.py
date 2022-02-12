@@ -235,10 +235,12 @@ def main(
                 public=public,
                 overwrite=overwrite,
             )
+            did_write = result.get('msg', '').startswith('Found')
             print(result.get('msg'))
+            return did_write
 
-        put(abs_name)
-        if put_latest:
+        did_write = put(abs_name)
+        if put_latest and did_write:
             latest_name = "_".join([
                 agg_keys_label,
                 values_label,
