@@ -10,6 +10,25 @@ from utz import *
 class BadKey(Exception): pass
 
 
+# Result/Status "enum"
+OVERWROTE = 'OVERWROTE'
+FOUND = 'FOUND'
+WROTE = 'WROTE'
+BAD_DST = 'BAD_DST'
+
+
+@dataclass
+class Result:
+    msg: str
+    status: str
+    dst: Optional[str] = None
+    value: Optional[any] = None
+
+    @property
+    def did_write(self):
+        return self.status == WROTE or self.status == OVERWROTE
+
+
 @dataclass(init=False, order=True)
 class Month:
     year: int
@@ -183,7 +202,7 @@ def convert_file(
             msg = 'Unrecognized key: %s' % src
             if error == 'warn':
                 stderr.write('%s\n' % msg)
-            return dict(msg=msg)
+            return Result(msg=msg, status=BAD_DST)
 
     dst_bkt, dst_key, dst = verify_pieces(dst_bkt, dst_key, dst)
     ctx['dst_bkt'] = dst_bkt
@@ -199,18 +218,21 @@ def convert_file(
     if s3_exists(dst_bkt, dst_key, s3=s3):
         if overwrite:
             msg = f'Overwrote {dst}'
+            status = OVERWROTE
         else:
             msg = f'Found {dst}; skipping'
-            return dict(msg=msg)
+            status = FOUND
+            return Result(msg=msg, status=status, dst=dst)
     else:
         msg = f'Wrote {dst}'
+        status = WROTE
 
     def run_fn():
-        result = run(fn, ctx, **kwargs)
-        dst_path = result and result.get('dst_path')
+        value = run(fn, ctx, **kwargs)
+        dst_path = value and value.get('dst_path')
         if dst_path:
             s3.upload_file(dst_path, dst_bkt, dst_key)
-        return result
+        return value
 
     args = getfullargspec(fn).args
     if 'src_path' in args:
@@ -219,12 +241,9 @@ def convert_file(
             name = basename(src_key)
             src_path = ctx['src_path'] = f'{tmpdir}/{name}'
             s3.download_file(src_bkt, src_key, src_path)
-            result = run_fn()
+            value = run_fn()
     else:
-        result = run_fn()
-
-    if result is None:
-        result = {}
+        value = run_fn()
 
     if public:
         s3_resource = boto3.resource('s3')
@@ -232,4 +251,4 @@ def convert_file(
         object_acl = ObjectAcl(dst_bkt, dst_key)
         object_acl.put(ACL='public-read')
 
-    return o(_msg=msg, **result)
+    return Result(msg=msg, status=status, dst=dst, value=value)

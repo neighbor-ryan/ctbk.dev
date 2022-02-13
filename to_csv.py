@@ -8,8 +8,7 @@ from botocore.client import Config
 from utz import *
 from zipfile import ZipFile
 
-from utils import convert_file, BadKey
-
+from utils import convert_file, BadKey, WROTE, Result
 
 rgx = r'^(?P<JC>JC-)?(?P<year>\d{4})(?P<month>\d{2})[ \-]citibike-tripdata?(?P<csv>\.csv)?(?P<zip>\.zip)?$'
 
@@ -35,7 +34,7 @@ def to_csv(src_path, src_name, dst_name, tmpdir):
     with z.open(name,'r') as i, open(csv_path,'wb') as o:
         o.write(i.read())
 
-    return dict(dst_path=csv_path)
+    return csv_path
 
 
 def original_to_csv(src_bkt, zip_key, dst_bkt, error='warn', overwrite=False, dst_root=None):
@@ -59,7 +58,7 @@ def original_to_csv(src_bkt, zip_key, dst_bkt, error='warn', overwrite=False, ds
         dst_bkt=dst_bkt, dst_key=dst_key,
         error=error,
         overwrite=overwrite,
-    ).get('msg', '')
+    ).msg
 
 
 @cmd(help='Read Zip files published by Citibike (per {month,region}), extract a lone CSV from inside each, save')

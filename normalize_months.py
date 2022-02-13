@@ -112,7 +112,7 @@ def csv2pqt(year, month, entries, bkt, dst_root, overwrite, public=False, start=
         bkt=bkt, entries=entries, dst_key=dst_key,
         overwrite=overwrite,
         public=public,
-    ).get('msg')
+    ).msg
 
 
 @cmd(help="Normalize CSVs (harmonize field names/values), combine each month's separate JC/NYC datasets, output a single parquet per month")

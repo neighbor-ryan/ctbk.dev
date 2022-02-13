@@ -29,7 +29,9 @@ jobs:
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        MAIL_FROM: ${{ secrets.MAIL_USERNAME }}
+        MAIL_PSWD: ${{ secrets.MAIL_PASSWORD }}
       run: |
         python to_csv.py
         python normalize_months.py
-        python group_counts.py
+        python group_counts.py --email ${{ secrets.MAIL_TO }}

@@ -6,8 +6,8 @@ from boto3 import client
 from botocore.client import Config
 from click import command as cmd, option as opt
 
-from utils import convert_file, Month, s3_exists
-
+from urllib.parse import urlparse
+from utils import convert_file, Month, s3_exists, FOUND
 
 TBL = 'agg'
 
@@ -80,6 +80,28 @@ def aggregate_months(urls, agg_keys, sum_keys, parallel):
     return df
 
 
+def build_email(written_urls):
+    from html_dsl.common import HTML, BODY, DIV, P, UL, LI, A
+    if written_urls:
+        urls_str = "\n- ".join(written_urls)
+        text = f'''Wrote:\n- {urls_str}'''
+        html = DIV[
+            P['Wrote:'],
+            P[UL[[ LI[url] for url in written_urls ]]],
+            P[
+                'See ', A(href='https://ctbk.s3.amazonaws.com/index.html#/aggregated?s=50')['s3://ctbk/aggregated/'],
+                ' and ', A(href='https://ctbk.dev')['ctbk.dev'],
+            ],
+        ]
+    else:
+        text = 'No files written.'
+        html = P['No files written']
+
+    html = HTML[BODY[html]]
+
+    return str(html), text
+
+
 @cmd(help='Read normalized, per-month Parquet datasets, aggregate based on various features, write out to Parquet and/or SQLite')
 @opt('-c/-C', '--counts/--no-counts', default=True)
 @opt('-d/-D', '--durations/--no-durations', default=True)
@@ -103,6 +125,8 @@ def aggregate_months(urls, agg_keys, sum_keys, parallel):
 @opt('--public/--no-public', help='Give written objects a public ACL')
 @opt('--start', help='Month to process from (inclusive; in YYYYMM form)')
 @opt('--end', help='Month to process to (exclusive; in YYYYMM form)')
+@opt('-e', '--email', help='Send email about outcome, from MAIL_USERNAME/MAIL_PASSWORD to this address')
+@opt('--smtp', help='SMTP server URL')
 def main(
     # Eligible "y-axes"; sum these features
     counts,
@@ -132,6 +156,8 @@ def main(
     # Date range
     start,
     end,
+    email,
+    smtp,
 ):
     # When running without a specified range, also upload/overwrite a default/mutable ("latest") version of the output
     # data
@@ -235,12 +261,11 @@ def main(
                 public=public,
                 overwrite=overwrite,
             )
-            msg = result.get('_msg', '')
-            did_write = msg and not msg.startswith('Found')
-            print(msg)
-            return did_write
+            print(result.msg)
+            return result
 
-        did_write = put(abs_name)
+        result = put(abs_name)
+        did_write = result.status != FOUND
         if put_latest and did_write:
             latest_name = "_".join([
                 agg_keys_label,
@@ -249,10 +274,48 @@ def main(
             latest_name += f'.{fmt}'
             put(latest_name, overwrite=True)
 
+        return result
+
+    written_urls = []
     if parquet:
-        convert('parquet')
+        result = convert('parquet')
+        if result.did_write:
+            written_urls += [ result.dst ]
     if sql:
-        convert('sqlite')
+        result = convert('sqlite')
+        if result.did_write:
+            written_urls += [ result.dst ]
+
+    if written_urls and email or smtp:
+        From = env.get('MAIL_FROM')
+        password = env.get('MAIL_PSWD')
+        if not From:
+            raise Exception('MAIL_FROM env var missing')
+        if not password:
+            raise Exception('MAIL_PSWD env var missing')
+        if not email:
+            raise Exception('No "To" email address found')
+        if not smtp:
+            if From.endswith('@gmail.com'):
+                smtp = 'smtp.gmail.com:587'
+            else:
+                raise Exception('No SMTP URL found')
+        parsed = urlparse(smtp)
+        if parsed.scheme not in {'http', 'https'}:
+            parsed = urlparse(f'https://{smtp}')
+        smtp_hostname = parsed.hostname
+        smtp_port = parsed.port or 587
+
+        html, text = build_email(written_urls)
+
+        from send_email import send_email
+        send_email(
+            From=From, To=email,
+            smtp_hostname=smtp_hostname, smtp_port=smtp_port,
+            password=password,
+            Subject='ctbk.dev aggregation result',
+            html=html, text=text,
+        )
 
 
 if __name__ == '__main__':
