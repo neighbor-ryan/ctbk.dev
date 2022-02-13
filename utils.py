@@ -225,7 +225,6 @@ def convert_file(
 
     if result is None:
         result = {}
-    msg = result.get('msg', msg)
 
     if public:
         s3_resource = boto3.resource('s3')
@@ -233,4 +232,4 @@ def convert_file(
         object_acl = ObjectAcl(dst_bkt, dst_key)
         object_acl.put(ACL='public-read')
 
-    return o(msg=msg, **result)
+    return o(_msg=msg, **result)

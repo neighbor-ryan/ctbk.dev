@@ -235,8 +235,9 @@ def main(
                 public=public,
                 overwrite=overwrite,
             )
-            did_write = result.get('msg', '').startswith('Found')
-            print(result.get('msg'))
+            msg = result.get('_msg', '')
+            did_write = msg and not msg.startswith('Found')
+            print(msg)
             return did_write
 
         did_write = put(abs_name)
