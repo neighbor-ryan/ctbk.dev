@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# coding: utf-8
 
 from click import command as cmd, option as opt
 
@@ -8,12 +7,9 @@ from botocore.client import Config
 from utz import *
 from zipfile import ZipFile
 
-from utils import convert_file, BadKey, WROTE, Result
+from utils import convert_file, BadKey
 
 rgx = r'^(?P<JC>JC-)?(?P<year>\d{4})(?P<month>\d{2})[ \-]citibike-tripdata?(?P<csv>\.csv)?(?P<zip>\.zip)?$'
-
-# s3://tripdata/(?P<JC>JC-)?(?P<month>YYYYMM)-citibike-tripdata(?:\.csv)?.zip → s3://ctbk/original/{JC}{month}-citibike-tripdata.zip
-# s3://ctbk/original/{JC}{month}-citibike-tripdata.zip → s3://ctbk/cleaned/{JC}{month}-citibike-tripdata.zip
 
 
 def to_csv(src_path, src_name, dst_name, tmpdir):
