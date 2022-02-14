@@ -8,7 +8,7 @@ import {S3Tree} from "./s3tree";
 import {QueryParamProvider} from "use-query-params";
 import {RouteAdapter} from "./route-adapter";
 
-const DEFAULT_AGGREGATED_URL = 'https://ctbk.s3.amazonaws.com/aggregated2/ymrgtb_cd.sqlite'
+const DEFAULT_AGGREGATED_URL = 'https://ctbk.s3.amazonaws.com/aggregated/ymrgtb_cd.sqlite'
 
 function Router() {
     const [ url, setUrl ] = useState(DEFAULT_AGGREGATED_URL);

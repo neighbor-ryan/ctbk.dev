@@ -695,7 +695,7 @@ export function App({ url }: { url: string, }) {
                     <Markdown>{`
 ## About
 Use the controls above to filter/stack by region, user type, gender, or date, and toggle aggregation of rides or total ride minutes, e.g.:
-- [JC only](#?r=jc)
+- [JC+Hoboken](#?r=jh)
 - [Ride minute %'s, Male vs. Female](#?d=1406-2101&g=mf&pct&s=g&y=m) (Jun 2014 - January 2021, the window where 12mo rolling avgs are possible)
 
 This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 2nd week of each month, covering the previous month).
