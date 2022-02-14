@@ -22,6 +22,7 @@ def aggregate(
 
     group_keys = []
     if agg_keys.get('r'):
+        df['Region'] = df['Start Region']  # assign rides to the region they originated in
         group_keys.append('Region')
     if agg_keys.get('y'):
         df['Start Year'] = df['Start Time'].dt.year
@@ -100,6 +101,19 @@ def build_email(written_urls):
     html = HTML[BODY[html]]
 
     return str(html), text
+
+
+_df = None
+def get_df(*, urls, agg_keys, sum_keys, parallel):
+    global _df
+    if _df is None:
+        _df = aggregate_months(
+            urls=urls,
+            agg_keys=agg_keys,
+            sum_keys=sum_keys,
+            parallel=parallel,
+        )
+    return _df
 
 
 @cmd(help='Read normalized, per-month Parquet datasets, aggregate based on various features, write out to Parquet and/or SQLite')
@@ -219,19 +233,14 @@ def main(
         agg_keys = dict(sorted(list(agg_keys.items()), key=lambda t: t[0]))
     agg_keys_label = "".join(agg_keys.keys())
 
-    df = aggregate_months(
-        urls=urls,
-        agg_keys=agg_keys,
-        sum_keys=sum_keys,
-        parallel=parallel,
-    )
+    df = partial(get_df, urls=urls, agg_keys=agg_keys, sum_keys=sum_keys, parallel=parallel)
 
     def write(fmt, dst, dst_bkt, dst_key, s3):
         if fmt == 'parquet':
-            df.to_parquet(dst)
+            df().to_parquet(dst)
         elif fmt == 'sqlite':
             with NamedTemporaryFile() as f:
-                df.to_sql(TBL, f'sqlite:///{f.name}', index=False)
+                df().to_sql(TBL, f'sqlite:///{f.name}', index=False)
                 print(f'Upload {f.name} to {dst_bkt}:{dst_key}')
                 s3.upload_file(f.name, dst_bkt, dst_key)
         else:

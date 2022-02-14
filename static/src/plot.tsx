@@ -20,25 +20,22 @@ import {
     useEnumQueryParam
 } from "./search-params";
 import _ from "lodash";
-import {Filter} from "./query";
 
 const { entries, values, keys, fromEntries } = Object
 const Arr = Array.from
 
 const useShowLegend = createPersistedState("showLegend")
 
-const workerUrl = new URL(
-    "sql.js-httpvfs/dist/sqlite.worker.js",
-    import.meta.url
-);
-const wasmUrl = new URL("sql.js-httpvfs/dist/sql-wasm.wasm", import.meta.url);
+type Region = 'NYC' | 'JC' | 'HB'
+const Regions: Region[] = [ 'NYC', 'JC', 'HB', ]
+const RegionQueryStrings: [Region, string][] = [ ['HB','h'], ['NYC','n'], ['JC','j'], ]
 
-type Region = 'All' | 'NYC' | 'JC'
-const Regions: [Region, string][] = [ ['All','all'], ['NYC','nyc'], ['JC','jc'], ]
 type UserType = 'All' | 'Subscriber' | 'Customer'
 const UserTypes: [UserType, string][] = [ ['All', 'a'], ['Subscriber', 's'], ['Customer','c'], ]
 
 type Gender = 'Male' | 'Female' | 'Other / Unspecified'
+const Genders: Gender[] = ['Male' , 'Female' , 'Other / Unspecified']
+const GenderQueryStrings: [ Gender, string ][] = [ ['Male', 'm'], ['Female', 'f'], ['Other / Unspecified', 'u'], ]
 const Int2Gender: { [k: number]: Gender } = { 0: 'Other / Unspecified', 1: 'Male', 2: 'Female' }
 // Gender data became 100% "Other / Unspecified" from February 2021; don't bother with per-entry
 // rolling averages from that point onward
@@ -55,8 +52,8 @@ const NormalizeRideableType: { [k: string]: RideableType } = {
     'motivate_dockless_bike': 'Unknown',
 }
 
-type StackBy = 'None' | 'User Type' | 'Gender' | 'Rideable Type'
-const StackBys: [StackBy, string][] = [ ['None', 'n'], ['Gender','g'], ['User Type','u'], ['Rideable Type','r'], ]
+type StackBy = 'None' | 'Region' | 'User Type' | 'Gender' | 'Rideable Type'
+const StackBys: [StackBy, string][] = [ ['None', 'n'], ['Region', 'r'], ['Gender','g'], ['User Type','u'], ['Rideable Type','r'], ]
 
 type DateRange = 'All' | '1y' | '2y' | '3y' | '4y' | '5y' | { start?: Date, end?: Date }
 
@@ -153,6 +150,11 @@ const stackRollColorDicts = {
     'None': {
         '': '0',
     },
+    'Region': {
+        'NYC': '6',
+        'HB': 'D',
+        'JC': 'E',
+    },
     'User Type': {
         'Customer': 'D',
         'Subscriber': '7',
@@ -207,9 +209,6 @@ function vline(year: number): Partial<Shape> {
         }
     }
 }
-
-const GenderChars: [ Gender, string ][] = [ ['Male', 'm'], ['Female', 'f'], ['Other / Unspecified', 'u'], ]
-const Genders: Gender[] = ['Male' , 'Female' , 'Other / Unspecified']
 
 const StartDate = moment('2013-06-01').toDate()
 const Date2Query = (d: Date | undefined) => d ? moment(d).format('YYMM') : ''
@@ -306,14 +305,14 @@ export function App({ url }: { url: string, }) {
     const worker = useMemo(() => new Worker({ url, }), [ url, ])
     const [ data, setData ] = useState<Row[] | null>(null)
 
-    const [ region, setRegion ] = useEnumQueryParam<Region>('r', Regions)
     const [ yAxis, setYAxis ] = useEnumQueryParam<YAxis>('y', YAxes)
     const [ userType, setUserType ] = useEnumQueryParam<UserType>('u',UserTypes)
     const [ stackBy, setStackBy ] = useEnumQueryParam<StackBy>('s', StackBys)
 
     const [ stackRelative, setStackRelative ] = useQueryParam('pct', boolParam())
 
-    const [ genders, setGenders ] = useEnumMultiParam<Gender>('g', { entries: GenderChars, defaultValue: Genders, delimiter: '' })
+    const [ regions, setRegions ] = useEnumMultiParam<Region>('r', { entries: RegionQueryStrings, defaultValue: Regions, delimiter: ''})
+    const [ genders, setGenders ] = useEnumMultiParam<Gender>('g', { entries: GenderQueryStrings, defaultValue: Genders, delimiter: '' })
     const [ rideableTypes, setRideableTypes ] = useEnumMultiParam<RideableType>('rt', { entries: RideableTypeChars, defaultValue: RideableTypes })
 
     const [ dateRange, setDateRange ] = useQueryParam<DateRange>('d', dateRangeParam())
@@ -321,7 +320,7 @@ export function App({ url }: { url: string, }) {
 
     const [ showLegend, setShowLegend ] = useShowLegend(true)
 
-    console.log("Region", region, "User Type", userType, "Y-Axis", yAxis, "Date range:", dateRange, "Last row:")
+    console.log("Regions", regions, "User Type", userType, "Y-Axis", yAxis, "Date range:", dateRange, "Last row:")
     console.log(data && data[data.length - 1])
 
     useEffect(
@@ -362,7 +361,7 @@ export function App({ url }: { url: string, }) {
             })
             .filter((r) => {
                 // Apply filters
-                if (!(region == 'All' || region == r.Region)) {
+                if (regions.indexOf(r.Region) == -1) {
                     return false
                 }
                 if (!(userType == 'All' || userType == r['User Type'])) {
@@ -383,6 +382,7 @@ export function App({ url }: { url: string, }) {
         'User Type': ['Customer', 'Subscriber'],
         'Gender': ['Other / Unspecified', 'Male', 'Female'],
         'Rideable Type': ['Docked', 'Electric', 'Unknown'],
+        'Region': [ 'JC', 'HB', 'NYC', ],
     }
     const stackKeys = stackKeyDict[stackBy]
     const showlegend = showLegend == null ? (stackBy != 'None') : showLegend
@@ -395,7 +395,7 @@ export function App({ url }: { url: string, }) {
     filtered.forEach((r) => {
         const date: Date = r['Month'];
         const month: string = date.toString();
-        const stackVal: Gender | UserType | RideableType | '' = stackBy == 'None' ? '' : r[stackBy]
+        const stackVal: Region | Gender | UserType | RideableType | '' = stackBy == 'None' ? '' : r[stackBy]
         const count = (yAxis == 'Rides') ? r['Count'] : r['Duration'];
 
         if (!(month in monthsData)) {
@@ -632,7 +632,15 @@ export function App({ url }: { url: string, }) {
             </div>
             {/* Other radio/checklist configs */}
             <div className="no-gutters row">
-                <Radios label="Region" options={["All", "NYC", "JC"]} cb={setRegion} choice={region} />
+                <Checklist
+                    label={"Region"}
+                    data={[
+                        { name: 'NYC', data: 'NYC', checked: regions.includes('NYC') },
+                        { name: 'JC', data: 'JC', checked: regions.includes('JC') },
+                        { name: 'HB', data: 'HB', checked: regions.includes('HB') },
+                    ]}
+                    cb={setRegions}
+                />
                 <Radios label="User Type" options={["All", "Subscriber", "Customer"]} cb={setUserType} choice={userType} />
                 <Radios label="Y Axis" options={["Rides", "Ride minutes"]} cb={setYAxis} choice={yAxis} />
                 <Checklist
@@ -651,6 +659,7 @@ export function App({ url }: { url: string, }) {
                     label="Stack by"
                     options={[
                         "None",
+                        "Region",
                         "User Type",
                         {
                             label: GenderLabel,
@@ -667,7 +676,7 @@ export function App({ url }: { url: string, }) {
                         cb={setStackRelative}
                     />
                 </Radios>
-                <Checklist<Gender>
+                <Checklist
                     label={GenderLabel}
                     data={[
                         { name: 'Male', data: 'Male', checked: genders.includes('Male') },
