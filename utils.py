@@ -18,6 +18,11 @@ BAD_DST = 'BAD_DST'
 
 
 @dataclass
+class Upload:
+    path: str
+
+
+@dataclass
 class Result:
     msg: str
     status: str
@@ -229,10 +234,12 @@ def convert_file(
 
     def run_fn():
         value = run(fn, ctx, **kwargs)
-        dst_path = value and value.get('dst_path')
-        if dst_path:
-            s3.upload_file(dst_path, dst_bkt, dst_key)
-        return value
+        if isinstance(value, Upload):
+            path = value.path
+            s3.upload_file(path, dst_bkt, dst_key)
+            return path
+        else:
+            return value
 
     args = getfullargspec(fn).args
     if 'src_path' in args:
