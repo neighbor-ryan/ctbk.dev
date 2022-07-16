@@ -9,7 +9,7 @@ from zipfile import ZipFile
 
 from utils import convert_file, BadKey, Upload
 
-rgx = r'^(?P<JC>JC-)?(?P<year>\d{4})(?P<month>\d{2})[ \-]citibike-tripdata?(?P<csv>\.csv)?(?P<zip>\.zip)?$'
+rgx = r'^(?P<JC>JC-)?(?P<year>\d{4})(?P<month>\d{2})[ \-]citi?bike-tripdata?(?P<csv>\.csv)?(?P<zip>\.zip)?$'
 
 
 def to_csv(src_path, src_name, dst_name, tmpdir):
