@@ -29,6 +29,7 @@ const useShowLegend = createPersistedState("showLegend")
 type Region = 'NYC' | 'JC' | 'HB'
 const Regions: Region[] = [ 'NYC', 'JC', 'HB', ]
 const RegionQueryStrings: [Region, string][] = [ ['HB','h'], ['NYC','n'], ['JC','j'], ]
+const RegionNames = { 'NYC': 'NYC', 'JC': 'JC', 'HB': 'HOB', }
 
 type UserType = 'All' | 'Subscriber' | 'Customer'
 const UserTypes: [UserType, string][] = [ ['All', 'a'], ['Subscriber', 's'], ['Customer','c'], ]
@@ -346,10 +347,17 @@ export function App({ url }: { url: string, }) {
     let yAxisLabel = yAxisLabelDict[yAxis].yAxis
     let yHoverLabel = yAxisLabelDict[yAxis].hoverLabel
     let title = yAxisLabelDict[yAxis].title
+    let parendStrings = []
+    if (regions && regions.length < Regions.length) {
+        parendStrings.push(`${regions.map(r => RegionNames[r]).join(", ")}`)
+    }
     if (stackRelative) {
         yAxisLabel += ' (%)'
         yHoverLabel += ' (%)'
-        title += ` (%, by ${stackBy})`
+        parendStrings.push(`%, by ${stackBy}`)
+    }
+    if (parendStrings.length) {
+        title += ` (${parendStrings.join(";")})`
     }
 
     const filtered =
@@ -597,6 +605,13 @@ export function App({ url }: { url: string, }) {
                     autosize: true,
                     barmode: 'stack',
                     showlegend,
+                    legend: {
+                        x: 0.5,
+                        y: 1.12,
+                        xanchor: 'center',
+                        // yanchor: 'bottom',
+                        orientation: 'h',
+                    },
                     title,
                     xaxis: {
                         title: 'Month',
@@ -604,8 +619,12 @@ export function App({ url }: { url: string, }) {
                         titlefont: { size: 14 },
                     },
                     yaxis: {
+                        automargin: true,
                         gridcolor: '#DDDDDD',
-                        title: yAxisLabel,
+                        title: {
+                            text: yAxisLabel,
+                            standoff: 40,
+                        },
                         tickfont: { size: 14 },
                         titlefont: { size: 14 },
                         range: stackRelative ? [ 0, 100, ] : undefined,
@@ -613,7 +632,7 @@ export function App({ url }: { url: string, }) {
                     paper_bgcolor: 'rgba(0,0,0,0)',
                     plot_bgcolor: 'rgba(0,0,0,0)',
                     shapes: vlines,
-                    margin: { b: 30 },
+                    margin: { b: 40, l: 0, },
                 }}
             />
             {/* DateRange controls */}
@@ -634,11 +653,7 @@ export function App({ url }: { url: string, }) {
             <div className="no-gutters row">
                 <Checklist
                     label={"Region"}
-                    data={[
-                        { name: 'NYC', data: 'NYC', checked: regions.includes('NYC') },
-                        { name: 'JC', data: 'JC', checked: regions.includes('JC') },
-                        { name: 'HB', data: 'HB', checked: regions.includes('HB') },
-                    ]}
+                    data={Regions.map(region => ({ name: RegionNames[region], data: region, checked: regions.includes(region), }))}
                     cb={setRegions}
                 />
                 <Radios label="User Type" options={["All", "Subscriber", "Customer"]} cb={setUserType} choice={userType} />
