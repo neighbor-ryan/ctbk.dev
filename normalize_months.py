@@ -66,6 +66,8 @@ rgxs = {
     'SYS': sys_rgx,
     NONE: NONE,
 }
+
+
 def get_region(station_id, file_region=None):
     regions = [ region for region, rgx in rgxs.items() if match(rgx, station_id) ]
     if not regions:
@@ -98,7 +100,6 @@ def add_region(df, file_region):
     print('Region matrix:')
     print(region_matrix)
     return df
-
 
 
 def normalize_fields(df, dst, file_region):
@@ -175,6 +176,9 @@ def csv2pqt(
     ).msg
 
 
+RGX = r'(?:(?P<region>JC)-)?(?P<year>\d{4})(?P<month>\d{2})-citibike-tripdata.csv'
+
+
 @cmd(help="Normalize CSVs (harmonize field names/values), combine each month's separate JC/NYC datasets, output a single parquet per month")
 @opt('-b', '--bucket', default='ctbk', help='Bucket to read from and write to')
 @opt('-s', '--src-root', default='csvs', help='Prefix to read CSVs from')
@@ -194,13 +198,12 @@ def main(bucket, src_root, dst_root, parallel, overwrite, public, start, end):
     csvs = contents[contents.Key.str.endswith('.csv')]
     keys = csvs.Key.rename('key')
     urls = keys.apply(lambda key: f's3://{bucket}/{key}').rename('url')
-    rgx = '(?:(?P<region>JC)-)?(?P<year>\d{4})(?P<month>\d{2})-citibike-tripdata.csv'
-    d = sxs(keys.str.extract(rgx), urls)
+    d = sxs(keys.str.extract(RGX), urls)
 
     d['region'] = d['region'].fillna('NYC')
     d = d.astype({ 'year': int, 'month': int, })
-    d['region_url'] = d[['region','url']].to_dict('records')
-    months = d.groupby(['year','month'])['region_url'].apply(list).to_dict()
+    d['region_url'] = d[['region', 'url']].to_dict('records')
+    months = d.groupby(['year', 'month'])['region_url'].apply(list).to_dict()
 
     kwargs = dict(
         bkt=bucket,

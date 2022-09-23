@@ -3,6 +3,7 @@ boto3>=1.19.8
 botocore>=1.22.8
 click>=8.0.1
 dask[dataframe]>=2021.7.1
+fsspec
 geopy
 html_dsl>=0.4.1
 kaleido>=0.2.1
