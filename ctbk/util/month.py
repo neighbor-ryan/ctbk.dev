@@ -1,8 +1,10 @@
+from typing import MutableMapping
+
 from pandas.core.tools.datetimes import DatetimeScalar
 from utz import *
 
 
-@dataclass(init=False, order=True)
+@dataclass(init=False, order=True, eq=True, unsafe_hash=True)
 class Month:
     year: int
     month: int
@@ -100,3 +102,10 @@ class Month:
                 or (step < 0 and cur > end):
             yield cur
             cur = cur + step
+
+
+class MonthSet(dict):
+    def __getitem__(self, k):
+        if not isinstance(k, Month):
+            k = Month(k)
+        return super().__getitem__(k)
