@@ -4,6 +4,9 @@ from pandas.core.tools.datetimes import DatetimeScalar
 from utz import *
 
 
+# Types that can
+Monthy = Union['Month', str, int, None]
+
 @dataclass(init=False, order=True, eq=True, unsafe_hash=True)
 class Month:
     year: int

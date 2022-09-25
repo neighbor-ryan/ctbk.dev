@@ -4,8 +4,9 @@ from boto3 import client
 from botocore.client import Config
 from click import command as cmd, option as opt
 
-from utils import convert_file
-
+#from ctbk.csvs import Csvs
+from ctbk.monthly import BKT, MonthsDataset
+from ctbk.util.month import Month, MonthSet
 
 fields = {
     'Trip Duration',
@@ -26,14 +27,14 @@ fields = {
 }
 # All fields are ingested as strings by default; select overrides here:
 dtypes = {
-    'Start Time':'datetime64[ns]',
-    'Stop Time':'datetime64[ns]',
-    'Start Station Latitude':float,
-    'Start Station Longitude':float,
-    'End Station Latitude':float,
-    'End Station Longitude':float,
-    'Trip Duration':int,
-    'Gender':int,
+    'Start Time': 'datetime64[ns]',
+    'Stop Time': 'datetime64[ns]',
+    'Start Station Latitude': float,
+    'Start Station Longitude': float,
+    'End Station Latitude': float,
+    'End Station Longitude': float,
+    'Trip Duration': int,
+    'Gender': int,
 }
 def normalize_field(f): return sub(r'[\s/]', '', f.lower())
 normalize_fields_map = { normalize_field(f): f for f in fields }
@@ -129,51 +130,78 @@ def normalize_fields(df, dst, file_region):
     return df
 
 
-def normalize_csv(url, region, dst):
-    _, ext = splitext(url)
-    assert ext == '.csv'
+class NormalizedMonths(MonthsDataset):
+    root = f's3://{BKT}/normalized'
 
-    df = read_csv(url, dtype=str)
-    df = normalize_fields(df, dst, file_region=region)
-    df = df.astype({ k: v for k, v in dtypes.items() if k in df })
-    return df
+    @cached_property
+    def inputs(self):
+        csvs = pd.DataFrame(Csvs().listdir)
+        csvs = csvs[csvs['name'].str.endswith('.csv')]
+        keys = csvs.Key.rename('key')
+        d = pd.concat([ keys.str.extract(RGX), keys, ], axis=1)
+        d['region'] = d['region'].fillna('NYC')
+        d = d.astype({ 'year': int, 'month': int, })
+        d['region_url'] = d[['region', 'key']].to_dict('records')
+        d['month'] = d[['year', 'month']].apply(lambda r: Month(r['year'], r['month']), axis=1)
+        months = d.groupby('month')['region_url'].apply(list).to_dict()
+        return MonthSet(months)
+
+    def normalize_csv(self, key, region, dst):
+        _, ext = splitext(key)
+        assert ext == '.csv'
+
+        with self.fs.open(f'{BKT}/{key}', 'r') as f:
+            df = pd.read_csv(f, dtype=str)
+        df = normalize_fields(df, dst, file_region=region)
+        df = df.astype({ k: v for k, v in dtypes.items() if k in df })
+        return df
+
+    def deps(self, month):
+        return self.inputs[month]
+        # inputs = {
+        #     f"{input['Region'].lower()}_path": input['key']
+        #     for input in self.inputs[month]
+        # }
+        # return inputs
+
+    def compute(self, deps, dst):
+        return pd.concat([ self.normalize_csv(**entry, dst=dst) for entry in deps ])
+
+    def __getitem__(self, month):
+        month = Month(month)
+        return self.inputs[month]
 
 
-def normalize_csvs(entries, dst):
-    df = pd.concat([ normalize_csv(**entry, dst=dst) for entry in entries ])
-    df.to_parquet(dst)
-
-
-def csv2pqt(
-        year, month,
-        entries,
-        bkt, dst_root,
-        overwrite, public=False,
-        start=None, end=None,
-):
-    name = '%d%02d' % (year, month)
-    if start:
-        start_year, start_month = int(start[:4]), int(start[4:])
-        if (year, month) < (start_year, start_month):
-            return 'Skipping month %s < %d%02d' % (name, start_year, start_month)
-
-    if end:
-        end_year, end_month = int(end[:4]), int(end[4:])
-        if (year, month) >= (end_year, end_month):
-            return 'Skipping month %s ≥ %d%02d' % (name, end_year, end_month)
-
-    dst_name = f'{name}.parquet'
-    if dst_root:
-        dst_key = f'{dst_root}/{dst_name}'
-    else:
-        dst_key = dst_name
-
-    return convert_file(
-        normalize_csvs,
-        bkt=bkt, entries=entries, dst_key=dst_key,
-        overwrite=overwrite,
-        public=public,
-    ).msg
+# def csv2pqt(
+#         year, month,
+#         entries,
+#         bkt, dst_root,
+#         overwrite, public=False,
+#         start=None, end=None,
+# ):
+#     name = '%d%02d' % (year, month)
+#     if start:
+#         start_year, start_month = int(start[:4]), int(start[4:])
+#         if (year, month) < (start_year, start_month):
+#             return 'Skipping month %s < %d%02d' % (name, start_year, start_month)
+#
+#     if end:
+#         end_year, end_month = int(end[:4]), int(end[4:])
+#         if (year, month) >= (end_year, end_month):
+#             return 'Skipping month %s ≥ %d%02d' % (name, end_year, end_month)
+#
+#     dst_name = f'{name}.parquet'
+#     if dst_root:
+#         dst_key = f'{dst_root}/{dst_name}'
+#     else:
+#         dst_key = dst_name
+#
+#     return convert_file(
+#         normalize_csvs,
+#         bkt=bkt, entries=entries, dst_key=dst_key,
+#         overwrite=overwrite,
+#         public=public,
+#     ).msg
 
 
 RGX = r'(?:(?P<region>JC)-)?(?P<year>\d{4})(?P<month>\d{2})-citibike-tripdata.csv'
