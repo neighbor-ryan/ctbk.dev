@@ -1,11 +1,10 @@
-from typing import MutableMapping
-
 from pandas.core.tools.datetimes import DatetimeScalar
 from utz import *
 
 
-# Types that can
+# Types that can be passed to the Month constructor
 Monthy = Union['Month', str, int, None]
+
 
 @dataclass(init=False, order=True, eq=True, unsafe_hash=True)
 class Month:
@@ -47,12 +46,12 @@ class Month:
                 self.year = arg.year
                 self.month = arg.month
                 self._verify()
+            elif arg is None:
+                self._init_now()
             elif 'year' in arg and 'month' in arg:
                 self.year = int(arg['year'])
                 self.month = int(arg['month'])
                 self._verify()
-            elif arg is None:
-                self._init_now()
             else:
                 raise ValueError('Unrecognized argument: %s' % str(arg))
         elif not args:

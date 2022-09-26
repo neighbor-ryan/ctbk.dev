@@ -1,112 +1,30 @@
+from os import cpu_count
 from os.path import basename
+
+import click
+from joblib import Parallel, delayed
+from typing import Type, Literal
 
 from sys import stderr
 
 import fsspec
 import pandas as pd
 from abc import abstractmethod
-from dataclasses import dataclass
-from functools import cached_property
 from inspect import getfullargspec
 from urllib.parse import urlparse
-from utz import singleton
 
-from ctbk.util.context import contexts
+from ctbk import cached_property, Month, contexts
 from ctbk.util.convert import Result, run, BadKey, BAD_DST, OVERWROTE, FOUND, WROTE
-from ctbk.util.month import Month
+
 
 GENESIS = Month(2013, 6)
-
-
 RGX = r'(?:(?P<region>JC)-)?(?P<year>\d{4})(?P<month>\d{2})-citibike-tripdata.csv'
 BKT = 'ctbk'
 
-
-# MONTH_DATASET_REGISTRY = {}
-#
-#
-# def register_month_dataset(root: str):
-#     def _register(cls):
-#         MONTH_DATASET_REGISTRY[root] = cls
-#         cls.root = root
-#         return cls
-#     return _register
-#
-#
-# MONTHS_DATASET_REGISTRY = {}
-#
-# def register_months_dataset(root: str):
-#     def _register(cls):
-#         MONTHS_DATASET_REGISTRY[root] = cls
-#         cls.root = root
-#         cls.month_cls = register_month_dataset(root)(cls.month_cls)
-#         cls.month_cls.months_cls = cls
-#         return cls
-#     return _register
+Error = Literal["warn", "error"]
 
 
-# @dataclass
-# class MonthDataset:
-#     month: Month
-#     # root: str
-#
-#     FMT = 'pqt'
-#     months_cls = None
-#
-#     @cached_property
-#     def url(self):
-#         return f'{self.root}/{self.month}.{self.FMT}'
-#
-#     @cached_property
-#     def dt(self):
-#         return self.month.dt
-#
-#     @property
-#     def scheme(self):
-#         url = self.url
-#         parsed = urlparse(url)
-#         return parsed.scheme
-#
-#     @cached_property
-#     def fs(self) -> fsspec.filesystem:
-#         return fsspec.filesystem(self.scheme)
-#
-#     @property
-#     def exists(self):
-#         return self.fs.exists(self.url)
-#
-#     @abstractmethod
-#     def compute(self, *args, **kwargs):
-#         raise NotImplementedError
-#
-#     @abstractmethod
-#     def deps(self):
-#         raise NotImplementedError
-#
-#     def __call__(self, error='warn', overwrite=False, **kwargs):
-#         overwriting = False
-#         if self.exists:
-#             if overwrite:
-#                 overwriting = True
-#             else:
-#                 with self.fs.open(self.url, 'rb') as f:
-#                     return pd.read_parquet(f)
-#
-#         fn = self.compute
-#         fn_spec = getfullargspec(fn)
-#         fn_kwargs = {}
-#
-#         deps = self.deps()
-#         result = self.compute(**kwargs)
-#         if isinstance(result, pd.DataFrame):
-#             result.to_parquet(self.url)
-#         elif isinstance(result, Result):
-#             raise  # TODO
-
-
-@dataclass(init=False)
 class MonthsDataset:
-    root: str = None
     # start: Month = None
     # end: Month = None
 
@@ -117,21 +35,18 @@ class MonthsDataset:
     #         for month in start.until(end)
     #     ]
 
+    ROOT: str = None
+    SRC_CLS: Type['MonthsDataset'] = None
+
     def __init__(
             self,
             root: str = None,
-            # start: Monthy = GENESIS,
-            # end: Monthy = None,
+            src: 'MonthsDataset' = None,
     ):
-        self.root = root or getattr(self, 'ROOT', None)
+        self.src = src or (self.SRC_CLS and self.SRC_CLS())
+        self.root = root or self.ROOT
         if self.root is None:
-            raise RuntimeError('root/ROOT not defined')
-        # self.start = Month(start)
-        # self.end = Month(end)
-
-    # @abstractmethod
-    # def deps(self, month, **kwargs):
-    #     pass
+            raise RuntimeError('root/ROOT required')
 
     @abstractmethod
     def compute(self, month, **kwargs):
@@ -143,7 +58,6 @@ class MonthsDataset:
             inputs = inputs[inputs[k] == v]
         return inputs
 
-    @abstractmethod
     @cached_property
     def inputs_df(self):
         raise NotImplementedError
@@ -152,8 +66,40 @@ class MonthsDataset:
     def inputs(self):
         return self.inputs_df.to_dict('records')
 
-    def convert_all(self):
-        return [ self.convert_one(**input) for input in self.inputs ]
+    def convert(
+            self,
+            start: Month = None,
+            end: Month = None,
+            error: Error = 'warn',
+            overwrite: bool = False,
+            parallel: bool = False,
+    ):
+        # Optionally filter months to operate on
+        if start or end:
+            start = Month(start) or GENESIS
+            end = Month(end) or Month()
+            inputs = []
+            for input in self.inputs:
+                month = input['month']
+                if start <= month < end:
+                    inputs.append(input)
+                else:
+                    print(f'Skipping month {month}: {input}')
+        else:
+            inputs = self.inputs
+
+        # Execute, serial or in parallel
+        if parallel:
+            p = Parallel(n_jobs=cpu_count())
+            convert_one = delayed(self.convert_one)
+            results = p(convert_one(**ipt, error=error, overwrite=overwrite) for ipt in inputs)
+        else:
+            results = [
+                self.convert_one(**input, error=error, overwrite=overwrite)
+                for input in inputs
+            ]
+
+        return results
 
     def convert_one(
             self,
@@ -214,6 +160,11 @@ class MonthsDataset:
         with contexts(ctxs):
             value = run(fn, ctx)
 
+        if isinstance(value, pd.DataFrame):
+            if not self.fs.exists(self.root):
+                self.fs.mkdir(self.root)
+            value.to_parquet(dst)
+
         return Result(msg=msg, status=status, dst=dst, value=value)
 
     @cached_property
@@ -236,10 +187,6 @@ class MonthsDataset:
 
     def __call__(self, start: Month = GENESIS, end: Month = None):
         return [ month() for month in self.months() ]
-
-
-# class Csv(MonthDataset):
-#     pass
 
 
 # @click.command(help="")

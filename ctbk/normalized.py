@@ -1,12 +1,8 @@
+import click
 from utz import *
 
-from boto3 import client
-from botocore.client import Config
-from click import command as cmd, option as opt
-
-#from ctbk.csvs import Csvs
+from ctbk import Csvs, cached_property, Month
 from ctbk.monthly import BKT, MonthsDataset
-from ctbk.util.month import Month, MonthSet
 
 fields = {
     'Trip Duration',
@@ -131,132 +127,56 @@ def normalize_fields(df, dst, file_region):
 
 
 class NormalizedMonths(MonthsDataset):
-    root = f's3://{BKT}/normalized'
+    ROOT = f's3://{BKT}/normalized'
+    RGX = r'(?:(?P<region>JC)-)?(?P<month>\d{6})-citibike-tripdata.csv'
+    SRC_CLS = Csvs
 
     @cached_property
-    def inputs(self):
-        csvs = pd.DataFrame(Csvs().listdir)
-        csvs = csvs[csvs['name'].str.endswith('.csv')]
-        keys = csvs.Key.rename('key')
-        d = pd.concat([ keys.str.extract(RGX), keys, ], axis=1)
-        d['region'] = d['region'].fillna('NYC')
-        d = d.astype({ 'year': int, 'month': int, })
-        d['region_url'] = d[['region', 'key']].to_dict('records')
-        d['month'] = d[['year', 'month']].apply(lambda r: Month(r['year'], r['month']), axis=1)
-        months = d.groupby('month')['region_url'].apply(list).to_dict()
-        return MonthSet(months)
+    def inputs_df(self):
+        print('computing inputs_df')
+        csvs = pd.DataFrame(self.src.listdir).rename(columns={ 'name': 'src', })
+        src = csvs.src
+        df = sxs(src.str.extract(self.RGX), src)
+        df['region'] = df['region'].fillna('NYC')
+        df['month'] = df['month'].apply(Month)
+        df['srcs'] = df[['region', 'src']].to_dict('records')
+        df = df.groupby('month')['srcs'].apply(list).reset_index()
+        df['dst'] = df['month'].apply(lambda m: f'{self.root}/{m}.parquet')
+        return df
 
-    def normalize_csv(self, key, region, dst):
-        _, ext = splitext(key)
-        assert ext == '.csv'
-
-        with self.fs.open(f'{BKT}/{key}', 'r') as f:
+    def normalize_csv(self, src, region, dst):
+        with self.src.fs.open(src, 'r') as f:
             df = pd.read_csv(f, dtype=str)
         df = normalize_fields(df, dst, file_region=region)
         df = df.astype({ k: v for k, v in dtypes.items() if k in df })
         return df
 
-    def deps(self, month):
-        return self.inputs[month]
-        # inputs = {
-        #     f"{input['Region'].lower()}_path": input['key']
-        #     for input in self.inputs[month]
-        # }
-        # return inputs
-
-    def compute(self, deps, dst):
-        return pd.concat([ self.normalize_csv(**entry, dst=dst) for entry in deps ])
-
-    def __getitem__(self, month):
-        month = Month(month)
-        return self.inputs[month]
+    def compute(self, srcs, dst):
+        return pd.concat([ self.normalize_csv(**entry, dst=dst) for entry in srcs ])
 
 
-# def csv2pqt(
-#         year, month,
-#         entries,
-#         bkt, dst_root,
-#         overwrite, public=False,
-#         start=None, end=None,
-# ):
-#     name = '%d%02d' % (year, month)
-#     if start:
-#         start_year, start_month = int(start[:4]), int(start[4:])
-#         if (year, month) < (start_year, start_month):
-#             return 'Skipping month %s < %d%02d' % (name, start_year, start_month)
-#
-#     if end:
-#         end_year, end_month = int(end[:4]), int(end[4:])
-#         if (year, month) >= (end_year, end_month):
-#             return 'Skipping month %s ≥ %d%02d' % (name, end_year, end_month)
-#
-#     dst_name = f'{name}.parquet'
-#     if dst_root:
-#         dst_key = f'{dst_root}/{dst_name}'
-#     else:
-#         dst_key = dst_name
-#
-#     return convert_file(
-#         normalize_csvs,
-#         bkt=bkt, entries=entries, dst_key=dst_key,
-#         overwrite=overwrite,
-#         public=public,
-#     ).msg
-
-
-RGX = r'(?:(?P<region>JC)-)?(?P<year>\d{4})(?P<month>\d{2})-citibike-tripdata.csv'
-
-
-@cmd(help="Normalize CSVs (harmonize field names/values), combine each month's separate JC/NYC datasets, output a single parquet per month")
-@opt('-b', '--bucket', default='ctbk', help='Bucket to read from and write to')
-@opt('-s', '--src-root', default='csvs', help='Prefix to read CSVs from')
-@opt('-d', '--dst-root', default='normalized', help='Prefix to write normalized files to')
-@opt('-p', '--parallel/--no-parallel', help='Use joblib to parallelize execution')
-@opt('-f', '--overwrite/--no-overwrite', help='When set, write files even if they already exist')
-@opt('--public/--no-public', help='Give written objects a public ACL')
-@opt('--start', help='Month to process from (in YYYYMM form)')
-@opt('--end', help='Month to process until (in YYYYMM form; exclusive)')
-def main(bucket, src_root, dst_root, parallel, overwrite, public, start, end):
-    s3 = client('s3', config=Config())
-
-    if not src_root.endswith('/'):
-        src_root += '/'
-    resp = s3.list_objects_v2(Bucket=bucket, Prefix=src_root)
-    contents = pd.DataFrame(resp['Contents'])
-    csvs = contents[contents.Key.str.endswith('.csv')]
-    keys = csvs.Key.rename('key')
-    urls = keys.apply(lambda key: f's3://{bucket}/{key}').rename('url')
-    d = sxs(keys.str.extract(RGX), urls)
-
-    d['region'] = d['region'].fillna('NYC')
-    d = d.astype({ 'year': int, 'month': int, })
-    d['region_url'] = d[['region', 'url']].to_dict('records')
-    months = d.groupby(['year', 'month'])['region_url'].apply(list).to_dict()
-
-    kwargs = dict(
-        bkt=bucket,
-        dst_root=dst_root,
-        overwrite=overwrite,
-        public=public,
-        start=start,
-        end=end,
-    )
-
-    if parallel:
-        p = Parallel(n_jobs=cpu_count())
-        print(
-            '\n'.join(
-                p(
-                    delayed(csv2pqt)(year, month, entries, **kwargs)
-                    for (year, month), entries in months.items()
-                )
-            )
-        )
-    else:
-        for (year, month), entries in months.items():
-            print(
-                csv2pqt(year, month, entries, **kwargs)
-            )
+@click.command(help="Normalize CSVs (harmonize field names/values), combine each month's separate JC/NYC datasets, output a single parquet per month")
+@click.option('-s', '--src-root', default=f's3://{BKT}/csvs', help='Prefix to read CSVs from')
+@click.option('-d', '--dst-root', default=f's3://{BKT}/normalized', help='Prefix to write normalized files to')
+@click.option('-p/-P', '--parallel/--no-parallel', default=True, help='Use joblib to parallelize execution')
+@click.option('-f', '--overwrite/--no-overwrite', help='When set, write files even if they already exist')
+# @click.option('--public/--no-public', help='Give written objects a public ACL')
+@click.option('--start', help='Month to process from (in YYYYMM form)')
+@click.option('--end', help='Month to process until (in YYYYMM form; exclusive)')
+def main(
+        src_root,
+        dst_root,
+        parallel,
+        overwrite,
+        # public,
+        start,
+        end,
+):
+    src = Csvs(root=src_root)
+    nm = NormalizedMonths(root=dst_root, src=src)
+    results = nm.convert(start=start, end=end, overwrite=overwrite, parallel=parallel)
+    results_df = pd.DataFrame(results)
+    print(results_df)
 
 
 if __name__ == '__main__':
