@@ -19,11 +19,7 @@ class Csvs(MonthsDataset):
 
     @cached_property
     def inputs_df(self):
-        srcs_df = pd.DataFrame(self.src.fs.listdir(self.src.root))
-        src_keys = srcs_df.name.rename('key')
-        src_names = src_keys.apply(basename)
-        zip_keys = src_names[src_names.str.endswith('.zip')]
-        df = sxs(zip_keys.str.extract(self.RGX), zip_keys)
+        df = self.parsed_srcs(self.RGX, '.zip')
         df = df.dropna(subset=['month']).astype({ 'month': int })
         df['month'] = df['month'].apply(Month)
         df['region'] = df['region'].fillna('NYC')
@@ -48,9 +44,9 @@ class Csvs(MonthsDataset):
         return WROTE
 
 
-@click.command(help="Normalize CSVs (harmonize field names/values), combine each month's separate JC/NYC datasets, output a single parquet per month")
-@click.option('-s', '--src-root', default=Tripdata.ROOT, help='Prefix to read CSVs from')
-@click.option('-d', '--dst-root', default=Csvs.ROOT, help='Prefix to write normalized files to')
+@click.command(help="Extract CSVs from Citi Bike \"tripdata\" .zip files")
+@click.option('-s', '--src-root', default=Tripdata.ROOT, help='Prefix to read tripdata .zips from')
+@click.option('-d', '--dst-root', default=Csvs.ROOT, help='Prefix to write extracted CSVs to')
 @click.option('-p/-P', '--parallel/--no-parallel', default=True, help='Use joblib to parallelize execution')
 @click.option('-f', '--overwrite/--no-overwrite', help='When set, write files even if they already exist')
 # @click.option('--public/--no-public', help='Give written objects a public ACL')

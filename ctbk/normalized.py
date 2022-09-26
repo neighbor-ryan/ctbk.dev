@@ -2,7 +2,7 @@ import click
 from utz import *
 
 from ctbk import Csvs, cached_property, Month
-from ctbk.monthly import BKT, MonthsDataset
+from ctbk.monthly import BKT, MonthsDataset, PARQUET_EXTENSION
 
 fields = {
     'Trip Duration',
@@ -141,7 +141,7 @@ class NormalizedMonths(MonthsDataset):
         df['month'] = df['month'].apply(Month)
         df['srcs'] = df[['region', 'src']].to_dict('records')
         df = df.groupby('month')['srcs'].apply(list).reset_index()
-        df['dst'] = df['month'].apply(lambda m: f'{self.root}/{m}.parquet')
+        df['dst'] = df['month'].apply(lambda m: f'{self.root}/{m}{PARQUET_EXTENSION}')
         return df
 
     def normalize_csv(self, src, region, dst):

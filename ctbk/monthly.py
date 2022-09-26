@@ -11,11 +11,13 @@ import pandas as pd
 from abc import abstractmethod
 from inspect import getfullargspec
 from urllib.parse import urlparse
+from utz import sxs
 
 from ctbk import cached_property, Month, contexts
 from ctbk.util.convert import Result, run, BadKey, BAD_DST, OVERWROTE, FOUND, WROTE
 
 
+PARQUET_EXTENSION = '.parquet'
 GENESIS = Month(2013, 6)
 RGX = r'(?:(?P<region>JC)-)?(?P<year>\d{4})(?P<month>\d{2})-citibike-tripdata.csv'
 BKT = 'ctbk'
@@ -149,8 +151,16 @@ class MonthsDataset:
         ctxs = []
         if 'src_fd' in args:
             assert src
+            assert 'src_df' not in args
             src_fd = ctx['src_fd'] = self.fs.open(src, 'rb')
             ctxs.append(src_fd)
+        elif 'src_df' in args:
+            if src.endswith(PARQUET_EXTENSION):
+                with self.src.fs.open(src, 'rb') as f:
+                    src_df = pd.read_parquet(f)
+                ctx['src_df'] = src_df
+            else:
+                raise RuntimeError(f"Unrecognized src_df extension: {src}")
 
         if 'dst_fd' in args:
             dst_fd = ctx['dst_fd'] = self.fs.open(dst, 'rb')
@@ -184,8 +194,22 @@ class MonthsDataset:
     def listdir_df(self):
         return pd.DataFrame(self.listdir)
 
-    def __call__(self, start: Month = GENESIS, end: Month = None):
-        return [ month() for month in self.months() ]
+    @cached_property
+    def src_names(self):
+        return self.src.listdir_df.name
+
+    @cached_property
+    def src_basenames(self):
+        return self.src_names.apply(basename)
+
+    def parsed_srcs(self, rgx=None, endswith=None):
+        src_basenames = self.src_basenames
+        if endswith:
+            src_basenames = src_basenames[src_basenames.str.endswith(endswith)]
+        if rgx:
+            return sxs(src_basenames.str.extract(rgx), src_basenames)
+        else:
+            return src_basenames
 
 
 # @click.command(help="")
