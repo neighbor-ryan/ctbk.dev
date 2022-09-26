@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import click
 from utz import *
 
 from ctbk import Month, MonthsDataset, cached_property, NormalizedMonths
@@ -90,29 +89,5 @@ class StationMetaHists(MonthsDataset):
         return stations_hist
 
 
-@click.command(help="Group+Count rides by station info (ID, name, lat, lng)")
-@click.option('-s', '--src-root', default=NormalizedMonths.ROOT, help='Prefix to read normalized parquets from')
-@click.option('-d', '--dst-root', default=StationMetaHists.ROOT, help='Prefix to write station name/latlng hists to')
-@click.option('-p/-P', '--parallel/--no-parallel', default=True, help='Use joblib to parallelize execution')
-@click.option('-f', '--overwrite/--no-overwrite', help='When set, write files even if they already exist')
-# @click.option('--public/--no-public', help='Give written objects a public ACL')
-@click.option('--start', help='Month to process from (in YYYYMM form)')
-@click.option('--end', help='Month to process until (in YYYYMM form; exclusive)')
-def main(
-        src_root,
-        dst_root,
-        parallel,
-        overwrite,
-        # public,
-        start,
-        end,
-):
-    src = NormalizedMonths(root=src_root)
-    stations = StationMetaHists(root=dst_root, src=src)
-    results = stations.convert(start=start, end=end, overwrite=overwrite, parallel=parallel)
-    results_df = pd.DataFrame(results)
-    print(results_df)
-
-
 if __name__ == '__main__':
-    main()
+    StationMetaHists.cli()

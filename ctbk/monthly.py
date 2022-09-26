@@ -1,6 +1,7 @@
 from os import cpu_count
-from os.path import basename
+from os.path import basename, splitext
 
+import click
 from joblib import Parallel, delayed
 from typing import Type, Literal
 
@@ -13,7 +14,7 @@ from inspect import getfullargspec
 from urllib.parse import urlparse
 from utz import sxs
 
-from ctbk import cached_property, Month, contexts
+from ctbk import cached_property, Month, contexts, Monthy
 from ctbk.util.convert import Result, run, BadKey, BAD_DST, OVERWROTE, FOUND, WROTE
 
 
@@ -25,17 +26,7 @@ BKT = 'ctbk'
 Error = Literal["warn", "error"]
 
 
-class MonthsDataset:
-    # start: Month = None
-    # end: Month = None
-
-    # def months(self, start: Month = GENESIS, end: Month = None):
-    #     end = end or Month()
-    #     return [
-    #         self.month_cls(month=month, root=self.root, fmt=self.fmt)
-    #         for month in start.until(end)
-    #     ]
-
+class Dataset:
     ROOT: str = None
     SRC_CLS: Type['MonthsDataset'] = None
 
@@ -49,9 +40,44 @@ class MonthsDataset:
         if self.root is None:
             raise RuntimeError('root/ROOT required')
 
-    @abstractmethod
-    def compute(self, month, **kwargs):
-        pass
+    @cached_property
+    def scheme(self):
+        url = self.root
+        parsed = urlparse(url)
+        return parsed.scheme
+
+    @cached_property
+    def fs(self) -> fsspec.filesystem:
+        return fsspec.filesystem(self.scheme)
+
+    @cached_property
+    def listdir(self):
+        return self.fs.listdir(self.root)
+
+    @cached_property
+    def listdir_df(self):
+        return pd.DataFrame(self.listdir)
+
+    @cached_property
+    def src_names(self):
+        return self.src.listdir_df.name
+
+    @cached_property
+    def src_basenames(self):
+        return self.src_names.apply(basename)
+
+    def parsed_srcs(self, rgx=None, endswith=None):
+        src_basenames = self.src_basenames
+        if endswith:
+            src_basenames = src_basenames[src_basenames.str.endswith(endswith)]
+        if rgx:
+            return sxs(src_basenames.str.extract(rgx), src_basenames)
+        else:
+            return src_basenames
+
+    @cached_property
+    def inputs_df(self):
+        raise NotImplementedError
 
     def filter(self, **kwargs):
         inputs = self.inputs
@@ -60,13 +86,74 @@ class MonthsDataset:
         return inputs
 
     @cached_property
-    def inputs_df(self):
-        raise NotImplementedError
-
-    @cached_property
     def inputs(self):
         return self.inputs_df.to_dict('records')
 
+    def input_range_df(self, start: Monthy = None, end: Monthy = None):
+        start = Month(start) if start else GENESIS
+        end = Month(end) or Month()
+        df = self.inputs_df
+        df = df[start <= df.month < end]
+        return df
+
+    def input_range(self, start: Monthy = None, end: Monthy = None):
+        start = Month(start) if start else GENESIS
+        end = Month(end) or Month()
+        inputs = []
+        for input in self.inputs:
+            month = input['month']
+            if start <= month < end:
+                inputs.append(input)
+            else:
+                print(f'Skipping month {month}: {input}')
+        return inputs
+
+    @classmethod
+    def cli_opts(cls):
+        return [
+            click.command(help="Group+Count rides by station info (ID, name, lat, lng)"),
+            click.option('-s', '--src-root', default=cls.SRC_CLS.ROOT, help='Prefix to read normalized parquets from'),
+            click.option('-d', '--dst-root', default=cls.ROOT, help='Prefix to write station name/latlng hists to'),
+            click.option('-p/-P', '--parallel/--no-parallel', default=True, help='Use joblib to parallelize execution'),
+            click.option('-f', '--overwrite/--no-overwrite', help='When set, write files even if they already exist'),
+            #click.option('--public/--no-public', help='Give written objects a public ACL'),
+            click.option('--start', help='Month to process from (in YYYYMM form)'),
+            click.option('--end', help='Month to process until (in YYYYMM form; exclusive)'),
+        ]
+
+    @classmethod
+    def cli(cls):
+        fn = cls.main
+        for cli_opt in cls.cli_opts():
+            fn = cli_opt(fn)
+        return fn()
+
+    @classmethod
+    def main(
+            cls,
+            src_root,
+            dst_root,
+            parallel,
+            overwrite,
+            # public,
+            start,
+            end,
+    ):
+        src = cls.SRC_CLS(root=src_root)
+        self = cls(root=dst_root, src=src)
+        results = self.convert(start=start, end=end, overwrite=overwrite, parallel=parallel)
+        if isinstance(results, Result):
+            print(results)
+        else:
+            results_df = pd.DataFrame(results)
+            print(results_df)
+
+    @abstractmethod
+    def compute(self, **kwargs):
+        pass
+
+
+class MonthsDataset(Dataset):
     def convert(
             self,
             start: Month = None,
@@ -76,18 +163,7 @@ class MonthsDataset:
             parallel: bool = False,
     ):
         # Optionally filter months to operate on
-        if start or end:
-            start = Month(start) or GENESIS
-            end = Month(end) or Month()
-            inputs = []
-            for input in self.inputs:
-                month = input['month']
-                if start <= month < end:
-                    inputs.append(input)
-                else:
-                    print(f'Skipping month {month}: {input}')
-        else:
-            inputs = self.inputs
+        inputs = self.input_range(start=start, end=end)
 
         # Execute, serial or in parallel
         if parallel:
@@ -127,10 +203,16 @@ class MonthsDataset:
                     stderr.write('%s\n' % msg)
                 return Result(msg=msg, status=BAD_DST)
 
-        ctx['dst'] = dst
-        ctx['dst_name'] = basename(dst)
-        ctx['error'] = error
-        ctx['overwriting'] = False
+        fn = self.compute
+        args = getfullargspec(fn).args
+
+        ctx = {
+            'dst': dst,
+            'dst_name': basename(dst),
+            'error': error,
+            'overwriting': False,
+            'overwrite': overwrite,
+        }
 
         if self.fs.exists(dst):
             if overwrite:
@@ -144,9 +226,6 @@ class MonthsDataset:
         else:
             msg = f'Wrote {dst}'
             status = WROTE
-
-        fn = self.compute
-        args = getfullargspec(fn).args
 
         ctxs = []
         if 'src_fd' in args:
@@ -176,49 +255,80 @@ class MonthsDataset:
 
         return Result(msg=msg, status=status, dst=dst, value=value)
 
-    @cached_property
-    def scheme(self):
-        url = self.root
-        parsed = urlparse(url)
-        return parsed.scheme
 
+class Reducer(Dataset):
     @cached_property
-    def fs(self) -> fsspec.filesystem:
-        return fsspec.filesystem(self.scheme)
+    def inputs_df(self):
+        return self.src.listdir_df
 
-    @cached_property
-    def listdir(self):
-        return self.fs.listdir(self.root)
+    def convert(
+            self,
+            start: Month = None,
+            end: Month = None,
+            error: Error = 'warn',
+            overwrite: bool = False,
+            parallel: bool = False,
+    ):
+        latest = not start and not end
 
-    @cached_property
-    def listdir_df(self):
-        return pd.DataFrame(self.listdir)
+        start = Month(start) if start else GENESIS
+        end = Month(end)
+        root = self.root
+        prefix, extension = splitext(root)
+        dst = f'{prefix}_{start}-{end}{extension or PARQUET_EXTENSION}'
+        all_dst = f'{prefix}{extension or PARQUET_EXTENSION}'
 
-    @cached_property
-    def src_names(self):
-        return self.src.listdir_df.name
+        fn = self.compute
+        args = getfullargspec(fn).args
+        ctx = {
+            'dst': dst,
+            'error': error,
+            'overwrite': overwrite,
+            'overwriting': False,
+            'parallel': parallel,
+        }
 
-    @cached_property
-    def src_basenames(self):
-        return self.src_names.apply(basename)
-
-    def parsed_srcs(self, rgx=None, endswith=None):
-        src_basenames = self.src_basenames
-        if endswith:
-            src_basenames = src_basenames[src_basenames.str.endswith(endswith)]
-        if rgx:
-            return sxs(src_basenames.str.extract(rgx), src_basenames)
+        if self.fs.exists(dst):
+            if overwrite:
+                ctx['overwriting'] = True
+                msg = f'Overwrote {dst}'
+                status = OVERWROTE
+            else:
+                msg = f'Found {dst}; skipping'
+                status = FOUND
+                return Result(msg=msg, status=status, dst=dst)
         else:
-            return src_basenames
+            msg = f'Wrote {dst}'
+            status = WROTE
 
+        if 'src_dfs' in args:
+            inputs_df = self.inputs_df
+            months = inputs_df.month
+            inputs_df = inputs_df[(start <= months) & (months < end)]
+            srcs = inputs_df.src
+            if not all(srcs.str.endswith(PARQUET_EXTENSION)):
+                raise RuntimeError(f"Expected `src`s to be {PARQUET_EXTENSION} files")
+            if parallel:
+                p = Parallel(n_jobs=cpu_count())
+                src_dfs = p(delayed(pd.read_parquet)(src) for src in srcs.values)
+            else:
+                src_dfs = [ pd.read_parquet(src) for src in srcs.values ]
+            ctx['src_dfs'] = src_dfs
 
-# @click.command(help="")
-# @click.option('-s', '--src')
-# @click.option('-d', '--dst')
-# @click.option('-p', '--parallel/--no-parallel', help='Use joblib to parallelize execution')
-# @click.option('-f', '--overwrite/--no-overwrite', help='When set, write files even if they already exist')
-# @click.option('--public/--no-public', help='Give written objects a public ACL')
-# @click.option('--start', help='Month to process from (in YYYYMM form)')
-# @click.option('--end', help='Month to process until (in YYYYMM form; exclusive)')
-# def main(src, dst, parallel, overwrite, public, start, end):
-#     StationsMonthsCls = register_months_dataset(src)(StationsMonths)
+        value = run(fn, ctx)
+
+        if isinstance(value, pd.DataFrame):
+            parent = root.rsplit('/', 1)[0]
+            if not self.fs.exists(parent):
+                self.fs.mkdir(parent)
+            print(f'Writing DataFrame to {dst}')
+            value.to_parquet(dst)
+            if latest:
+                print(f'Writing "latest" DataFrame to {all_dst}')
+                value.to_parquet(all_dst)
+        elif 'dst' in args:
+            if latest:
+                print(f'Copying {dst} to {all_dst}')
+                self.fs.copy(dst, all_dst, recursive=True)
+
+        return Result(msg=msg, status=status, dst=dst, value=value)
