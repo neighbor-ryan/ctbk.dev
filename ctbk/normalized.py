@@ -51,10 +51,10 @@ normalize_fields_map['ended_at'] = 'Stop Time'
 normalize_fields_map['member_casual'] = 'Member/Casual'
 
 
-nyc_rgx = '(?:\d{1,3}|\d{4}\.\d\d)'
-jc_rgx = 'JC\d{3}'
-hb_rgx = 'HB\d{3}'
-sys_rgx = '(?:SYS\d{3}|Lab - NYC)'
+nyc_rgx = r'(?:\d{1,3}|\d{4}\.\d\d)'
+jc_rgx = r'JC\d{3}'
+hb_rgx = r'HB\d{3}'
+sys_rgx = r'(?:SYS\d{3}|Lab - NYC)'
 NONE = 'None'
 rgxs = {
     'NYC': nyc_rgx,
@@ -156,8 +156,8 @@ class NormalizedMonths(MonthsDataset):
 
 
 @click.command(help="Normalize CSVs (harmonize field names/values), combine each month's separate JC/NYC datasets, output a single parquet per month")
-@click.option('-s', '--src-root', default=f's3://{BKT}/csvs', help='Prefix to read CSVs from')
-@click.option('-d', '--dst-root', default=f's3://{BKT}/normalized', help='Prefix to write normalized files to')
+@click.option('-s', '--src-root', default=Csvs.ROOT, help='Prefix to read CSVs from')
+@click.option('-d', '--dst-root', default=NormalizedMonths.ROOT, help='Prefix to write normalized files to')
 @click.option('-p/-P', '--parallel/--no-parallel', default=True, help='Use joblib to parallelize execution')
 @click.option('-f', '--overwrite/--no-overwrite', help='When set, write files even if they already exist')
 # @click.option('--public/--no-public', help='Give written objects a public ACL')

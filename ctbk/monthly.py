@@ -1,7 +1,6 @@
 from os import cpu_count
 from os.path import basename
 
-import click
 from joblib import Parallel, delayed
 from typing import Type, Literal
 
