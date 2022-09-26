@@ -6,24 +6,13 @@ from zipfile import ZipFile
 
 from ctbk import Month, MonthsDataset, cached_property
 from ctbk.monthly import BKT
+from ctbk.tripdata import Tripdata
 from ctbk.util.convert import WROTE
-
-
-TRIPDATA_BKT = 'tripdata'
-TRIPDATA_URL = f's3://{TRIPDATA_BKT}'
-
-
-class Zips(MonthsDataset):
-    ROOT = TRIPDATA_URL
-
-    @cached_property
-    def inputs_df(self):
-        return pd.DataFrame(self.fs.listdir())
 
 
 class Csvs(MonthsDataset):
     ROOT = f's3://{BKT}/csvs'
-    SRC_CLS = Zips
+    SRC_CLS = Tripdata
 
     RGX = r'^(?:(?P<region>JC)-)?(?P<month>\d{6})[ \-]citi?bike-tripdata?(?P<csv>\.csv)?(?P<zip>\.zip)?$'
     REGION_PREFIXES = { 'JC': 'JC-', 'NYC': '', }
@@ -60,7 +49,7 @@ class Csvs(MonthsDataset):
 
 
 @click.command(help="Normalize CSVs (harmonize field names/values), combine each month's separate JC/NYC datasets, output a single parquet per month")
-@click.option('-s', '--src-root', default=TRIPDATA_URL, help='Prefix to read CSVs from')
+@click.option('-s', '--src-root', default=Tripdata.ROOT, help='Prefix to read CSVs from')
 @click.option('-d', '--dst-root', default=Csvs.ROOT, help='Prefix to write normalized files to')
 @click.option('-p/-P', '--parallel/--no-parallel', default=True, help='Use joblib to parallelize execution')
 @click.option('-f', '--overwrite/--no-overwrite', help='When set, write files even if they already exist')
@@ -76,7 +65,7 @@ def main(
         start,
         end,
 ):
-    src = Zips(root=src_root)
+    src = Tripdata(root=src_root)
     csvs = Csvs(root=dst_root, src=src)
     results = csvs.convert(start=start, end=end, overwrite=overwrite, parallel=parallel)
     results_df = pd.DataFrame(results)
