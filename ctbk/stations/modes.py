@@ -73,7 +73,8 @@ class StationModes(MonthsDataset):
         stations = sxs(annotated_station_names['Station Name'], annotated_stations[['Latitude', 'Longitude',]])
         stations.to_parquet(dst)
         if latest_dst:
-            stations.to_parquet(latest_dst)
+            print(f'Copying "latest" {dst} to {latest_dst}')
+            self.fs.copy(dst, latest_dst)
         return WROTE
 
 

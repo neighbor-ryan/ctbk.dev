@@ -13,10 +13,11 @@ class StationMetaHist(Reducer):
     @cached_property
     def inputs_df(self):
         df = self.src.listdir_df
+        df['src'] = 's3://' + df.name
         df = (
             sxs(
                 df.name.str.extract(r'(?P<month>\d{6})\.parquet')['month'].dropna().apply(Month),
-                df.name.rename('src'),
+                df.src,
             )
             .sort_values('month')
         )

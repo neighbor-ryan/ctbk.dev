@@ -336,12 +336,9 @@ class Reducer(Dataset):
                 self.fs.mkdir(self.parent)
             print(f'Writing DataFrame to {dst}')
             value.to_parquet(dst)
-            if latest:
-                print(f'Writing "latest" DataFrame to {all_dst}')
-                value.to_parquet(all_dst)
-        elif 'dst' in args:
-            if latest:
-                print(f'Copying {dst} to {all_dst}')
-                self.fs.copy(dst, all_dst, recursive=True)
+
+        if latest and not self.fs.exists(latest):
+            print(f'Copying {dst} to {all_dst}')
+            self.fs.copy(dst, all_dst, recursive=True)
 
         return Result(msg=msg, status=status, dst=dst, value=value)
