@@ -55,6 +55,17 @@ class Dataset:
         path = f'{path}{extension}'
         return path
 
+    def ensure_dir(self, path):
+        parent = path.rsplit('/', 1)[0]
+        if parent != path and not self.fs.exists(parent):
+            self.fs.mkdir(parent)
+
+    @staticmethod
+    def month_range(start: Monthy = None, end: Monthy = None):
+        start = Month(start) if start else GENESIS
+        end = Month(end)
+        return start, end
+
     @property
     def parent(self):
         return self.root.rsplit('/', 1)[0]
@@ -119,11 +130,11 @@ class Dataset:
     def cli_opts(cls):
         return [
             click.command(help="Group+Count rides by station info (ID, name, lat, lng)"),
-            click.option('-r', '--root', help='Namespace to read/write files, e.g. "s3://" or "s3" (for a local dir mirroring the S3 layout)'),
+            click.option('--root', help='Namespace to read/write files, e.g. "s3://" or "s3" (for a local dir mirroring the S3 layout)'),
             click.option('--src', 'src_url', help='`src`-specific url base'),
             click.option('--dst', 'dst_url', help='`dst`-specific url base'),
             click.option('-p/-P', '--parallel/--no-parallel', default=True, help='Use joblib to parallelize execution'),
-            click.option('-f', '--overwrite/--no-overwrite', help='When set, write files even if they already exist'),
+            click.option('-f', '--overwrite', count=True, help='When set, write files even if they already exist'),
             click.option('--start', help='Month to process from (in YYYYMM form)'),
             click.option('--end', help='Month to process until (in YYYYMM form; exclusive)'),
         ]
@@ -145,9 +156,10 @@ class Dataset:
             overwrite,
             start,
             end,
+            **kwargs,
     ):
         src = cls.SRC_CLS(root=src_url or root)
-        self = cls(root=dst_url or root, src=src)
+        self = cls(root=dst_url or root, src=src, **kwargs)
         results = self.convert(start=start, end=end, overwrite=overwrite, parallel=parallel)
         if isinstance(results, Result):
             print(results)
@@ -259,8 +271,7 @@ class MonthsDataset(Dataset):
             value = run(fn, ctx)
 
         if isinstance(value, pd.DataFrame):
-            if not self.fs.exists(self.root):
-                self.fs.mkdir(self.root)
+            self.ensure_dir(dst)
             value.to_parquet(dst)
 
         extra_dst = task.get('extra_dst')
@@ -272,35 +283,46 @@ class MonthsDataset(Dataset):
 
 class Reducer(Dataset):
     def task_list(self, start: Monthy = None, end: Monthy = None):
+        start, end = self.month_range(start, end)
         df = self.src.outputs(start=start, end=end)
-        srcs = df.name.values
-        task = { 'srcs': srcs, }
+        cols = [df.name.rename('src')]
+        dsts = df.month.apply(self.reduced_df_path).rename('dst')
+        if all(~dsts.isna()):
+            cols.append(dsts)
+        subtasks = sxs(*cols).to_dict('record')
+        task = { 'subtasks': subtasks, }
         return [task]
 
-    def reduce_wrapper(self, src):
+    def reduced_df_path(self, month):
+        return None
+
+    def reduce_wrapper(self, src, dst=None, overwrite=False):
         fn = self.reduce
         spec = getfullargspec(fn)
         args = spec.args
+        fs = self.fs
+        exists = fs.exists(dst)
+        if dst and exists and not overwrite:
+            print(f'Found reduced_df: {dst}')
+            return pd.read_parquet(dst)
+
         ctx = { 'src': src }
         if 'df' in args:
             with self.src.fs.open(src, 'rb') as f:
                 ctx['df'] = pd.read_parquet(f)
-        return run(fn, ctx)
+        df = run(fn, ctx)
+        if dst and (not exists or overwrite):
+            if exists:
+                print(f'Overwriting reduced_df: {dst}')
+            else:
+                print(f'Writing reduced_df: {dst}')
+            with fs.open(dst, 'wb') as f:
+                df.to_parquet(f)
+        return df
 
     @abstractmethod
     def reduce(self, **kwargs):
         pass
-
-    def reduced_dfs(self, srcs, parallel: bool = False):
-        if parallel:
-            p = Parallel(n_jobs=cpu_count())
-            dfs = p(delayed(self.reduce)(url) for url in srcs)
-        else:
-            dfs = [self.reduce(url) for url in srcs]
-        return dfs
-
-    def reduced_df(self, srcs, parallel: bool = False):
-        return pd.concat(self.reduced_dfs(srcs=srcs, parallel=parallel))
 
     def combine(self, reduced_dfs):
         return pd.concat(reduced_dfs)
@@ -334,9 +356,7 @@ class Reducer(Dataset):
             parallel: bool = False,
     ):
         latest = not start and not end
-
-        start = Month(start) if start else GENESIS
-        end = Month(end)
+        start, end = self.month_range(start, end)
         dst = self.path(start, end)
         all_dst = self.path()
 
@@ -363,12 +383,13 @@ class Reducer(Dataset):
             msg = f'Wrote {dst}'
             status = WROTE
 
-        srcs = task['srcs']
+        overwrite_reduced_dfs = overwrite > 1
+        subtasks = task['subtasks']
         if parallel:
             p = Parallel(n_jobs=cpu_count())
-            reduced_dfs = p(delayed(self.reduce_wrapper)(src) for src in srcs)
+            reduced_dfs = p(delayed(self.reduce_wrapper)(**subtask, overwrite=overwrite_reduced_dfs) for subtask in subtasks)
         else:
-            reduced_dfs = [ self.reduce_wrapper(src) for src in srcs ]
+            reduced_dfs = [ self.reduce_wrapper(**subtask, overwrite=overwrite_reduced_dfs) for subtask in subtasks ]
         ctx['reduced_dfs'] = reduced_dfs
         if 'combined_df' in args:
             ctx['combined_df'] = self.combine(reduced_dfs)
@@ -376,8 +397,7 @@ class Reducer(Dataset):
         value = run(fn, ctx)
 
         if isinstance(value, pd.DataFrame):
-            if not self.fs.exists(self.parent):
-                self.fs.mkdir(self.parent)
+            self.ensure_dir(dst)
             print(f'Writing DataFrame to {dst}')
             value.to_parquet(dst)
 

@@ -8,6 +8,9 @@ class StationMetaHist(Reducer):
     ROOT = f'{BKT}/stations/llname_hists/all'
     SRC_CLS = NormalizedMonths
 
+    def reduced_df_path(self, month):
+        return f'{self.parent}/{month}.parquet'
+
     def reduce(self, df):
         columns = {
             'Start Station ID': 'Station ID',
