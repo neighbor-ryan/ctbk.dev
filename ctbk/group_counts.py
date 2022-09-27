@@ -3,56 +3,10 @@
 import click
 from utz import *
 
-from ctbk import NormalizedMonths, Monthy
+from ctbk import NormalizedMonths
 from ctbk.monthly import Reducer, BKT, PARQUET_EXTENSION
 
 TBL = 'agg'
-
-
-# def aggregate_months(urls, agg_keys, sum_keys, parallel):
-#     if parallel:
-#         p = Parallel(n_jobs=cpu_count())
-#         dfs = p(delayed(aggregate)(url, agg_keys, sum_keys) for url in urls)
-#     else:
-#         dfs = [ aggregate(url, agg_keys, sum_keys) for url in urls ]
-#
-#     df = pd.concat(dfs)
-#     return df
-#
-#
-# def build_email(written_urls):
-#     from html_dsl.common import HTML, BODY, DIV, P, UL, LI, A
-#     if written_urls:
-#         urls_str = "\n- ".join(written_urls)
-#         text = f'''Wrote:\n- {urls_str}'''
-#         html = DIV[
-#             P['Wrote:'],
-#             P[UL[[ LI[url] for url in written_urls ]]],
-#             P[
-#                 'See ', A(href='https://ctbk.s3.amazonaws.com/index.html#/aggregated?s=50')['s3://ctbk/aggregated/'],
-#                 ' and ', A(href='https://ctbk.dev')['ctbk.dev'],
-#             ],
-#         ]
-#     else:
-#         text = 'No files written.'
-#         html = P['No files written']
-#
-#     html = HTML[BODY[html]]
-#
-#     return str(html), text
-#
-#
-# _df = None
-# def get_df(*, urls, agg_keys, sum_keys, parallel):
-#     global _df
-#     if _df is None:
-#         _df = aggregate_months(
-#             urls=urls,
-#             agg_keys=agg_keys,
-#             sum_keys=sum_keys,
-#             parallel=parallel,
-#         )
-#     return _df
 
 
 class GroupCounts(Reducer):
@@ -70,6 +24,8 @@ class GroupCounts(Reducer):
             gender=True,
             user_type=True,
             rideable_type=True,
+            start_station=False,
+            end_station=False,
             # Features to aggregate
             counts=True,
             durations=True,
@@ -85,10 +41,11 @@ class GroupCounts(Reducer):
         self.gender = gender
         self.user_type = user_type
         self.rideable_type = rideable_type
+        self.start_station = start_station
+        self.end_station = end_station
         self.counts = counts
         self.durations = durations
         self.sort_agg_keys = sort_agg_keys
-
         super().__init__(**kwargs)
 
     @classmethod
@@ -96,6 +53,8 @@ class GroupCounts(Reducer):
         return super().cli_opts() + [
             click.option('-c/-C', '--counts/--no-counts', default=True),
             click.option('-d/-D', '--durations/--no-durations', default=True),
+            click.option('-s/-S', '--start-station/--no-start-station', default=True),
+            click.option('-e/-E', '--end-station/--no-end-station', default=True),
             click.option('-g/-G', '--gender/--no-gender', default=True),
             click.option('-r/-R', '--region/--no-region', default=True),
             click.option('-t/-T', '--user-type/--no-user-type', default=True),
@@ -118,6 +77,8 @@ class GroupCounts(Reducer):
             'g': self.gender,
             't': self.user_type,
             'b': self.rideable_type,
+            's': self.start_station,
+            'e': self.end_station,
         }
         return { k: v for k, v in agg_keys.items() if v }
 
@@ -183,6 +144,10 @@ class GroupCounts(Reducer):
             group_keys.append('User Type')
         if agg_keys.get('b'):
             group_keys.append('Rideable Type')
+        if agg_keys.get('s'):
+            group_keys.append('Start Station ID')
+        if agg_keys.get('e'):
+            group_keys.append('End Station ID')
 
         select_keys = []
         if sum_keys.get('c'):
