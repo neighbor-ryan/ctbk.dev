@@ -40,6 +40,19 @@ class Dataset:
         if self.root is None:
             raise RuntimeError('root/ROOT required')
 
+    def path(self, start=None, end=None, extension=PARQUET_EXTENSION):
+        root = self.root
+        path, _extension = splitext(root)
+        extension = _extension or extension
+        if start and end:
+            path = f'{path}_{start}-{end}'
+        path = f'{path}{extension}'
+        return path
+
+    @property
+    def parent(self):
+        return self.root.rsplit('/', 1)[0]
+
     @cached_property
     def scheme(self):
         url = self.root
@@ -183,14 +196,20 @@ class MonthsDataset(Dataset):
             dst,
             error='warn',
             overwrite=False,
-            **ctx,
+            **ipt,
     ):
-        src = ctx.get('src')
-        if 'src' in ctx:
-            assert 'srcs' not in ctx
-            ctx['src_name'] = basename(ctx['src'])
+        ctx = {
+            'error': error,
+            'overwriting': False,
+            'overwrite': overwrite,
+        }
+        src = ipt.get('src')
+        if 'src' in ipt:
+            assert 'srcs' not in ipt
+            ctx['src_name'] = basename(ipt['src'])
         else:
-            assert 'srcs' in ctx
+            assert 'srcs' in ipt
+        ctx.update(ipt)
 
         if callable(dst):
             try:
@@ -203,16 +222,13 @@ class MonthsDataset(Dataset):
                     stderr.write('%s\n' % msg)
                 return Result(msg=msg, status=BAD_DST)
 
-        fn = self.compute
-        args = getfullargspec(fn).args
-
-        ctx = {
+        ctx.update({
             'dst': dst,
             'dst_name': basename(dst),
-            'error': error,
-            'overwriting': False,
-            'overwrite': overwrite,
-        }
+        })
+
+        fn = self.compute
+        args = getfullargspec(fn).args
 
         if self.fs.exists(dst):
             if overwrite:
@@ -273,10 +289,8 @@ class Reducer(Dataset):
 
         start = Month(start) if start else GENESIS
         end = Month(end)
-        root = self.root
-        prefix, extension = splitext(root)
-        dst = f'{prefix}_{start}-{end}{extension or PARQUET_EXTENSION}'
-        all_dst = f'{prefix}{extension or PARQUET_EXTENSION}'
+        dst = self.path(start, end)
+        all_dst = self.path()
 
         fn = self.compute
         args = getfullargspec(fn).args
@@ -318,9 +332,8 @@ class Reducer(Dataset):
         value = run(fn, ctx)
 
         if isinstance(value, pd.DataFrame):
-            parent = root.rsplit('/', 1)[0]
-            if not self.fs.exists(parent):
-                self.fs.mkdir(parent)
+            if not self.fs.exists(self.parent):
+                self.fs.mkdir(self.parent)
             print(f'Writing DataFrame to {dst}')
             value.to_parquet(dst)
             if latest:
