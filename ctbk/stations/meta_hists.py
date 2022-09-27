@@ -2,7 +2,7 @@
 
 from utz import *
 
-from ctbk import Month, MonthsDataset, cached_property, NormalizedMonths
+from ctbk import Month, MonthsDataset, cached_property, NormalizedMonths, Monthy
 from ctbk.monthly import BKT, PARQUET_EXTENSION
 
 
@@ -46,14 +46,12 @@ def mode_sketch(df, groupby, thresh=0.5):
 
 
 class StationMetaHists(MonthsDataset):
-    ROOT = f's3://{BKT}/stations/llname_hists'
+    ROOT = f'{BKT}/stations/llname_hists'
     SRC_CLS = NormalizedMonths
     RGX = '(?P<month>\\d{6})\\' + PARQUET_EXTENSION
 
-    @cached_property
-    def inputs_df(self):
-        df = self.parsed_srcs(self.RGX, PARQUET_EXTENSION)
-        df['month'] = df['month'].apply(Month)
+    def task_df(self, start: Monthy = None, end: Monthy = None):
+        df = self.src.outputs(start=start, end=end)
         df['src'] = f'{self.src.root}/' + df.name
         df['dst'] = f'{self.root}/' + df.name
         df = df[['month', 'src', 'dst']]

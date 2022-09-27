@@ -1,7 +1,7 @@
 import click
 from utz import *
 
-from ctbk import Csvs, cached_property, Month
+from ctbk import Csvs, cached_property, Month, Monthy
 from ctbk.monthly import BKT, MonthsDataset, PARQUET_EXTENSION
 
 fields = {
@@ -127,18 +127,12 @@ def normalize_fields(df, dst, file_region):
 
 
 class NormalizedMonths(MonthsDataset):
-    ROOT = f's3://{BKT}/normalized'
-    RGX = r'(?:(?P<region>JC)-)?(?P<month>\d{6})-citibike-tripdata.csv'
+    ROOT = f'{BKT}/normalized'
     SRC_CLS = Csvs
+    RGX = '(?P<month>\\d{6})\\' + PARQUET_EXTENSION
 
-    @cached_property
-    def inputs_df(self):
-        print('computing inputs_df')
-        csvs = pd.DataFrame(self.src.listdir).rename(columns={ 'name': 'src', })
-        src = csvs.src
-        df = sxs(src.str.extract(self.RGX), src)
-        df['region'] = df['region'].fillna('NYC')
-        df['month'] = df['month'].apply(Month)
+    def task_df(self, start: Monthy = None, end: Monthy = None):
+        df = self.src.parsed_outputs(start=start, end=end)
         df['srcs'] = df[['region', 'src']].to_dict('records')
         df = df.groupby('month')['srcs'].apply(list).reset_index()
         df['dst'] = df['month'].apply(lambda m: f'{self.root}/{m}{PARQUET_EXTENSION}')

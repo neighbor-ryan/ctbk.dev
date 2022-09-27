@@ -1,32 +1,45 @@
-from pandas import concat
-from utz import sxs
+import pandas as pd
 
-from ctbk import cached_property, Month
+from ctbk import NormalizedMonths
 from ctbk.monthly import Reducer, BKT
-from ctbk.stations.meta_hists import StationMetaHists
 
 
 class StationMetaHist(Reducer):
-    SRC_CLS = StationMetaHists
-    ROOT = f's3://{BKT}/stations/llname_hists/all'
+    ROOT = f'{BKT}/stations/llname_hists/all'
+    SRC_CLS = NormalizedMonths
 
-    @cached_property
-    def inputs_df(self):
-        df = self.src.listdir_df
-        df['src'] = 's3://' + df.name
-        df = (
-            sxs(
-                df.name.str.extract(r'(?P<month>\d{6})\.parquet')['month'].dropna().apply(Month),
-                df.src,
-            )
-            .sort_values('month')
+    def reduce(self, df):
+        columns = {
+            'Start Station ID': 'Station ID',
+            'Start Station Name': 'Station Name',
+            'Start Station Latitude': 'Latitude',
+            'Start Station Longitude': 'Longitude',
+        }
+        starts = df[columns.keys()].rename(columns=columns)
+        starts['Start'] = True
+
+        columns = {
+            'End Station ID': 'Station ID',
+            'End Station Name': 'Station Name',
+            'End Station Latitude': 'Latitude',
+            'End Station Longitude': 'Longitude',
+        }
+        ends = df[columns.keys()].rename(columns=columns)
+        ends['Start'] = False
+
+        station_entries = pd.concat([starts, ends])
+        stations_hist = (
+            station_entries
+                .groupby(['Station ID', 'Station Name', 'Latitude', 'Longitude'])
+                .size()
+                .rename('count')
+                .reset_index()
         )
-        return df
+        return stations_hist
 
-    def compute(self, src_dfs):
-        srcs_df = concat(src_dfs)
+    def compute(self, combined_df):
         return (
-            srcs_df
+            combined_df
                 .groupby(['Station ID', 'Station Name', 'Latitude', 'Longitude'])
                 ['count']
                 .sum()

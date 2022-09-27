@@ -1,14 +1,12 @@
-import pandas as pd
-
-from ctbk import MonthsDataset, cached_property
-
-TRIPDATA_BKT = 'tripdata'
-TRIPDATA_URL = f's3://{TRIPDATA_BKT}'
+from ctbk import MonthsDataset, Monthy, Month
 
 
 class Tripdata(MonthsDataset):
-    ROOT = TRIPDATA_URL
+    ROOT = 'tripdata'
+    RGX = r'^(?:(?P<region>JC)-)?(?P<month>\d{6})[ \-]citi?bike-tripdata?(?P<csv>\.csv)?(?P<zip>\.zip)?$'
 
-    @cached_property
-    def inputs_df(self):
-        return pd.DataFrame(self.fs.listdir())
+    def outputs(self, start: Monthy = None, end: Month = None, rgx=None, endswith=None):
+        df = super().outputs(start, end, rgx, endswith)
+        df = df.dropna(subset=['month']).astype({ 'month': int })
+        df['region'] = df['region'].fillna('NYC')
+        return df
