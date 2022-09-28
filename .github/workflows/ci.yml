@@ -25,14 +25,14 @@ jobs:
     - name: Install Python dependencies
       run: pip install -r requirements.txt
     - name: Unzip+Cache CSVs
-      run: python ctbk/csvs.py
+      run: python ctbk/csvs.py --s3
     - name: Join regions, convert to Parquet
-      run: python ctbk/normalized.py
+      run: python ctbk/normalized.py --s3
     - name: Compute station name / latlng histograms
-      run: python ctbk/stations/meta_hist.py
+      run: python ctbk/stations/meta_hist.py --s3
     - name: Compute station name / latlng histograms
-      run: python ctbk/stations/modes.py
+      run: python ctbk/stations/modes.py --s3
     - name: Aggregate counts by (month, station-pair)
-      run: python ctbk/group_counts.py -seGBTD
+      run: python ctbk/group_counts.py --s3 -seGBTD
     - name: Aggregate counts by (month, region, gender, user type, rideable type)
-      run: python ctbk/group_counts.py --email ${{ secrets.MAIL_TO }}
+      run: python ctbk/group_counts.py --s3 --email ${{ secrets.MAIL_TO }}
