@@ -128,14 +128,18 @@ class Dataset:
     def task_df(self, start: Monthy = None, end: Monthy = None):
         return self.src.outputs(start=start, end=end)
 
-    def outputs(self, start: Monthy = None, end: Month = None):
+    @cached_property
+    def parsed_basenames(self):
         df = self.listdir_df
         basenames = df.name.apply(basename)
 
         if not self.RGX:
             raise RuntimeError('No regex found for parsing output paths')
 
-        df = sxs(basenames.str.extract(self.RGX), df)
+        return sxs(basenames.str.extract(self.RGX), df)
+
+    def outputs(self, start: Monthy = None, end: Month = None):
+        df = self.parsed_basenames
         df['month'] = df['month'].apply(Month)
         if start and end:
             df = df[(start <= df.month) & (df.month < end)]
