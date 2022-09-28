@@ -132,8 +132,8 @@ class NormalizedMonths(MonthsDataset):
     RGX = '(?P<month>\\d{6})\\' + PARQUET_EXTENSION
 
     def task_df(self, start: Monthy = None, end: Monthy = None):
-        df = self.src.parsed_outputs(start=start, end=end)
-        df['srcs'] = df[['region', 'src']].to_dict('records')
+        df = self.src.outputs(start=start, end=end)
+        df['srcs'] = sxs(df.region, df.name.rename('src')).to_dict('records')
         df = df.groupby('month')['srcs'].apply(list).reset_index()
         df['dst'] = df['month'].apply(lambda m: f'{self.root}/{m}{PARQUET_EXTENSION}')
         return df
