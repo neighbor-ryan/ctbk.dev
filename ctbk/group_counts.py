@@ -28,7 +28,7 @@ class GroupCounts(Reducer):
             option('-w/-W', '--weekday/--no-weekday', default=False),
             option('-h/-H', '--hour/--no-hour', default=False),
             option('--sort-agg-keys/--no-sort-agg-keys'),
-            option('-e', '--email', help='Send email about outcome, from MAIL_USERNAME/MAIL_PASSWORD to this address'),
+            option('--email', help='Send email about outcome, from MAIL_USERNAME/MAIL_PASSWORD to this address'),
             option('--smtp', help='SMTP server URL'),
             option('--sql/--no-sql', default=True, help=f'Write a SQLite version of the output data (to default table {cls.TBL})'),
             option('--tbl', '--table', help=f'Write a SQLite version of the output data to this table name (default: {cls.TBL})'),
