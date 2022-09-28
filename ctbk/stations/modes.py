@@ -3,8 +3,8 @@ from pandas import Series
 from sys import stderr
 from utz import sxs
 
-from .meta_hist import StationMetaHist
-from ..util import Month, Monthy
+from ctbk.stations.meta_hist import StationMetaHist
+from ctbk.util import Month, Monthy
 from ctbk.monthly import BKT, MonthsDataset, GENESIS
 
 
