@@ -23,7 +23,7 @@ jobs:
         echo "MAIL_FROM=${{ secrets.MAIL_USERNAME }}" >> $GITHUB_ENV
         echo "MAIL_PSWD=${{ secrets.MAIL_PASSWORD }}" >> $GITHUB_ENV
     - name: Install Python dependencies
-      run: pip install -r requirements.txt
+      run: pip install -e .
     - name: Unzip+Cache CSVs
       run: python ctbk/csvs.py --s3
     - name: Join regions, convert to Parquet
