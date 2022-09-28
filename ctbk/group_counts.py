@@ -1,17 +1,38 @@
 #!/usr/bin/env python
 
-import click
+from click import option
 from utz import *
 
 from ctbk import NormalizedMonths
-from ctbk.monthly import Reducer, BKT, PARQUET_EXTENSION
-
-TBL = 'agg'
+from ctbk.monthly import Reducer, BKT, PARQUET_EXTENSION, SQLITE_EXTENSION
 
 
 class GroupCounts(Reducer):
     SRC_CLS = NormalizedMonths
     ROOT = f'{BKT}/aggregated'
+    TBL = 'agg'
+
+    @classmethod
+    def cli_opts(cls):
+        return super().cli_opts() + [
+            option('-c/-C', '--counts/--no-counts', default=True),
+            option('-d/-D', '--durations/--no-durations', default=True),
+            option('-s/-S', '--start-station/--no-start-station', default=False),
+            option('-e/-E', '--end-station/--no-end-station', default=False),
+            option('-g/-G', '--gender/--no-gender', default=True),
+            option('-r/-R', '--region/--no-region', default=True),
+            option('-t/-T', '--user-type/--no-user-type', default=True),
+            option('-b/-B', '--rideable-type/--no-rideable-type', default=True),
+            option('-y/-Y', '--year/--no-year', default=True),
+            option('-m/-M', '--month/--no-month', default=True),
+            option('-w/-W', '--weekday/--no-weekday', default=False),
+            option('-h/-H', '--hour/--no-hour', default=False),
+            option('--sort-agg-keys/--no-sort-agg-keys'),
+            option('-e', '--email', help='Send email about outcome, from MAIL_USERNAME/MAIL_PASSWORD to this address'),
+            option('--smtp', help='SMTP server URL'),
+            option('--sql/--no-sql', default=True, help=f'Write a SQLite version of the output data (to default table {cls.TBL})'),
+            option('--tbl', '--table', help=f'Write a SQLite version of the output data to this table name (default: {cls.TBL})'),
+        ]
 
     def __init__(
             self,
@@ -31,6 +52,10 @@ class GroupCounts(Reducer):
             durations=True,
             # Misc
             sort_agg_keys=True,
+            email=None,
+            smtp=None,
+            sql=False,
+            tbl=None,
             **kwargs
     ):
         self.year = year
@@ -46,25 +71,13 @@ class GroupCounts(Reducer):
         self.counts = counts
         self.durations = durations
         self.sort_agg_keys = sort_agg_keys
+        self.email = email
+        self.smtp = smtp
+        if tbl:
+            sql = True
+        self.sql = sql
+        self.tbl = tbl or self.TBL
         super().__init__(**kwargs)
-
-    @classmethod
-    def cli_opts(cls):
-        return super().cli_opts() + [
-            click.option('-c/-C', '--counts/--no-counts', default=True),
-            click.option('-d/-D', '--durations/--no-durations', default=True),
-            click.option('-s/-S', '--start-station/--no-start-station', default=True),
-            click.option('-e/-E', '--end-station/--no-end-station', default=True),
-            click.option('-g/-G', '--gender/--no-gender', default=True),
-            click.option('-r/-R', '--region/--no-region', default=True),
-            click.option('-t/-T', '--user-type/--no-user-type', default=True),
-            click.option('-b/-B', '--rideable-type/--no-rideable-type', default=True),
-            click.option('-y/-Y', '--year/--no-year', default=True),
-            click.option('-m/-M', '--month/--no-month', default=True),
-            click.option('-w/-W', '--weekday/--no-weekday', default=False),
-            click.option('-h/-H', '--hour/--no-hour', default=False),
-            click.option('--sort-agg-keys/--no-sort-agg-keys'),
-        ]
 
     @property
     def agg_keys(self):
@@ -171,6 +184,98 @@ class GroupCounts(Reducer):
             axis=1
         )
         return counts
+
+    def convert_one(self, task, overwrite: bool = False, **kwargs):
+        result = super().convert_one(task, overwrite=overwrite, **kwargs)
+        if result.did_write:
+            dst = result.dst
+            all_dst = result.attrs.get('all_dst')
+            written_urls = [dst]
+            if all_dst:
+                written_urls.append(all_dst)
+            if self.sql:
+                df = result.value
+                if not isinstance(df, pd.DataFrame):
+                    stderr.write(f"result value is not a DataFrame, can't write SQLite db: {df}\n")
+                else:
+                    pqt_dsts = [ dst ]
+                    if all_dst:
+                        pqt_dsts.append(all_dst)
+                    for pqt_dst in pqt_dsts:
+                        db_dst = splitext(pqt_dst)[0] + SQLITE_EXTENSION
+                        if self.fs.exists(db_dst) and not overwrite:
+                            print(f'db exists, skipping: {db_dst}')
+                            continue
+                        if self.fs.protocol == 'file':
+                            con = f'sqlite:///{db_dst}'
+                            if_exists = 'replace' if overwrite else 'fail'
+                            df.to_sql(self.tbl, con, if_exists=if_exists, index=False)
+                        else:
+                            with TemporaryDirectory() as tmpdir:
+                                path = f'{tmpdir}/{basename(db_dst)}'
+                                con = f'sqlite:///{path}'
+                                df.to_sql(self.tbl, con, index=False)
+                                with open(path, 'rb') as i, self.fs.open(db_dst, 'wb') as o:
+                                    shutil.copyfileobj(i, o)
+                        written_urls.append(db_dst)
+            if self.email:
+                self.maybe_email(written_urls)
+        return result
+
+    def maybe_email(self, written_urls):
+        email, smtp = self.email, self.smtp
+        if written_urls and (email or smtp):
+            From = env.get('MAIL_FROM')
+            password = env.get('MAIL_PSWD')
+            if not From:
+                raise Exception('MAIL_FROM env var missing')
+            if not password:
+                raise Exception('MAIL_PSWD env var missing')
+            if not email:
+                raise Exception('No "To" email address found')
+            if not smtp:
+                if From.endswith('@gmail.com'):
+                    smtp = 'smtp.gmail.com:587'
+                else:
+                    raise Exception('No SMTP URL found')
+            parsed = urlparse(smtp)
+            if parsed.scheme not in {'http', 'https'}:
+                parsed = urlparse(f'https://{smtp}')
+            smtp_hostname = parsed.hostname
+            smtp_port = parsed.port or 587
+
+            html, text = self.build_email(written_urls)
+
+            from send_email import send_email
+            send_email(
+                From=From, To=email,
+                smtp_hostname=smtp_hostname, smtp_port=smtp_port,
+                password=password,
+                Subject='ctbk.dev aggregation result',
+                html=html, text=text,
+            )
+            print('Emailed!')
+
+    @staticmethod
+    def build_email(written_urls):
+        from html_dsl.common import HTML, BODY, DIV, P, UL, LI, A
+        if written_urls:
+            urls_str = "\n- ".join(written_urls)
+            text = f'''Wrote:\n- {urls_str}'''
+            html = DIV[
+                P['Wrote:'],
+                P[UL[[ LI[url] for url in written_urls ]]],
+                P[
+                    'See ', A(href='https://ctbk.s3.amazonaws.com/index.html#/aggregated?s=50')['s3://ctbk/aggregated/'],
+                    ' and ', A(href='https://ctbk.dev')['ctbk.dev'],
+                ],
+            ]
+        else:
+            text = 'No files written.'
+            html = P['No files written']
+
+        html = HTML[BODY[html]]
+        return str(html), text
 
 
 if __name__ == '__main__':

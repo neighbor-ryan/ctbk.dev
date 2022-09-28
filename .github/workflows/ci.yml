@@ -9,29 +9,30 @@ jobs:
   daily:
     runs-on: ubuntu-latest
     steps:
-    - name: Check out repo
-      uses: actions/checkout@v2
-    - name: Set up Python
-      uses: actions/setup-python@v2
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v2
       with:
-        python-version: 3.8
-    - uses: actions/cache@v2
-      name: Configure pip caching
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+        python-version: 3.9
+        cache: pip
+    - name: Set env/secret vars
+      run: |
+        echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
+        echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
+        echo "AWS_DEFAULT_REGION=us-east-1" >> $GITHUB_ENV
+        echo "GIT_BRANCH=${{ github.event.pull_request && github.head_ref || github.ref_name }}" >> $GITHUB_ENV
+        echo "MAIL_FROM=${{ secrets.MAIL_USERNAME }}" >> $GITHUB_ENV
+        echo "MAIL_PSWD=${{ secrets.MAIL_PASSWORD }}" >> $GITHUB_ENV
     - name: Install Python dependencies
-      run: |
-        pip install -r requirements.txt
-    - name: Unzip+Cache CSVs, convert to Parquet, aggregate counts
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        MAIL_FROM: ${{ secrets.MAIL_USERNAME }}
-        MAIL_PSWD: ${{ secrets.MAIL_PASSWORD }}
-      run: |
-        python to_csv.py
-        python normalize_months.py
-        python group_counts.py --email ${{ secrets.MAIL_TO }}
+      run: pip install -r requirements.txt
+    - name: Unzip+Cache CSVs
+      run: python ctbk/csvs.py
+    - name: Join regions, convert to Parquet
+      run: python ctbk/normalized.py
+    - name: Compute station name / latlng histograms
+      run: python ctbk/stations/meta_hist.py
+    - name: Compute station name / latlng histograms
+      run: python ctbk/stations/modes.py
+    - name: Aggregate counts by (month, station-pair)
+      run: python ctbk/group_counts.py -seGBTD
+    - name: Aggregate counts by (month, region, gender, user type, rideable type)
+      run: python ctbk/group_counts.py --email ${{ secrets.MAIL_TO }}

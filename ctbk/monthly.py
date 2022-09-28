@@ -2,23 +2,21 @@ from os import cpu_count
 from os.path import basename, splitext
 
 import click
-from joblib import Parallel, delayed
-from typing import Type, Literal
-
-from sys import stderr
-
 import fsspec
 import pandas as pd
 from abc import abstractmethod
 from inspect import getfullargspec
+from joblib import Parallel, delayed
+from sys import stderr
+from typing import Type, Literal
 from urllib.parse import urlparse
-from utz import sxs, singleton
+from utz import sxs
 
 from ctbk import cached_property, Month, contexts, Monthy
 from ctbk.util.convert import Result, run, BadKey, BAD_DST, OVERWROTE, FOUND, WROTE
 
-
 PARQUET_EXTENSION = '.parquet'
+SQLITE_EXTENSION = '.db'
 GENESIS = Month(2013, 6)
 RGX = r'(?:(?P<region>JC)-)?(?P<year>\d{4})(?P<month>\d{2})-citibike-tripdata.csv'
 BKT = 'ctbk'
@@ -27,22 +25,41 @@ Error = Literal["warn", "error"]
 
 
 class Dataset:
-    NAMESPACE = 's3'  # by default, operate on a local directory called "s3", which mirrors the "s3://" namespace
+    NAMESPACE = 's3/'  # by default, operate on a local directory called "s3", which mirrors the "s3://" namespace
     ROOT: str = None
     SRC_CLS: Type['Dataset'] = None
     RGX = None
 
     def __init__(
             self,
+            namespace: str = None,
             root: str = None,
             src: 'Dataset' = None,
     ):
+        # Try to infer whether a scheme/namespace was passed in `namespace` or already prepended to `root`
+        if namespace:
+            self.namespace = namespace
+            root = root or self.default_root
+            self.root = f'{namespace}{root}'
+        else:
+            self.namespace = self.NAMESPACE
+            if root:
+                parsed = urlparse(root)
+                if parsed.scheme:
+                    # `root` came in as a URL
+                    self.root = root
+                else:
+                    self.root = f'{self.namespace}{root}'
+            else:
+                self.root = f'{self.namespace}{self.default_root}'
+
         self.src = src or (self.SRC_CLS and self.SRC_CLS())
-        if root is None:
-            if self.ROOT is None:
-                raise RuntimeError('root/ROOT required')
-            root = f'{self.NAMESPACE}/{self.ROOT}'
-        self.root = root
+
+    @property
+    def default_root(self):
+        if self.ROOT is None:
+            raise RuntimeError('root/ROOT required')
+        return self.ROOT
 
     def path(self, start=None, end=None, extension=PARQUET_EXTENSION, root=None):
         root = root or self.root
@@ -137,6 +154,8 @@ class Dataset:
             click.option('-f', '--overwrite', count=True, help='When set, write files even if they already exist'),
             click.option('--start', help='Month to process from (in YYYYMM form)'),
             click.option('--end', help='Month to process until (in YYYYMM form; exclusive)'),
+            click.option('--namespace', help='Prepend to "roots"/paths to obtain valid URLs, e.g. "s3://" (default: "s3" for local folder mimicking S3 tree)'),
+            click.option('--s3', is_flag=True, help='Set --namespace to "s3://"'),
         ]
 
     @classmethod
@@ -156,10 +175,16 @@ class Dataset:
             overwrite,
             start,
             end,
+            namespace,
+            s3,
             **kwargs,
     ):
-        src = cls.SRC_CLS(root=src_url or root)
-        self = cls(root=dst_url or root, src=src, **kwargs)
+        if s3:
+            if namespace and namespace != 's3://':
+                raise ValueError(f'`--s3` conflicts with `--namespace {namespace}`')
+            namespace = 's3://'
+        src = cls.SRC_CLS(namespace=namespace, root=src_url or root)
+        self = cls(namespace=namespace, root=dst_url or root, src=src, **kwargs)
         results = self.convert(start=start, end=end, overwrite=overwrite, parallel=parallel)
         if isinstance(results, Result):
             print(results)
@@ -401,8 +426,10 @@ class Reducer(Dataset):
             print(f'Writing DataFrame to {dst}')
             value.to_parquet(dst)
 
+        attrs = {}
         if latest:
             print(f'Copying {dst} to {all_dst}')
             self.fs.copy(dst, all_dst, recursive=True)
+            attrs['all_dst'] = all_dst
 
-        return Result(msg=msg, status=status, dst=dst, value=value)
+        return Result(msg=msg, status=status, dst=dst, value=value, attrs=attrs)

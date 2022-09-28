@@ -25,6 +25,7 @@ class Result:
     status: str
     dst: Optional[str] = None
     value: Optional[any] = None
+    attrs: dict = None
 
     @property
     def did_write(self):
