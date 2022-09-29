@@ -136,22 +136,27 @@ class GroupCounts(Reducer):
         sum_keys = self.sum_keys
         group_keys = []
         if agg_keys.get('r'):
-            df['Region'] = df['Start Region']  # assign rides to the region they originated in
+            df = df.rename(columns={'Start Region': 'Region'})  # assign rides to the region they originated in
             group_keys.append('Region')
         if agg_keys.get('y'):
-            df['Start Year'] = df['Start Time'].dt.year
+            if 'Start Year' not in df:
+                df['Start Year'] = df['Start Time'].dt.year
             group_keys.append('Start Year')
         if agg_keys.get('m'):
-            df['Start Month'] = df['Start Time'].dt.month
+            if 'Start Month' not in df:
+                df['Start Month'] = df['Start Time'].dt.month
             group_keys.append('Start Month')
         if agg_keys.get('d'):
-            df['Start Day'] = df['Start Time'].dt.day
+            if 'Start Day' not in df:
+                df['Start Day'] = df['Start Time'].dt.day
             group_keys.append('Start Day')
         if agg_keys.get('w'):
-            df['Start Weekday'] = df['Start Time'].dt.weekday
+            if 'Start Weekday' not in df:
+                df['Start Weekday'] = df['Start Time'].dt.weekday
             group_keys.append('Start Weekday')
         if agg_keys.get('h'):
-            df['Start Hour'] = df['Start Time'].dt.hour
+            if 'Start Hour' not in df:
+                df['Start Hour'] = df['Start Time'].dt.hour
             group_keys.append('Start Hour')
         if agg_keys.get('g'):
             group_keys.append('Gender')
@@ -186,6 +191,9 @@ class GroupCounts(Reducer):
             axis=1
         )
         return counts
+
+    def combine(self, reduced_dfs):
+        return self.reduce(pd.concat(reduced_dfs))
 
     def convert_one(self, task, overwrite: bool = False, **kwargs):
         result = super().convert_one(task, overwrite=overwrite, **kwargs)
