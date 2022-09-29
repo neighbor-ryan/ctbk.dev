@@ -32,6 +32,8 @@ jobs:
       run: python ctbk/stations/meta_hist.py --s3
     - name: Compute canonical station names, latlngs
       run: python ctbk/stations/modes.py --s3
+    - name: Aggregate counts by station-pair
+      run: python ctbk/group_counts.py --s3 -se -c
     - name: Aggregate counts by (month, station-pair)
       run: python ctbk/group_counts.py --s3 -ymrse -c
     - name: Aggregate counts by (month, region, gender, user type, rideable type)
