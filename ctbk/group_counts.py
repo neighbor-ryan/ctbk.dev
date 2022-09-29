@@ -184,12 +184,13 @@ class GroupCounts(Reducer):
                 .sum()
                 .reset_index()
         )
-        counts['Month'] = counts.apply(
-            lambda r: to_dt(
-                '%d-%02d' % (int(r['Start Year']), int(r['Start Month']))
-            ),
-            axis=1
-        )
+        if agg_keys.get('y') and agg_keys.get('m'):
+            counts['Month'] = counts.apply(
+                lambda r: to_dt(
+                    '%d-%02d' % (int(r['Start Year']), int(r['Start Month']))
+                ),
+                axis=1
+            )
         return counts
 
     def combine(self, reduced_dfs):
