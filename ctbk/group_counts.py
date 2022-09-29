@@ -15,18 +15,20 @@ class GroupCounts(Reducer):
     @classmethod
     def cli_opts(cls):
         return super().cli_opts() + [
+            # Features to group by
+            option('-y/-Y', '--year/--no-year'),
+            option('-m/-M', '--month/--no-month'),
+            option('-w/-W', '--weekday/--no-weekday'),
+            option('-h/-H', '--hour/--no-hour'),
+            option('-r/-R', '--region/--no-region'),
+            option('-g/-G', '--gender/--no-gender'),
+            option('-t/-T', '--user-type/--no-user-type'),
+            option('-b/-B', '--rideable-type/--no-rideable-type'),
+            option('-s/-S', '--start-station/--no-start-station'),
+            option('-e/-E', '--end-station/--no-end-station'),
+            # Features to aggregate
             option('-c/-C', '--counts/--no-counts', default=True),
-            option('-d/-D', '--durations/--no-durations', default=True),
-            option('-s/-S', '--start-station/--no-start-station', default=False),
-            option('-e/-E', '--end-station/--no-end-station', default=False),
-            option('-g/-G', '--gender/--no-gender', default=True),
-            option('-r/-R', '--region/--no-region', default=True),
-            option('-t/-T', '--user-type/--no-user-type', default=True),
-            option('-b/-B', '--rideable-type/--no-rideable-type', default=True),
-            option('-y/-Y', '--year/--no-year', default=True),
-            option('-m/-M', '--month/--no-month', default=True),
-            option('-w/-W', '--weekday/--no-weekday', default=False),
-            option('-h/-H', '--hour/--no-hour', default=False),
+            option('-d/-D', '--durations/--no-durations'),
             option('--sort-agg-keys/--no-sort-agg-keys'),
             option('--email', help='Send email about outcome, from MAIL_USERNAME/MAIL_PASSWORD to this address'),
             option('--smtp', help='SMTP server URL'),
