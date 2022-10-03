@@ -1,0 +1,161 @@
+import {useRouter} from "next/router";
+import {useEffect, useState} from "react";
+import {SetSet, useSet} from "./use-set";
+import {HandleUnexpectedValue, returnDefaultOrError} from "../search-params";
+import {QueryParamConfig} from "use-query-params";
+import _ from "lodash";
+
+export const pathnameRegex = /[^?#]+/u;
+
+export type Param<T> = {
+    encode: (t: T) => string | undefined
+    decode: (v: string | undefined) => T
+    use?: (init: Set<T>) => [Set<T>, SetSet<T>]
+}
+
+export function floatParam(init: number): Param<number> {
+    return {
+        encode: v => v === init ? undefined : v.toString(),
+        decode: v => v ? parseFloat(v) : init
+    }
+}
+
+const { entries, fromEntries, keys, } = Object
+
+export function enumMultiParam<T extends string>(
+    init: T[],
+    mapper: { [k in T]: string } | [ T, string ][],
+    delim?: string,
+): Param<T[]> {
+    const delimiter: string = delim === undefined ? '_' : delim
+    const t2s: { [k in T]: string } = (mapper instanceof Array) ? fromEntries(mapper) as { [k in T]: string } : mapper
+    const s2t: { [key: string]: T } = fromEntries(entries(t2s).map(([ k, v, ]) => [ v, k, ]))
+
+    function verify(values: string[]): T[] {
+        return Array.from(values).filter(
+            (v): v is T => {
+                if (v in t2s) {
+                    return true
+                } else {
+                    console.warn(`Invalid value: ${v} not in ${keys(t2s).join(", ")}`)
+                    return false
+                }
+            }
+        )
+    }
+
+    const encode = (values: T[]) => {
+        return verify(values).map(v => t2s[v]).join(delimiter)
+    }
+
+    const encodedInit = encode(init)
+
+    return {
+        encode: values => {
+            const enc = encode(values)
+            if (enc === encodedInit) return undefined
+            return enc
+        },
+        decode: s => {
+            if (!s && s !== '') {
+                return init
+            }
+            let values = s.split(delimiter).filter(v => {
+                    if (v in s2t) {
+                        return true
+                    } else {
+                        console.warn(`Unrecognized value: ${v} not in ${keys(s2t).join(",")}`)
+                        return false
+                    }
+                }).map(v => s2t[v])
+            values = verify(values)
+            return values
+        },
+        // use: useSet,
+    }
+}
+
+export function enumParam<T extends string>(
+    init: T,
+    mapper: { [k in T]: string } | [ T, string ][]
+): Param<T> {
+    const t2s: { [k in T]: string } = (mapper instanceof Array) ? fromEntries(mapper) as { [k in T]: string } : mapper
+    const s2t: { [key: string]: T } = fromEntries(entries(mapper).map(([ k, v, ]) => [ v, k, ]))
+    return {
+        encode(t: T): string | undefined {
+            if (t == init) return undefined
+            return t2s[t];
+        },
+        decode(v: string | undefined): T {
+            if (v === undefined) return init
+            if (!(v in s2t)) {
+                console.warn(`Invalid enum: ${v} not in ${keys(s2t).join(",")}`)
+                return init
+            }
+            return s2t[v]
+        },
+    }
+}
+
+export const boolParam: Param<boolean> = {
+    encode(t: boolean): string | undefined {
+        return t ? '' : undefined;
+    },
+    decode(v: string | undefined): boolean {
+        return v !== undefined;
+    },
+}
+
+export function numberArrayParam(
+    defaultValue: number[] = [],
+): Param<number[]> {
+    const eq = _.isEqual
+    return {
+        encode(value: number[]): string | undefined {
+            if (eq(value, defaultValue)) return undefined
+            return value.map(v => v.toString()).join(',')
+        },
+        decode(value: string | undefined): number[] {
+            if (value === undefined) return defaultValue
+            return value.split(',').map(parseInt)
+        },
+    }
+}
+
+export function parseQueryParams({ params }: { params: { [k: string]: Param<any> }}) {
+    const router = useRouter()
+    const searchStr = router.asPath.replace(pathnameRegex, '')
+    const search = Object.fromEntries(new URLSearchParams(searchStr).entries())
+    const state = Object.fromEntries(
+        Object.entries(params).map(([ k, param ]) => {
+            const [ val, set ] = (param?.use || useState)(param.decode(search[k]))
+            return [ k, { val, set, param } ]
+        })
+    )
+    const stateValues = Object.values(state).map(({ val }) => val)
+
+    const match = router.asPath.match(pathnameRegex);
+    const pathname = match ? match[0] : router.asPath;
+
+    useEffect(
+        () => {
+            const query: {[k: string]: string} = {}
+            Object.entries(state).map(([ k, { val, param, } ]) => {
+                const s = param.encode(val)
+                if (s !== undefined) {
+                    query[k] = s
+                }
+            })
+            const search = new URLSearchParams(query).toString()
+            const hash = ''
+            router.replace(
+                { pathname: router.pathname, hash, search},
+                { pathname, hash, search, },
+                { shallow: true, scroll: false, }
+            )
+        },
+        [ ...stateValues, pathname, ]
+    )
+
+    return Object.fromEntries(Object.entries(state).map(([ k, { val, set, }]) => [ k, [ val, set, ] ]))
+}

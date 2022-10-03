@@ -4,10 +4,11 @@ from click import option
 from utz import *
 
 from ctbk import NormalizedMonths
+from ctbk.aggregator import Aggregator
 from ctbk.monthly import Reducer, BKT, PARQUET_EXTENSION, SQLITE_EXTENSION
 
 
-class GroupCounts(Reducer):
+class GroupCounts(Aggregator, Reducer):
     SRC_CLS = NormalizedMonths
     ROOT = f'{BKT}/aggregated'
     TBL = 'agg'
@@ -15,64 +16,20 @@ class GroupCounts(Reducer):
     @classmethod
     def cli_opts(cls):
         return super().cli_opts() + [
-            # Features to group by
-            option('-y/-Y', '--year/--no-year'),
-            option('-m/-M', '--month/--no-month'),
-            option('-w/-W', '--weekday/--no-weekday'),
-            option('-h/-H', '--hour/--no-hour'),
-            option('-r/-R', '--region/--no-region'),
-            option('-g/-G', '--gender/--no-gender'),
-            option('-t/-T', '--user-type/--no-user-type'),
-            option('-b/-B', '--rideable-type/--no-rideable-type'),
-            option('-s/-S', '--start-station/--no-start-station'),
-            option('-e/-E', '--end-station/--no-end-station'),
-            # Features to aggregate
-            option('-c/-C', '--counts/--no-counts', default=True),
-            option('-d/-D', '--durations/--no-durations'),
-            option('--sort-agg-keys/--no-sort-agg-keys'),
             option('--email', help='Send email about outcome, from MAIL_USERNAME/MAIL_PASSWORD to this address'),
             option('--smtp', help='SMTP server URL'),
-            option('--sql/--no-sql', default=True, help=f'Write a SQLite version of the output data (to default table {cls.TBL})'),
+            option('--sql/--no-sql', help=f'Write a SQLite version of the output data (to default table {cls.TBL})'),
             option('--tbl', '--table', help=f'Write a SQLite version of the output data to this table name (default: {cls.TBL})'),
         ]
 
     def __init__(
             self,
-            # Features to group by
-            year=True,
-            month=True,
-            weekday=False,
-            hour=False,
-            region=True,
-            gender=True,
-            user_type=True,
-            rideable_type=True,
-            start_station=False,
-            end_station=False,
-            # Features to aggregate
-            counts=True,
-            durations=True,
-            # Misc
-            sort_agg_keys=True,
             email=None,
             smtp=None,
             sql=False,
             tbl=None,
             **kwargs
     ):
-        self.year = year
-        self.month = month
-        self.weekday = weekday
-        self.hour = hour
-        self.region = region
-        self.gender = gender
-        self.user_type = user_type
-        self.rideable_type = rideable_type
-        self.start_station = start_station
-        self.end_station = end_station
-        self.counts = counts
-        self.durations = durations
-        self.sort_agg_keys = sort_agg_keys
         self.email = email
         self.smtp = smtp
         if tbl:
@@ -80,37 +37,6 @@ class GroupCounts(Reducer):
         self.sql = sql
         self.tbl = tbl or self.TBL
         super().__init__(**kwargs)
-
-    @property
-    def agg_keys(self):
-        agg_keys = {
-            'y': self.year,
-            'm': self.month,
-            'w': self.weekday,
-            'h': self.hour,
-            'r': self.region,
-            'g': self.gender,
-            't': self.user_type,
-            'b': self.rideable_type,
-            's': self.start_station,
-            'e': self.end_station,
-        }
-        return { k: v for k, v in agg_keys.items() if v }
-
-    @property
-    def agg_keys_label(self):
-        agg_keys = self.agg_keys
-        if self.sort_agg_keys:
-            agg_keys = dict(sorted(list(agg_keys.items()), key=lambda t: t[0]))
-        return "".join(agg_keys.keys())
-
-    @property
-    def sum_keys(self):
-        return { k: v for k, v in { 'c': self.counts, 'd': self.durations, }.items() if v }
-
-    @property
-    def sum_keys_label(self):
-        return ''.join([ label for label, flag in self.sum_keys.items() ])
 
     def reduced_df_path(self, month):
         pcs = [
@@ -120,16 +46,6 @@ class GroupCounts(Reducer):
         ]
         name = "_".join(pcs)
         return f'{self.root}/{name}{PARQUET_EXTENSION}'
-
-    def path(self, start=None, end=None, extension=PARQUET_EXTENSION, root=None):
-        pcs = [
-            self.agg_keys_label,
-            self.sum_keys_label,
-        ]
-        if start and end:
-            pcs += [f'{start}:{end}']
-        name = "_".join(pcs) + extension
-        return f'{root or self.root}/{name}'
 
     def reduce(self, df):
         agg_keys = self.agg_keys
@@ -171,10 +87,12 @@ class GroupCounts(Reducer):
 
         select_keys = []
         if sum_keys.get('c'):
-            df['Count'] = 1
+            if 'Count' not in df:
+                df['Count'] = 1
             select_keys.append('Count')
         if sum_keys.get('d'):
-            df['Duration'] = (df['Stop Time'] - df['Start Time']).dt.seconds
+            if 'Duration' not in df:
+                df['Duration'] = (df['Stop Time'] - df['Start Time']).dt.seconds
             select_keys.append('Duration')
 
         grouped = df.groupby(group_keys)

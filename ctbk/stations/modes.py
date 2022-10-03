@@ -1,3 +1,4 @@
+import pandas as pd
 from numpy import nan
 from pandas import Series
 from sys import stderr
@@ -55,10 +56,18 @@ class StationModes(MonthsDataset):
     SRC_CLS = StationMetaHist
     ROOT = f'{BKT}/stations/ids'
 
+    def output(self, start: Monthy = None, end: Month = None):
+        start, end = self.month_range(start, end)
+        ids_path = self.path(start=start, end=end)
+        return self.fs.info(ids_path)
+
+    def outputs(self, start: Monthy = None, end: Month = None):
+        output = self.output(start, end)
+        return pd.DataFrame([ output ])
+
     def task_list(self, start: Monthy = None, end: Monthy = None):
         latest = not start and not end
-        start = Month(start) if start else GENESIS
-        end = Month(end) or Month()
+        start, end = self.month_range(start, end)
         src = self.src.path(start, end)
         dst = self.path(start, end)
         task = { 'src': src, 'dst': dst, }

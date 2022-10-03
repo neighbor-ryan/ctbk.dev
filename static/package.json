@@ -1,45 +1,58 @@
 {
-  "dependencies": {
-    "assert": "^2.0.0",
-    "aws-sdk": "^2.1043.0",
-    "buffer": "^6.0.3",
-    "jquery": "^3.6.0",
-    "lodash": "^4.17.21",
-    "moment": "^2.29.1",
-    "node-fetch": "^3.1.0",
-    "plotly.js": "^2.3.0",
-    "process": "^0.11.10",
-    "react-dom": "^17.0.2",
-    "react-markdown": "^7.1.1",
-    "react-plotly.js": "^2.5.1",
-    "react-router-dom": "^6.0.2",
-    "react-tooltip": "^4.2.21",
-    "sql.js-httpvfs": "^0.8.8",
-    "stream": "^0.0.2",
-    "use-persisted-state": "^0.3.3",
-    "use-query-params": "^1.2.3"
-  },
-  "devDependencies": {
-    "@types/jquery": "^3.5.6",
-    "@types/lodash": "^4.14.177",
-    "@types/react": "^17.0.15",
-    "@types/react-dom": "^17.0.9",
-    "@types/react-plotly.js": "^2.5.0",
-    "@types/use-persisted-state": "^0.3.0",
-    "http-server": "^14.1.0",
-    "source-map-loader": "^3.0.0",
-    "ts-loader": "^9.1.2",
-    "typescript": "^4.2.4",
-    "webpack": "^5.36.2",
-    "webpack-cli": "^4.7.0"
-  },
-  "browser": {
-    "buffer": false
-  },
-  "scripts": {
-    "build": "node_modules/.bin/webpack",
-    "dev": "node_modules/.bin/webpack --mode=development -w",
-    "sync": "python sync.py",
-    "fix-mime-type": "./fix-mime-type.sh"
-  }
+    "name": "ctbk.dev",
+    "homepage": "https://ctbk.dev",
+    "version": "0.1.0",
+    "license": "MIT",
+    "author": "Ryan Williams <ryan@runsascoded.com",
+    "dependencies": {
+        "assert": "^2.0.0",
+        "aws-sdk": "^2.1043.0",
+        "buffer": "^6.0.3",
+        "jquery": "^3.6.0",
+        "lodash": "^4.17.21",
+        "moment": "^2.29.1",
+        "next": "^12.3.1",
+        "node-fetch": "^3.1.0",
+        "plotly.js": "^1.44.4",
+        "process": "^0.11.10",
+        "react-dom": "^17.0.2",
+        "react-markdown": "^7.1.1",
+        "react-plotly.js": "^2.5.1",
+        "react-router-dom": "^6.0.2",
+        "react-tooltip": "^4.2.21",
+        "sql.js-httpvfs": "^0.8.8",
+        "stream": "^0.0.2",
+        "use-persisted-state": "^0.3.3",
+        "use-query-params": "^1.2.3"
+    },
+    "devDependencies": {
+        "@types/jquery": "^3.5.6",
+        "@types/lodash": "^4.14.177",
+        "@types/react": "^17.0.15",
+        "@types/react-dom": "^17.0.9",
+        "@types/react-plotly.js": "^2.5.0",
+        "@types/use-persisted-state": "^0.3.0",
+        "http-server": "^14.1.0",
+        "source-map-loader": "^3.0.0",
+        "ts-loader": "^9.1.2",
+        "typescript": "^4.2.4",
+        "webpack": "^5.36.2",
+        "webpack-cli": "^4.7.0"
+    },
+    "browser": {
+        "buffer": false
+    },
+    "scripts": {
+        "dev": "next dev",
+        "build": "next build",
+        "export": "next build && next export",
+        "start": "next start"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/neighbor-ryan/ctbk.dev"
+    },
+    "bugs": {
+        "url": "https://github.com/neighbor-ryan/ctbk.dev/issues"
+    }
 }

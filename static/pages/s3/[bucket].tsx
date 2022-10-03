@@ -116,7 +116,7 @@ class S3Bucket {
     }
 }
 
-export function S3Tree({}) {
+export default function S3Tree({}) {
     const { bucket: bucketParam, key, } = useParams()
     const bucket = bucketParam || 'ctbk'
     console.log(`Initializing, bucket ${bucket} key ${key}`)

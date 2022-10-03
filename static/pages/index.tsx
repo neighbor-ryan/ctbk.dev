@@ -2,24 +2,22 @@ import React, {useEffect, useMemo, useState} from 'react';
 import ReactMarkdown from 'react-markdown'
 import ReactTooltip from 'react-tooltip';
 const Markdown = ReactMarkdown
-import Plot from 'react-plotly.js';
-import * as Plotly from "plotly.js";
-import {Shape} from "plotly.js";
-import {Checklist} from "./checklist";
-import {Radios} from "./radios";
-import {Checkbox} from "./checkbox";
-import {Worker} from "./worker";
-import {QueryParamConfig, useQueryParam} from 'use-query-params';
+import dynamic from 'next/dynamic'
+
+const Plot = dynamic(() => import("react-plotly.js"), { ssr: false,})
+// import Plot from 'react-plotly.js';
+const Plotly = dynamic(() => import("plotly.js"), { ssr: false,})
+// import * as Plotly from "plotly.js";
+// import {Shape} from "plotly.js";
+import {Checklist} from "../src/checklist";
+import {Radios} from "../src/radios";
+import {Checkbox} from "../src/checkbox";
 import createPersistedState from 'use-persisted-state';
 import moment from 'moment';
-import {
-    boolParam,
-    HandleUnexpectedValue,
-    returnDefaultOrError,
-    useEnumMultiParam,
-    useEnumQueryParam
-} from "./search-params";
 import _ from "lodash";
+import {boolParam, enumMultiParam, enumParam, numberArrayParam, parseQueryParams} from "../src/utils/params";
+import {DateRange2Dates, dateRangeParam} from "../src/date-range";
+import {DateRange} from "aws-sdk/clients/securityhub";
 
 const { entries, values, keys, fromEntries } = Object
 const Arr = Array.from
@@ -56,11 +54,9 @@ const NormalizeRideableType: { [k: string]: RideableType } = {
 type StackBy = 'None' | 'Region' | 'User Type' | 'Gender' | 'Rideable Type'
 const StackBys: [StackBy, string][] = [ ['None', 'n'], ['Region', 'r'], ['Gender','g'], ['User Type','u'], ['Rideable Type','r'], ]
 
-type DateRange = 'All' | '1y' | '2y' | '3y' | '4y' | '5y' | { start?: Date, end?: Date }
-
 type YAxis = 'Rides' | 'Ride minutes'
 const YAxes: [YAxis, string][] = [ ['Rides', 'r'], ['Ride minutes', 'm'], ]
-const yAxisLabelDict = {
+const yAxisLabelDict: { [k in YAxis]: { yAxis: string, title: string, hoverLabel: string } } = {
     'Rides': { yAxis: 'Total Rides', title: 'Citibike Rides per Month', hoverLabel: 'Rides' },
     'Ride minutes': { yAxis: 'Total Ride Minutes', title: 'Citibike Ride Minutes per Month', hoverLabel: 'Minutes', },
 }
@@ -178,9 +174,9 @@ function pad(num: number, size: number){
 }
 function darken(c: string, f = 0.5): string {
     return '#' + [
-        c.substr(1, 2),
-        c.substr(3, 2),
-        c.substr(5, 2)
+        c.substring(1, 3),
+        c.substring(3, 5),
+        c.substring(5, 7)
     ]
         .map((s) =>
             pad(
@@ -193,7 +189,7 @@ function darken(c: string, f = 0.5): string {
         .join('')
 }
 
-function vline(year: number): Partial<Shape> {
+function vline(year: number): Partial<Plotly.Shape> {
     const x: string = `${year-1}-12-20`;
     return {
         layer: 'below',
@@ -211,133 +207,70 @@ function vline(year: number): Partial<Shape> {
     }
 }
 
-const StartDate = moment('2013-06-01').toDate()
-const Date2Query = (d: Date | undefined) => d ? moment(d).format('YYMM') : ''
-const Query2Date = (s: string) => {
-    const year = `20${s.substring(0, 2)}`
-    const month = s.substring(2, 4)
-    return moment(`${year}-${month}-01`).toDate()
-}
-const DateRange2Dates = (dateRange: DateRange, end?: Date): { start: Date, end: Date, } => {
-    end = end ? end : new Date
-    if (dateRange == 'All') {
-        return { start: StartDate, end }
-    }
-    else if (typeof dateRange === 'string') {
-        let start: Date = new Date(end)
-        if (dateRange[dateRange.length - 1] != 'y') {
-            throw Error(`Unrecognized date range string: ${dateRange}`)
-        }
-        const numYears = parseInt(dateRange.substr(0, dateRange.length - 1))
-        start.setFullYear(start.getFullYear() - numYears)
-        console.log(`subtracted ${numYears} years: ${start}, ${end}`)
-        return { start, end }
-    } else {
-        const {start, end: e } = dateRange
-        return { start: start || StartDate, end: e || end }
-    }
+const DEFAULT_AGGREGATED_URL = 'https://ctbk.s3.amazonaws.com/aggregated/ymrgtb_cd.sqlite'
+
+export async function getStaticProps(context: any) {
+    return { props: { url: DEFAULT_AGGREGATED_URL } }
 }
 
-export function dateRangeParam(
-    {
-        defaultValue = 'All',
-        handleUnexpectedValue = "Warn",
-    }: {
-        defaultValue?: DateRange,
-        handleUnexpectedValue?: HandleUnexpectedValue,
-    } = {}
-): QueryParamConfig<DateRange> {
-    const eq = _.isEqual
-    return {
-        encode(value: DateRange): string | (string | null)[] | null | undefined {
-            if (eq(value, defaultValue)) return undefined
-            if (typeof value === 'string') return value
-            const {start, end} = value
-            return `${Date2Query(start)}-${Date2Query(end)}`
-        },
-        decode(value: string | (string | null)[] | null | undefined): DateRange {
-            if (value === undefined) return defaultValue
-            if (value === null) return returnDefaultOrError(value, 'All', handleUnexpectedValue)
-            if (typeof value === 'string') {
-                if (['All', '1y', '2y', '3y', '4y', '5y',].includes(value)) {
-                    return value as DateRange
-                } else {
-                    const [start, end] = value.split('-').map(d => d ? Query2Date(d) : undefined)
-                    return {start, end} as DateRange
-                }
-            } else {
-                return returnDefaultOrError(value, 'All', handleUnexpectedValue)
-            }
-        },
-        equals(l: DateRange, r: DateRange): boolean { return eq(l, r) }
-    }
-}
-
-export function numberArrayParam(
-    {
-        defaultValue = [],
-        handleUnexpectedValue = "Warn",
-    }: {
-        defaultValue?: number[],
-        handleUnexpectedValue?: HandleUnexpectedValue,
-    } = {}
-): QueryParamConfig<number[]> {
-    const eq = _.isEqual
-    return {
-        encode(value: number[]): string | (string | null)[] | null | undefined {
-            if (eq(value, defaultValue)) return undefined
-            return value.map(v => v.toString()).join(',')
-        },
-        decode(value: string | (string | null)[] | null | undefined): number[] {
-            if (value === undefined) return defaultValue
-            if (value === null) return returnDefaultOrError(value, defaultValue, handleUnexpectedValue)
-            if (typeof value === 'string') {
-                return value.split(',').map(parseInt)
-            } else {
-                const arrays: number[][] = value.map(v => this.decode(v))
-                return arrays[arrays.length - 1]
-            }
-        },
-        equals(l: number[], r: number[]): boolean { return eq(l, r) }
-    }
-}
-
-export function App({ url }: { url: string, }) {
-    const worker = useMemo(() => new Worker({ url, }), [ url, ])
+export default function App({ url }: { url: string, }) {
     const [ data, setData ] = useState<Row[] | null>(null)
 
-    const [ yAxis, setYAxis ] = useEnumQueryParam<YAxis>('y', YAxes)
-    const [ userType, setUserType ] = useEnumQueryParam<UserType>('u',UserTypes)
-    const [ stackBy, setStackBy ] = useEnumQueryParam<StackBy>('s', StackBys)
+    const params = {
+        y: enumParam('Rides', YAxes),
+        u: enumParam('All', UserTypes),
+        s: enumParam('None', StackBys),
+        pct: boolParam,
+        r: enumMultiParam(Regions, RegionQueryStrings),
+        g: enumMultiParam(Genders, GenderQueryStrings),
+        rt: enumMultiParam(RideableTypes, RideableTypeChars),
+        d: dateRangeParam(),
+        rolling: numberArrayParam([ 12 ]),
+    }
 
-    const [ stackRelative, setStackRelative ] = useQueryParam('pct', boolParam())
-
-    const [ regions, setRegions ] = useEnumMultiParam<Region>('r', { entries: RegionQueryStrings, defaultValue: Regions, delimiter: ''})
-    const [ genders, setGenders ] = useEnumMultiParam<Gender>('g', { entries: GenderQueryStrings, defaultValue: Genders, delimiter: '' })
-    const [ rideableTypes, setRideableTypes ] = useEnumMultiParam<RideableType>('rt', { entries: RideableTypeChars, defaultValue: RideableTypes })
-
-    const [ dateRange, setDateRange ] = useQueryParam<DateRange>('d', dateRangeParam())
-    const [ rollingAvgs, setRollingAvgs ] = useQueryParam<number[]>('rolling', numberArrayParam({ defaultValue: [12] }))
+    const {
+        y: [ yAxis, setYAxis ],
+        u: [ userType, setUserType ],
+        s: [ stackBy, setStackBy ],
+        pct: [ stackRelative, setStackRelative ],
+        r: [ regions, setRegions ],
+        g: [ genders, setGenders ],
+        rt: [ rideableTypes, setRideableTypes ],
+        d: [ dateRange, setDateRange ],
+        rolling: [ rollingAvgs, setRollingAvgs ],
+    } = parseQueryParams({ params })
 
     const [ showLegend, setShowLegend ] = useShowLegend(true)
 
     console.log("Regions", regions, "User Type", userType, "Y-Axis", yAxis, "Date range:", dateRange, "Last row:")
     console.log(data && data[data.length - 1])
 
+    const isSSR = typeof window === "undefined";
+    console.log(isSSR);
+
     useEffect(
         () => {
-            console.log("fetching…")
-            // This fetch seems like a good place to push-down the `dateRange` filter. However, rolling avgs are not in
-            // the database, but are computed later in the outer render() flow here, and need to look backward from the
-            // `start` date. Additionally, the latest data is often up to 6 weeks old (each month is typically released
-            // about 2 weeks into the next month), and it's better for e.g. a "1yr" plot to show 12mos of data than 1
-            // calendar year that's missing the 2 most recent months' entries.
-            // The table is very small so fetching it all and slicing in memory below is fine.
-            worker.fetch<Row>({
-                table: 'agg',
+            if (!isSSR) {
+                console.log("SSR, aborting effect")
+            }
+            const WorkerModulePromise = import("../src/worker")
+
+            console.log("Worker promise:", WorkerModulePromise,)
+            WorkerModulePromise.then(WorkerModule => {
+                const { Worker } = WorkerModule
+                console.log("WorkerModule:", WorkerModule, "Worker:", Worker)
+                const worker = new Worker({ url, })
+                console.log("fetching…")
+                // This fetch seems like a good place to push-down the `dateRange` filter. However, rolling avgs are not in
+                // the database, but are computed later in the outer render() flow here, and need to look backward from the
+                // `start` date. Additionally, the latest data is often up to 6 weeks old (each month is typically released
+                // about 2 weeks into the next month), and it's better for e.g. a "1yr" plot to show 12mos of data than 1
+                // calendar year that's missing the 2 most recent months' entries.
+                // The table is very small so fetching it all and slicing in memory below is fine.
+                return worker.fetch<Row>({ table: 'agg', })
             }).then(setData)
         },
-        [ worker, ],
+        [ url, ],
     )
 
     if (!data) {
@@ -525,7 +458,7 @@ export function App({ url }: { url: string, }) {
             .filter((d) => d.getMonth() == 0)
             .map((d) => d.getFullYear());
     const years: Array<number> = [...new Set(allYears)];
-    const vlines: Array<Partial<Shape>> = years.map(vline);
+    const vlines: Array<Partial<Plotly.Shape>> = years.map(vline);
 
     // Create Plotly trace data, including colors (when stacking)
     let stackRollColorDict: { [k: string]: string } = stackRollColorDicts[stackBy]
@@ -581,7 +514,7 @@ export function App({ url }: { url: string, }) {
         <span>
             Gender
             <span data-tip data-for="gender-label-tooltip">
-                <img className="warning icon" src="./assets/warning.png"/>
+                <img className="warning icon" src="/assets/warning.png"/>
             </span>
         </span>
 

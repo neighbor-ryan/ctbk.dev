@@ -34,7 +34,11 @@ jobs:
       run: python ctbk/stations/modes.py --s3
     - name: Aggregate counts by station-pair
       run: python ctbk/group_counts.py --s3 -se -c
+    - name: Build stations DB (station-pair)
+      run: python ctbk/stations/db.py --s3 -se -c
     - name: Aggregate counts by (month, station-pair)
-      run: python ctbk/group_counts.py --s3 -ymrse -c
+      run: python ctbk/group_counts.py --s3 -ymse -c
+    - name: Build stations DB (month, station-pair)
+      run: python ctbk/stations/db.py --s3 -ymse -c
     - name: Aggregate counts by (month, region, gender, user type, rideable type)
       run: python ctbk/group_counts.py --s3 -ymrgtb -cd --email ${{ secrets.MAIL_TO }}

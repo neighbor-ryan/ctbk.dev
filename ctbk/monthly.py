@@ -1,6 +1,9 @@
 from os import cpu_count
 from os.path import basename, splitext
 
+from sqlalchemy import create_engine
+from tempfile import TemporaryDirectory
+
 import click
 import fsspec
 import pandas as pd
@@ -13,11 +16,13 @@ from urllib.parse import urlparse
 from utz import sxs
 
 from ctbk import cached_property, Month, contexts, Monthy
+from ctbk.util.context import copy_ctx
 from ctbk.util.convert import Result, run, BadKey, BAD_DST, OVERWROTE, FOUND, WROTE
 
 PARQUET_EXTENSION = '.parquet'
 SQLITE_EXTENSION = '.db'
 GENESIS = Month(2013, 6)
+END = Month(2022, 9)
 RGX = r'(?:(?P<region>JC)-)?(?P<year>\d{4})(?P<month>\d{2})-citibike-tripdata.csv'
 BKT = 'ctbk'
 
@@ -29,6 +34,7 @@ class Dataset:
     ROOT: str = None
     SRC_CLS: Type['Dataset'] = None
     RGX = None
+    EXTENSION = PARQUET_EXTENSION
 
     def __init__(
             self,
@@ -53,7 +59,7 @@ class Dataset:
             else:
                 self.root = f'{self.namespace}{self.default_root}'
 
-        self.src = src or (self.SRC_CLS and self.SRC_CLS())
+        self.src = src or (self.SRC_CLS and self.SRC_CLS(namespace=self.namespace))
 
     @property
     def default_root(self):
@@ -61,10 +67,10 @@ class Dataset:
             raise RuntimeError('root/ROOT required')
         return self.ROOT
 
-    def path(self, start=None, end=None, extension=PARQUET_EXTENSION, root=None):
+    def path(self, start=None, end=None, extension=None, root=None):
         root = root or self.root
         path, _extension = splitext(root)
-        extension = _extension or extension
+        extension = _extension or extension or self.EXTENSION
         if start and end:
             path = f'{path}_{start}:{end}'
         elif start or end:
@@ -80,7 +86,7 @@ class Dataset:
     @staticmethod
     def month_range(start: Monthy = None, end: Monthy = None):
         start = Month(start) if start else GENESIS
-        end = Month(end)
+        end = Month(end) if end else END
         return start, end
 
     @property
@@ -241,8 +247,6 @@ class MonthsDataset(Dataset):
         if 'src' in task:
             assert 'srcs' not in task
             ctx['src_name'] = basename(task['src'])
-        else:
-            assert 'srcs' in task
         ctx.update(task)
 
         dst = task['dst']
@@ -295,6 +299,16 @@ class MonthsDataset(Dataset):
         if 'dst_fd' in args:
             dst_fd = ctx['dst_fd'] = self.fs.open(dst, 'rb')
             ctxs.append(dst_fd)
+
+        if 'con' in args:
+            tmpdir = TemporaryDirectory()
+            path = f'{tmpdir.name}/{basename(dst)}'
+            url = f'sqlite:///{path}'
+            engine = create_engine(url)
+            con = engine.connect()
+            ctx['con'] = con
+            copy = copy_ctx(src=path, dst=dst, dst_fs=self.fs)
+            ctxs += [ tmpdir, con, copy, ]
 
         with contexts(ctxs):
             value = run(fn, ctx)
@@ -365,8 +379,9 @@ class Reducer(Dataset):
     ):
         tasks = self.task_list(start, end)
         kwargs = dict(start=start, end=end, parallel=parallel, **kwargs)
-        if parallel:
-            p = Parallel(n_jobs=cpu_count())
+        if parallel and len(tasks) > 1:
+            n_jobs = min(cpu_count(), len(tasks))
+            p = Parallel(n_jobs=n_jobs)
             results = p(delayed(self.convert_one)(task, **kwargs) for task in tasks)
         else:
             results = [ self.convert_one(task, **kwargs) for task in tasks ]
@@ -414,8 +429,9 @@ class Reducer(Dataset):
 
         overwrite_reduced_dfs = overwrite > 1
         subtasks = task['subtasks']
-        if parallel:
-            p = Parallel(n_jobs=cpu_count())
+        if parallel and len(subtasks) > 1:
+            n_jobs = min(cpu_count(), len(subtasks))
+            p = Parallel(n_jobs=n_jobs)
             reduced_dfs = p(delayed(self.reduce_wrapper)(**subtask, overwrite=overwrite_reduced_dfs) for subtask in subtasks)
         else:
             reduced_dfs = [ self.reduce_wrapper(**subtask, overwrite=overwrite_reduced_dfs) for subtask in subtasks ]
