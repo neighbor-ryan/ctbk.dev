@@ -221,7 +221,7 @@ export default function App({ url }: { url: string, }) {
         u: enumParam('All', UserTypes),
         s: enumParam('None', StackBys),
         pct: boolParam,
-        r: enumMultiParam(Regions, RegionQueryStrings),
+        r: enumMultiParam(Regions, RegionQueryStrings, ''),
         g: enumMultiParam(Genders, GenderQueryStrings),
         rt: enumMultiParam(RideableTypes, RideableTypeChars),
         d: dateRangeParam(),
@@ -570,6 +570,7 @@ export default function App({ url }: { url: string, }) {
             />
             {/* DateRange controls */}
             <div className="no-gutters row date-controls">
+                <div className={"col-6"}>
                 {
                     ([ , "1y" , "2y" , "3y" , "4y" , "5y" , "All", ] as (DateRange & string)[]).map(dr =>
                         <input type="button"
@@ -581,6 +582,7 @@ export default function App({ url }: { url: string, }) {
                         />
                     )
                 }
+                </div>
             </div>
             {/* Other radio/checklist configs */}
             <div className="no-gutters row">

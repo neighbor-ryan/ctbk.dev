@@ -1,8 +1,6 @@
 import {useRouter} from "next/router";
 import {useEffect, useState} from "react";
-import {SetSet, useSet} from "./use-set";
-import {HandleUnexpectedValue, returnDefaultOrError} from "../search-params";
-import {QueryParamConfig} from "use-query-params";
+import {SetSet} from "./use-set";
 import _ from "lodash";
 
 export const pathnameRegex = /[^?#]+/u;

@@ -1,7 +1,22 @@
 import moment from "moment";
-import {HandleUnexpectedValue, returnDefaultOrError} from "./search-params";
 import _ from "lodash";
 import {Param} from "./utils/params";
+
+export type HandleUnexpectedValue = 'Default' | 'Warn' | 'Throw'
+
+export function returnDefaultOrError<D>(value: any, rv: D, handleUnexpectedValue: HandleUnexpectedValue): D {
+    if (handleUnexpectedValue === 'Default') {
+        return rv
+    } else {
+        const error = `Unexpected value ${value} in decoded query param; returning default ${rv}`
+        if (handleUnexpectedValue === 'Warn') {
+            console.error(error)
+            return rv
+        } else {
+            throw new Error(error)
+        }
+    }
+}
 
 export type DateRange = 'All' | '1y' | '2y' | '3y' | '4y' | '5y' | { start?: Date, end?: Date }
 
