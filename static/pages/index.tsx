@@ -1,10 +1,6 @@
-import React, {Dispatch, useEffect, useMemo, useState} from 'react';
+import React, {Dispatch} from 'react';
 import ReactMarkdown from 'react-markdown'
-import ReactTooltip from 'react-tooltip';
-const Markdown = ReactMarkdown
 import dynamic from 'next/dynamic'
-
-const Plot = dynamic(() => import("react-plotly.js"), { ssr: false,})
 import * as Plotly from "plotly.js"
 import {Checklist} from "../src/checklist";
 import {Radios} from "../src/radios";
@@ -15,6 +11,10 @@ import _ from "lodash";
 import {boolParam, enumMultiParam, enumParam, numberArrayParam, Param, parseQueryParams} from "../src/utils/params";
 import {DateRange, DateRange2Dates, dateRangeParam} from "../src/date-range";
 import Link from "next/link";
+
+const Markdown = ReactMarkdown
+const ReactTooltip = dynamic(() => import("react-tooltip"), { ssr: false, })
+const Plot = dynamic(() => import("react-plotly.js"), { ssr: false, })
 
 const { entries, values, keys, fromEntries } = Object
 const Arr = Array.from
@@ -59,7 +59,8 @@ const yAxisLabelDict: { [k in YAxis]: { yAxis: string, title: string, hoverLabel
 }
 
 type Row = {
-    Month: Date
+    Year: number
+    Month: number
     Count: number
     Duration: number
     Region: Region
@@ -67,23 +68,6 @@ type Row = {
     Gender: number
     'Rideable Type': string
 }
-type State = {
-    data: null | Row[]
-    region: Region
-    userType: UserType
-    genders: Gender[]
-    stackBy: StackBy
-    stackRelative: boolean
-    dateRange: DateRange
-    rideableTypes: RideableType[]
-    rollingAvgs: number[]
-    yAxis: YAxis
-    json: null | any
-    showLegend: boolean | null
-}
-
-// const jsonMode = true;
-const jsonMode = false;
 
 function order<T>(u: { [k: string]: T }) {
     return keys(u).sort().reduce(
@@ -204,10 +188,12 @@ function vline(year: number): Partial<Plotly.Shape> {
     }
 }
 
-const DEFAULT_AGGREGATED_URL = 'https://ctbk.s3.amazonaws.com/aggregated/ymrgtb_cd.sqlite'
+const JSON_URL = 'https://ctbk.s3.amazonaws.com/aggregated/ymrgtb_cd.json'
 
 export async function getStaticProps(context: any) {
-    return { props: { url: DEFAULT_AGGREGATED_URL } }
+    const res = await fetch(JSON_URL)
+    const data = await res.json()
+    return { props: { data, } }
 }
 
 type Params = {
@@ -236,9 +222,7 @@ type ParsedParams = {
     rolling: ParsedParam<number[]>
 }
 
-export default function App({ url }: { url: string, }) {
-    const [ data, setData ] = useState<Row[] | null>(null)
-
+export default function App({ data, }: { data: Row[] }) {
     const params: Params = {
         y: enumParam('Rides', YAxes),
         u: enumParam('All', UserTypes),
@@ -267,39 +251,6 @@ export default function App({ url }: { url: string, }) {
 
     // console.log("Regions", regions, "User Type", userType, "Y-Axis", yAxis, "Date range:", dateRange, "Last row:")
     // console.log(data && data[data.length - 1])
-
-    const isSSR = typeof window === "undefined";
-    // console.log(isSSR);
-
-    useEffect(
-        () => {
-            if (isSSR) {
-                console.log("SSR, aborting effect")
-                return
-            }
-            const WorkerModulePromise = import("../src/worker")
-
-            // console.log("Worker promise:", WorkerModulePromise,)
-            WorkerModulePromise.then(WorkerModule => {
-                const { Worker } = WorkerModule
-                // console.log("WorkerModule:", WorkerModule, "Worker:", Worker)
-                const worker = new Worker({ url, })
-                console.log("fetching…")
-                // This fetch seems like a good place to push-down the `dateRange` filter. However, rolling avgs are not in
-                // the database, but are computed later in the outer render() flow here, and need to look backward from the
-                // `start` date. Additionally, the latest data is often up to 6 weeks old (each month is typically released
-                // about 2 weeks into the next month), and it's better for e.g. a "1yr" plot to show 12mos of data than 1
-                // calendar year that's missing the 2 most recent months' entries.
-                // The table is very small so fetching it all and slicing in memory below is fine.
-                return worker.fetch<Row>({ table: 'agg', })
-            }).then(setData)
-        },
-        [ url, ],
-    )
-
-    if (!data) {
-        return <div>Loading…</div>
-    }
 
     let yAxisLabel = yAxisLabelDict[yAxis].yAxis
     let yHoverLabel = yAxisLabelDict[yAxis].hoverLabel
@@ -358,8 +309,7 @@ export default function App({ url }: { url: string, }) {
     let monthsData: { [month: string]: { [stackVal: string]: number }} = {}
     let stacksData: { [stackVal: string]: { [month: string]: number }} = {};
     filtered.forEach((r) => {
-        const date: Date = r['Month'];
-        const month: string = date.toString();
+        const month: string = `${r.Year.toString()}-${r.Month.toString().padStart(2, '0')}`
         const stackVal: Region | Gender | UserType | RideableType | '' = stackBy == 'None' ? '' : r[stackBy]
         const count = (yAxis == 'Rides') ? r['Count'] : r['Duration'];
 
@@ -412,7 +362,7 @@ export default function App({ url }: { url: string, }) {
 
     // If `end` isn't set, default to 1d after the latest fetched data point (since it's generally treated as an
     // exclusive bound)
-    const last = moment(_.max(data.map(r => new Date(r.Month)))).add(1, 'd').toDate()
+    const last = moment(_.max(data.map(r => new Date(r.Year, r.Month - 1,)))).add(1, 'd').toDate()
     const { start, end } = DateRange2Dates(dateRange, last)
 
     // Compute a (trailing) rolling average for:
