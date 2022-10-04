@@ -18,11 +18,9 @@ jobs:
       - name: Build
         run: |
           cd static
-          npm run build
-          mkdir -p built/assets
-          cp -r index.html favicon.ico dist assets built/
+          npm run export
       - name: Deploy to GH Page
         uses: JamesIves/github-pages-deploy-action@4.1.1
         with:
           branch: ghp
-          folder: static/built
+          folder: static/out
