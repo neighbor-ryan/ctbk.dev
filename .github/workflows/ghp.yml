@@ -19,6 +19,7 @@ jobs:
         run: |
           cd static
           npm run export
+          tree out
       - name: Deploy to GH Page
         uses: JamesIves/github-pages-deploy-action@4.1.1
         with:
