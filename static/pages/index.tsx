@@ -1,23 +1,19 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {Dispatch, useEffect, useMemo, useState} from 'react';
 import ReactMarkdown from 'react-markdown'
 import ReactTooltip from 'react-tooltip';
 const Markdown = ReactMarkdown
 import dynamic from 'next/dynamic'
 
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false,})
-// import Plot from 'react-plotly.js';
 const Plotly = dynamic(() => import("plotly.js"), { ssr: false,})
-// import * as Plotly from "plotly.js";
-// import {Shape} from "plotly.js";
 import {Checklist} from "../src/checklist";
 import {Radios} from "../src/radios";
 import {Checkbox} from "../src/checkbox";
 import createPersistedState from 'use-persisted-state';
 import moment from 'moment';
 import _ from "lodash";
-import {boolParam, enumMultiParam, enumParam, numberArrayParam, parseQueryParams} from "../src/utils/params";
-import {DateRange2Dates, dateRangeParam} from "../src/date-range";
-import {DateRange} from "aws-sdk/clients/securityhub";
+import {boolParam, enumMultiParam, enumParam, numberArrayParam, Param, parseQueryParams} from "../src/utils/params";
+import {DateRange, DateRange2Dates, dateRangeParam} from "../src/date-range";
 
 const { entries, values, keys, fromEntries } = Object
 const Arr = Array.from
@@ -213,10 +209,36 @@ export async function getStaticProps(context: any) {
     return { props: { url: DEFAULT_AGGREGATED_URL } }
 }
 
+type Params = {
+    y: Param<YAxis>
+    u: Param<UserType>
+    s: Param<StackBy>
+    pct: Param<boolean>
+    r: Param<Region[]>
+    g: Param<Gender[]>
+    rt: Param<RideableType[]>
+    d: Param<DateRange>
+    rolling: Param<number[]>
+}
+
+type ParsedParam<T> = [ T, Dispatch<T> ]
+
+type ParsedParams = {
+    y: ParsedParam<YAxis>
+    u: ParsedParam<UserType>
+    s: ParsedParam<StackBy>
+    pct: ParsedParam<boolean>
+    r: ParsedParam<Region[]>
+    g: ParsedParam<Gender[]>
+    rt: ParsedParam<RideableType[]>
+    d: ParsedParam<DateRange>
+    rolling: ParsedParam<number[]>
+}
+
 export default function App({ url }: { url: string, }) {
     const [ data, setData ] = useState<Row[] | null>(null)
 
-    const params = {
+    const params: Params = {
         y: enumParam('Rides', YAxes),
         u: enumParam('All', UserTypes),
         s: enumParam('None', StackBys),
@@ -238,15 +260,15 @@ export default function App({ url }: { url: string, }) {
         rt: [ rideableTypes, setRideableTypes ],
         d: [ dateRange, setDateRange ],
         rolling: [ rollingAvgs, setRollingAvgs ],
-    } = parseQueryParams({ params })
+    }: ParsedParams = parseQueryParams({ params })
 
     const [ showLegend, setShowLegend ] = useShowLegend(true)
 
-    console.log("Regions", regions, "User Type", userType, "Y-Axis", yAxis, "Date range:", dateRange, "Last row:")
-    console.log(data && data[data.length - 1])
+    // console.log("Regions", regions, "User Type", userType, "Y-Axis", yAxis, "Date range:", dateRange, "Last row:")
+    // console.log(data && data[data.length - 1])
 
     const isSSR = typeof window === "undefined";
-    console.log(isSSR);
+    // console.log(isSSR);
 
     useEffect(
         () => {
@@ -255,10 +277,10 @@ export default function App({ url }: { url: string, }) {
             }
             const WorkerModulePromise = import("../src/worker")
 
-            console.log("Worker promise:", WorkerModulePromise,)
+            // console.log("Worker promise:", WorkerModulePromise,)
             WorkerModulePromise.then(WorkerModule => {
                 const { Worker } = WorkerModule
-                console.log("WorkerModule:", WorkerModule, "Worker:", Worker)
+                // console.log("WorkerModule:", WorkerModule, "Worker:", Worker)
                 const worker = new Worker({ url, })
                 console.log("fetching…")
                 // This fetch seems like a good place to push-down the `dateRange` filter. However, rolling avgs are not in
@@ -469,7 +491,7 @@ export default function App({ url }: { url: string, }) {
             const name = stackVal == 'Total' ? '12mo avg' : `${stackVal} (12mo)`
             const char = stackRollColorDict[stackVal]
             const color = '#' + char + char + char + char + char + char
-            console.log("rolling color:", idx, stackVal, char, color)
+            // console.log("rolling color:", idx, stackVal, char, color)
             return {
                 name,
                 x: months,
@@ -494,7 +516,7 @@ export default function App({ url }: { url: string, }) {
                 const name = stackVal || yHoverLabel
                 const fade = fades[idx]
                 const color = darken(baseColor, fade)
-                console.log("trace", name, "color", color)
+                // console.log("trace", name, "color", color)
                 return {
                     x, y, name,
                     type: 'bar',
@@ -528,7 +550,7 @@ export default function App({ url }: { url: string, }) {
                     let [ start, end ] = [ e['xaxis.range[0]'], e['xaxis.range[1]'], ].map(s => s ? new Date(s) : undefined)
                     start = start ? moment(start).subtract(1, 'month').toDate() : start
                     const dateRange = (!start && !end) ? 'All' : { start, end, }
-                    console.log("relayout:", e, start, end, dateRange,)
+                    // console.log("relayout:", e, start, end, dateRange,)
                     setDateRange(dateRange)
                 }}
                 data={traces}

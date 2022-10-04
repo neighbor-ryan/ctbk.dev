@@ -8,7 +8,7 @@ export const pathnameRegex = /[^?#]+/u;
 export type Param<T> = {
     encode: (t: T) => string | undefined
     decode: (v: string | undefined) => T
-    use?: (init: Set<T>) => [Set<T>, SetSet<T>]
+    // use?: (init: Set<T>) => [Set<T>, SetSet<T>]
 }
 
 export function floatParam(init: number): Param<number> {
@@ -69,7 +69,6 @@ export function enumMultiParam<T extends string>(
             values = verify(values)
             return values
         },
-        // use: useSet,
     }
 }
 
@@ -78,7 +77,7 @@ export function enumParam<T extends string>(
     mapper: { [k in T]: string } | [ T, string ][]
 ): Param<T> {
     const t2s: { [k in T]: string } = (mapper instanceof Array) ? fromEntries(mapper) as { [k in T]: string } : mapper
-    const s2t: { [key: string]: T } = fromEntries(entries(mapper).map(([ k, v, ]) => [ v, k, ]))
+    const s2t: { [key: string]: T } = fromEntries(entries(t2s).map(([ k, v, ]) => [ v, k, ]))
     return {
         encode(t: T): string | undefined {
             if (t == init) return undefined
@@ -120,40 +119,65 @@ export function numberArrayParam(
     }
 }
 
-export function parseQueryParams({ params }: { params: { [k: string]: Param<any> }}) {
+export function parseQueryParams<Params extends { [k: string]: Param<any> }, ParsedParams>({ params }: { params: Params }): ParsedParams {
     const router = useRouter()
-    const searchStr = router.asPath.replace(pathnameRegex, '')
-    const search = Object.fromEntries(new URLSearchParams(searchStr).entries())
+    const path = router.asPath
+    const searchStr = path.replace(pathnameRegex, '')
+    const searchObj = Object.fromEntries(new URLSearchParams(searchStr).entries())
     const state = Object.fromEntries(
         Object.entries(params).map(([ k, param ]) => {
-            const [ val, set ] = (param?.use || useState)(param.decode(search[k]))
+            const [ val, set ] = useState(param.decode(searchObj[k]))
             return [ k, { val, set, param } ]
         })
     )
     const stateValues = Object.values(state).map(({ val }) => val)
-
-    const match = router.asPath.match(pathnameRegex);
-    const pathname = match ? match[0] : router.asPath;
+    const setters = Object.values(state).map(({ set }) => set)
 
     useEffect(
         () => {
-            const query: {[k: string]: string} = {}
-            Object.entries(state).map(([ k, { val, param, } ]) => {
-                const s = param.encode(val)
-                if (s !== undefined) {
-                    query[k] = s
-                }
-            })
-            const search = new URLSearchParams(query).toString()
+            window.onpopstate = e => {
+                const newUrl = e.state.url
+                const newSearchStr = newUrl.replace(pathnameRegex, '')
+                // console.log("onpopstate:", e, "newUrl:", newUrl, "newSearchStr:", newSearchStr, "oldSearchStr:", searchStr)
+                const newSearchObj = Object.fromEntries(new URLSearchParams(newSearchStr).entries())
+                Object.entries(params).forEach(([ k, param ]) => {
+                    const val = param.decode(newSearchObj[k])
+                    const { set } = state[k]
+                    // console.log(`back! setting: ${k}, ${set}, ${val}`)
+                    set(val)
+                })
+            };
+        },
+        setters
+    );
+
+    const match = path.match(pathnameRegex);
+    const pathname = match ? match[0] : path;
+
+    const query: {[k: string]: string} = {}
+    Object.entries(state).map(([ k, { val, param, } ]) => {
+        const s = param.encode(val)
+        if (s !== undefined) {
+            query[k] = s
+        }
+    })
+    const search = new URLSearchParams(query).toString()
+    // console.log(`path: ${path}, searchStr: ${searchStr}, searchObj: `, searchObj, `, search: ${search}, query:`, query)
+
+    useEffect(
+        () => {
             const hash = ''
-            router.replace(
+            router.push(
                 { pathname: router.pathname, hash, search},
                 { pathname, hash, search, },
                 { shallow: true, scroll: false, }
             )
         },
-        [ ...stateValues, pathname, ]
+        [ ...stateValues, pathname, search, ]
     )
 
-    return Object.fromEntries(Object.entries(state).map(([ k, { val, set, }]) => [ k, [ val, set, ] ]))
+    return fromEntries(
+        entries(state)
+            .map(([ k, { val, set, }]) => [ k, [ val, set, ] ])
+    ) as any as ParsedParams
 }
