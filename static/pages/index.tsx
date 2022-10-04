@@ -14,6 +14,7 @@ import moment from 'moment';
 import _ from "lodash";
 import {boolParam, enumMultiParam, enumParam, numberArrayParam, Param, parseQueryParams} from "../src/utils/params";
 import {DateRange, DateRange2Dates, dateRangeParam} from "../src/date-range";
+import Link from "next/link";
 
 const { entries, values, keys, fromEntries } = Object
 const Arr = Array.from
@@ -272,8 +273,9 @@ export default function App({ url }: { url: string, }) {
 
     useEffect(
         () => {
-            if (!isSSR) {
+            if (isSSR) {
                 console.log("SSR, aborting effect")
+                return
             }
             const WorkerModulePromise = import("../src/worker")
 
@@ -668,9 +670,12 @@ export default function App({ url }: { url: string, }) {
                     <Markdown>{`
 ## About
 Use the controls above to filter/stack by region, user type, gender, or date, and toggle aggregation of rides or total ride minutes, e.g.:
-- [JC+Hoboken](?r=jh)
-- [Ride minute %'s, Male vs. Female](?d=1406-2101&g=mf&pct&s=g&y=m) (Jun 2014 - January 2021, the window where 12mo rolling avgs are possible)
-
+`}</Markdown>
+                    <ul>
+                        <li><Link href={"/?r=jh"}>JC+Hoboken</Link></li>
+                        <li><Link href={"/?y=m&s=g&pct=&g=mf&d=1406-2101"}>Ride minute %'s, Male vs. Female</Link> (Jun 2014 - January 2021, the window where 12mo rolling avgs are possible)</li>
+                    </ul>
+                    <Markdown>{`
 This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 2nd week of each month, covering the previous month).
 
 [The GitHub repo](https://github.com/neighbor-ryan/ctbk.dev) has more info as well as [planned enhancements](https://github.com/neighbor-ryan/ctbk.dev/issues).

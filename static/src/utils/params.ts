@@ -129,7 +129,6 @@ export function parseQueryParams<Params extends { [k: string]: Param<any> }, Par
             return [ k, { val, set, param } ]
         })
     )
-    const stateValues = Object.values(state).map(({ val }) => val)
     const setters = Object.values(state).map(({ set }) => set)
 
     useEffect(
@@ -137,17 +136,37 @@ export function parseQueryParams<Params extends { [k: string]: Param<any> }, Par
             window.onpopstate = e => {
                 const newUrl = e.state.url
                 const newSearchStr = newUrl.replace(pathnameRegex, '')
-                // console.log("onpopstate:", e, "newUrl:", newUrl, "newSearchStr:", newSearchStr, "oldSearchStr:", searchStr)
+                console.log("onpopstate:", e, "newUrl:", newUrl, "newSearchStr:", newSearchStr, "oldSearchStr:", searchStr)
                 const newSearchObj = Object.fromEntries(new URLSearchParams(newSearchStr).entries())
                 Object.entries(params).forEach(([ k, param ]) => {
                     const val = param.decode(newSearchObj[k])
-                    const { set } = state[k]
-                    // console.log(`back! setting: ${k}, ${set}, ${val}`)
-                    set(val)
+                    const { val: cur, set } = state[k]
+                    const eq = _.isEqual(cur, val)
+                    if (!eq) {
+                        console.log(`back! setting: ${k}, ${cur} -> ${val} (change: ${!eq})`)
+                        set(val)
+                    }
                 })
             };
         },
-        setters
+        [ path, ]
+    );
+
+    useEffect(
+        () => {
+            console.log("updating states: path", path, ", searchStr:", searchStr)
+            //const newSearchObj = Object.fromEntries(new URLSearchParams(searchStr).entries())
+            Object.entries(params).forEach(([ k, param ]) => {
+                const val = param.decode(searchObj[k])
+                const { val: cur, set } = state[k]
+                const eq = _.isEqual(cur, val)
+                if (!eq) {
+                    console.log(`update state: ${k}, ${cur} -> ${val} (change: ${!eq})`)
+                    set(val)
+                }
+            })
+        },
+        [ path, ]
     );
 
     const match = path.match(pathnameRegex);
@@ -161,18 +180,19 @@ export function parseQueryParams<Params extends { [k: string]: Param<any> }, Par
         }
     })
     const search = new URLSearchParams(query).toString()
-    // console.log(`path: ${path}, searchStr: ${searchStr}, searchObj: `, searchObj, `, search: ${search}, query:`, query)
+    console.log(`path: ${path}, searchStr: ${searchStr}, searchObj: `, searchObj, `, search: ${search}, query:`, query)
 
     useEffect(
         () => {
             const hash = ''
+            console.log("router.push:", { pathname: router.pathname, hash, search})
             router.push(
                 { pathname: router.pathname, hash, search},
                 { pathname, hash, search, },
                 { shallow: true, scroll: false, }
             )
         },
-        [ ...stateValues, pathname, search, ]
+        [ pathname, router.pathname, search, ]
     )
 
     return fromEntries(
