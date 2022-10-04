@@ -1,5 +1,5 @@
 import {useRouter} from "next/router";
-import {useEffect, useState} from "react";
+import {Dispatch, useEffect, useState} from "react";
 import _ from "lodash";
 
 export const pathnameRegex = /[^?#]+/u;
@@ -9,6 +9,8 @@ export type Param<T> = {
     decode: (v: string | undefined) => T
     // use?: (init: Set<T>) => [Set<T>, SetSet<T>]
 }
+
+export type ParsedParam<T> = [ T, Dispatch<T> ]
 
 export function floatParam(init: number): Param<number> {
     return {

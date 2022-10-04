@@ -1,6 +1,6 @@
 import {Param} from "./utils/params";
 
-type LL = { lat: number, lng: number }
+export type LL = { lat: number, lng: number }
 
 export function llParam(init: LL, places?: number): Param<LL> {
     return {

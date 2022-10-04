@@ -1,14 +1,14 @@
-import React, {Dispatch} from 'react';
+import React, {Dispatch, useState} from 'react';
 import ReactMarkdown from 'react-markdown'
 import dynamic from 'next/dynamic'
 import * as Plotly from "plotly.js"
 import {Checklist} from "../src/checklist";
 import {Radios} from "../src/radios";
 import {Checkbox} from "../src/checkbox";
-import createPersistedState from 'use-persisted-state';
+// import createPersistedState from 'use-persisted-state';
 import moment from 'moment';
 import _ from "lodash";
-import {boolParam, enumMultiParam, enumParam, numberArrayParam, Param, parseQueryParams} from "../src/utils/params";
+import {boolParam, enumMultiParam, enumParam, numberArrayParam, Param, ParsedParam, parseQueryParams} from "../src/utils/params";
 import {DateRange, DateRange2Dates, dateRangeParam} from "../src/date-range";
 import Link from "next/link";
 
@@ -19,7 +19,7 @@ const Plot = dynamic(() => import("react-plotly.js"), { ssr: false, })
 const { entries, values, keys, fromEntries } = Object
 const Arr = Array.from
 
-const useShowLegend = createPersistedState("showLegend")
+// const useShowLegend = createPersistedState("showLegend")
 
 type Region = 'NYC' | 'JC' | 'HB'
 const Regions: Region[] = [ 'NYC', 'JC', 'HB', ]
@@ -208,8 +208,6 @@ type Params = {
     rolling: Param<number[]>
 }
 
-type ParsedParam<T> = [ T, Dispatch<T> ]
-
 type ParsedParams = {
     y: ParsedParam<YAxis>
     u: ParsedParam<UserType>
@@ -247,7 +245,7 @@ export default function App({ data, }: { data: Row[] }) {
         rolling: [ rollingAvgs, setRollingAvgs ],
     }: ParsedParams = parseQueryParams({ params })
 
-    const [ showLegend, setShowLegend ] = useShowLegend(true)
+    const [ showLegend, setShowLegend ] = useState(true)
 
     // console.log("Regions", regions, "User Type", userType, "Y-Axis", yAxis, "Date range:", dateRange, "Last row:")
     // console.log(data && data[data.length - 1])
@@ -617,19 +615,14 @@ export default function App({ data, }: { data: Row[] }) {
             </div>
             <div className="no-gutters row">
                 <div className="col-md-12">
-                    <Markdown>{`
-## About
-Use the controls above to filter/stack by region, user type, gender, or date, and toggle aggregation of rides or total ride minutes, e.g.:
-`}</Markdown>
+                    <h2>About</h2>
+                    <p>Use the controls above to filter/stack by region, user type, gender, or date, and toggle aggregation of rides or total ride minutes, e.g.:</p>
                     <ul>
                         <li><Link href={"/?r=jh"}>JC+Hoboken</Link></li>
                         <li><Link href={"/?y=m&s=g&pct=&g=mf&d=1406-2101"}>Ride minute %'s, Male vs. Female</Link> (Jun 2014 - January 2021, the window where 12mo rolling avgs are possible)</li>
                     </ul>
-                    <Markdown>{`
-This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 2nd week of each month, covering the previous month).
-
-[The GitHub repo](https://github.com/neighbor-ryan/ctbk.dev) has more info as well as [planned enhancements](https://github.com/neighbor-ryan/ctbk.dev/issues).
-                    `}</Markdown>
+                    <p>This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 2nd week of each month, covering the previous month).</p>
+                    <p><a href={"https://github.com/neighbor-ryan/ctbk.dev"}>The GitHub repo</a> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"}>planned enhancements</a>.</p>
                     <h3 id="qc">🚧 Data-quality issues 🚧</h3>
                     <Markdown>{`
 Several things changed in February 2021 (presumably as part of [the Lyft acquistion](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):
