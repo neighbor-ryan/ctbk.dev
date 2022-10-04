@@ -10,7 +10,7 @@ import * as ReactLeaflet from "react-leaflet";
 import {Dispatch, useEffect, useState} from 'react';
 
 const DEFAULT_CENTER = { lat: 40.750, lng: -73.944, }
-const DEFAULT_ZOOM = 12.5
+const DEFAULT_ZOOM = 12
 
 const COUNTS_URL = 'https://ctbk.s3.amazonaws.com/aggregated/s_c_202208.json'
 const STATIONS_URL = 'https://ctbk.s3.amazonaws.com/stations/ids.json'
@@ -120,12 +120,12 @@ export default function Home({ counts, stations, }: { counts: CountRow[], statio
                 <meta name="twitter:card" content="summary" key="twcard" />
                 <meta name="twitter:creator" content={"RunsAsCoded"} key="twhandle" />
 
-                <meta property="og:url" content="https://bikejc.github.io/maps" key="ogurl" />
+                <meta property="og:url" content="https://ctbk.dev/stations" key="ogurl" />
                 <meta property="og:type" content="website" />
-                <meta property="og:image" content="https://bikejc.github.io/maps/1-pbls.png" key="ogimage" />
-                <meta property="og:site_name" content="JC Bike Lane Map" key="ogsitename" />
-                <meta property="og:title" content="JC Bike Lane + Ward Map" key="ogtitle" />
-                <meta property="og:description" content={"≈10 protected bike lanes overlaid on the 6 council wards"} key="ogdesc" />
+                <meta property="og:image" content="https://ctbk.dev/stations/stations-screenshot.png" key="ogimage" />
+                <meta property="og:site_name" content="ctbk.dev" key="ogsitename" />
+                <meta property="og:title" content="Citi Bike Station Ridership Map" key="ogtitle" />
+                <meta property="og:description" content={"Map of Citi Bike stations' ridership in August 2022"} key="ogdesc" />
             </Head>
 
             <main className={styles.main}>{
