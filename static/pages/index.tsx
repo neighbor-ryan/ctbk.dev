@@ -5,7 +5,7 @@ const Markdown = ReactMarkdown
 import dynamic from 'next/dynamic'
 
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false,})
-const Plotly = dynamic(() => import("plotly.js"), { ssr: false,})
+import * as Plotly from "plotly.js"
 import {Checklist} from "../src/checklist";
 import {Radios} from "../src/radios";
 import {Checkbox} from "../src/checkbox";
@@ -244,8 +244,8 @@ export default function App({ url }: { url: string, }) {
         s: enumParam('None', StackBys),
         pct: boolParam,
         r: enumMultiParam(Regions, RegionQueryStrings, ''),
-        g: enumMultiParam(Genders, GenderQueryStrings),
-        rt: enumMultiParam(RideableTypes, RideableTypeChars),
+        g: enumMultiParam(Genders, GenderQueryStrings, ''),
+        rt: enumMultiParam(RideableTypes, RideableTypeChars, ''),
         d: dateRangeParam(),
         rolling: numberArrayParam([ 12 ]),
     }
@@ -578,7 +578,8 @@ export default function App({ url }: { url: string, }) {
                         gridcolor: '#DDDDDD',
                         title: {
                             text: yAxisLabel,
-                            standoff: 40,
+                            // standoff: 20,
+                            // position: 'top left',
                         },
                         tickfont: { size: 14 },
                         titlefont: { size: 14 },
@@ -587,7 +588,7 @@ export default function App({ url }: { url: string, }) {
                     paper_bgcolor: 'rgba(0,0,0,0)',
                     plot_bgcolor: 'rgba(0,0,0,0)',
                     shapes: vlines,
-                    margin: { b: 40, l: 0, },
+                    margin: { b: 40, l: 20, r: 10, },
                 }}
             />
             {/* DateRange controls */}
@@ -667,8 +668,8 @@ export default function App({ url }: { url: string, }) {
                     <Markdown>{`
 ## About
 Use the controls above to filter/stack by region, user type, gender, or date, and toggle aggregation of rides or total ride minutes, e.g.:
-- [JC+Hoboken](#?r=jh)
-- [Ride minute %'s, Male vs. Female](#?d=1406-2101&g=mf&pct&s=g&y=m) (Jun 2014 - January 2021, the window where 12mo rolling avgs are possible)
+- [JC+Hoboken](?r=jh)
+- [Ride minute %'s, Male vs. Female](?d=1406-2101&g=mf&pct&s=g&y=m) (Jun 2014 - January 2021, the window where 12mo rolling avgs are possible)
 
 This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 2nd week of each month, covering the previous month).
 
