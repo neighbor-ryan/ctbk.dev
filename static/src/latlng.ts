@@ -2,7 +2,7 @@ import {Param} from "./utils/params";
 
 export type LL = { lat: number, lng: number }
 
-export function llParam(init: LL, places?: number): Param<LL> {
+export function llParam({ init, places, push }: { init: LL, places?: number, push?: boolean }): Param<LL> {
     return {
         encode: ({ lat, lng }) =>
             (lat === init.lat && lng === init.lng)
@@ -17,5 +17,6 @@ export function llParam(init: LL, places?: number): Param<LL> {
             const [ lat, lng ] = v.split("_").map(parseFloat)
             return { lat, lng }
         },
+        push,
     }
 }

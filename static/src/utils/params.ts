@@ -7,15 +7,17 @@ export const pathnameRegex = /[^?#]+/u;
 export type Param<T> = {
     encode: (t: T) => string | undefined
     decode: (v: string | undefined) => T
+    push?: boolean
     // use?: (init: Set<T>) => [Set<T>, SetSet<T>]
 }
 
 export type ParsedParam<T> = [ T, Dispatch<T> ]
 
-export function floatParam(init: number): Param<number> {
+export function floatParam(init: number, push: boolean = true): Param<number> {
     return {
         encode: v => v === init ? undefined : v.toString(),
-        decode: v => v ? parseFloat(v) : init
+        decode: v => v ? parseFloat(v) : init,
+        push,
     }
 }
 
@@ -187,12 +189,35 @@ export function parseQueryParams<Params extends { [k: string]: Param<any> }, Par
     useEffect(
         () => {
             const hash = ''
-            console.log("router.push:", { pathname: router.pathname, hash, search})
-            router.push(
-                { pathname: router.pathname, hash, search},
-                { pathname, hash, search, },
-                { shallow: true, scroll: false, }
-            )
+            const changedKeys = []
+            for (const [key, value] of entries(searchObj)) {
+                if (!(key in query) || !_.isEqual(value, query[key])) {
+                    changedKeys.push(key)
+                }
+            }
+            for (const [key, value] of entries(query)) {
+                if (!changedKeys.includes(key) && (!(key in searchObj) || !_.isEqual(value, searchObj[key]))) {
+                    changedKeys.push(key)
+                }
+            }
+            let push = false
+            for (const key of changedKeys) {
+                const param = params[key]
+                if (param.push) {
+                    push = true
+                    return
+                }
+            }
+            const url = { pathname: router.pathname, hash, search}
+            const as = { pathname, hash, search, }
+            const options = { shallow: true, scroll: false, }
+            const method = push ? "push" : "replace"
+            console.log(`router.${method}:`, { pathname: router.pathname, hash, search}, "changedKeys:", changedKeys)
+            if (push) {
+                router.push(url, as, options)
+            } else {
+                router.replace(url, as, options)
+            }
         },
         [ pathname, router.pathname, search, ]
     )

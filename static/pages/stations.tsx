@@ -9,7 +9,7 @@ import {LL, llParam} from "../src/latlng";
 import * as ReactLeaflet from "react-leaflet";
 import {Dispatch, useEffect, useState} from 'react';
 
-const DEFAULT_CENTER = { lat: 40.750, lng: -73.944, }
+const DEFAULT_CENTER = { lat: 40.758, lng: -73.965, }
 const DEFAULT_ZOOM = 12
 
 const COUNTS_URL = 'https://ctbk.s3.amazonaws.com/aggregated/s_c_202208.json'
@@ -72,13 +72,11 @@ function MapBody(
     }
 ) {
     // Error: No context provided: useLeafletContext() can only be used in a descendant of <MapContainer>
-/*
     const map = useMap()
     useMapEvents({
-        move: () => setLL(map.getCenter()),
+        moveend: () => setLL(map.getCenter()),
         zoom: () => setZoom(map.getZoom()),
     })
-*/
 
     return <>
         {counts.map(({ id, count }) => {
@@ -96,16 +94,13 @@ function MapBody(
 
 export default function Home({ counts, stations, }: { counts: CountRow[], stations: Stations }) {
     const params: Params = {
-        ll: llParam(DEFAULT_CENTER, 3),
-        z: floatParam(DEFAULT_ZOOM),
+        ll: llParam({ init: DEFAULT_CENTER, places: 3, }),
+        z: floatParam(DEFAULT_ZOOM, false),
     }
     const {
         ll: [ { lat, lng }, setLL ],
         z: [ zoom, setZoom, ],
     }: ParsedParams = parseQueryParams({ params })
-
-    // const [ ready, setReady ] = useState(false)
-    // console.log("ready:", ready)
 
     const title = "Citi Bike rides by station, August 2022"
 
@@ -130,13 +125,11 @@ export default function Home({ counts, stations, }: { counts: CountRow[], statio
 
             <main className={styles.main}>{
                 (typeof window !== undefined) && <>
-                    <Map className={styles.homeMap} center={{ lat, lng, }} zoom={zoom} zoomControl={false} zoomSnap={0.5} zoomDelta={0.5} /*whenReady={() => { console.log("setReady"); setReady(true) }*/>
-                        {
-                            (RL: typeof ReactLeaflet) => <div>{
-                                MapBody(RL, { setLL, setZoom, counts, stations, url, attribution, })
-                            }</div>
-                        }
-                    </Map>
+                    <Map className={styles.homeMap} center={{ lat, lng, }} zoom={zoom} zoomControl={false} zoomSnap={0.5} zoomDelta={0.5}>{
+                        (RL: typeof ReactLeaflet) => <div>{
+                            MapBody(RL, { setLL, setZoom, counts, stations, url, attribution, })
+                        }</div>
+                    }</Map>
                     {title && <div className={styles.title}>{title}</div>}
                 </>
             }</main>
