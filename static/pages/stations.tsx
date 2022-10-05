@@ -122,7 +122,7 @@ export default function Home({ counts, stations, }: { counts: CountRow[], statio
 
                 <meta property="og:url" content="https://ctbk.dev/stations" key="ogurl" />
                 <meta property="og:type" content="website" />
-                <meta property="og:image" content="https://ctbk.dev/stations/stations-screenshot.png" key="ogimage" />
+                <meta property="og:image" content="https://ctbk.dev/stations-screenshot.png" key="ogimage" />
                 <meta property="og:site_name" content="ctbk.dev" key="ogsitename" />
                 <meta property="og:title" content="Citi Bike Station Ridership Map" key="ogtitle" />
                 <meta property="og:description" content={"Map of Citi Bike stations' ridership in August 2022"} key="ogdesc" />
