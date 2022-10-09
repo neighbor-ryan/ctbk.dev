@@ -15,18 +15,18 @@ jobs:
         with:
           node-version: 16
           cache: 'npm'
-          cache-dependency-path: static/package-lock.json
+          cache-dependency-path: www/package-lock.json
       - name: Install
         run: |
-          cd static
+          cd www
           npm install
       - name: Build
         run: |
-          cd static
+          cd www
           npm run export
           touch out/.nojekyll
       - name: Deploy to GH Page
         uses: JamesIves/github-pages-deploy-action@4.1.1
         with:
           branch: ghp
-          folder: static/out
+          folder: www/out

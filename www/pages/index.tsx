@@ -11,6 +11,7 @@ import _ from "lodash";
 import {boolParam, enumMultiParam, enumParam, numberArrayParam, Param, ParsedParam, parseQueryParams} from "../src/utils/params";
 import {DateRange, DateRange2Dates, dateRangeParam} from "../src/date-range";
 import Link from "next/link";
+import { basePath } from "../src/utils/config"
 
 const Markdown = ReactMarkdown
 const ReactTooltip = dynamic(() => import("react-tooltip"), { ssr: false, })
@@ -478,7 +479,7 @@ export default function App({ data, }: { data: Row[] }) {
 
     function icon(src: string, href: string, title: string) {
         return <a href={href} title={title}>
-            <img className="icon" src={`/assets/${src}.png`} />
+            <img className="icon" src={`${basePath}/assets/${src}.png`} />
         </a>
     }
 
@@ -486,7 +487,7 @@ export default function App({ data, }: { data: Row[] }) {
         <span>
             Gender
             <span data-tip data-for="gender-label-tooltip">
-                <img className="warning icon" src="/assets/warning.png"/>
+                <img className="warning icon" src={`${basePath}/assets/warning.png`} />
             </span>
         </span>
 

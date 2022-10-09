@@ -1,29 +1,35 @@
-name: S3 staging
+name: S3 (s3://ctbk.dev)
 on:
   push:
     branches:
       - dev
 jobs:
-  stage:
+  build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: static
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           persist-credentials: false
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          cache: 'npm'
+          cache-dependency-path: www/package-lock.json
       - name: Install
         run: |
-          pip install awscli s3cmd
+          cd www
           npm install
       - name: Build
-        run: npm run build
+        env:
+          CTBK_DEV: 1
+        run: |
+          cd www
+          npm run export
       - name: Sync
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.s3_ctbk_dev_access_key }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.s3_ctbk_dev_secret_key }}
+          AWS_DEFAULT_REGION: us-east-1
         run: |
-          npm run sync
-          npm run fix-mime-type
+          aws s3 sync www/out/ s3://ctbk.dev/
