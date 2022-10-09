@@ -47,7 +47,13 @@ const NormalizeRideableType: { [k: string]: RideableType } = {
 }
 
 type StackBy = 'None' | 'Region' | 'User Type' | 'Gender' | 'Rideable Type'
-const StackBys: [StackBy, string][] = [ ['None', 'n'], ['Region', 'r'], ['Gender','g'], ['User Type','u'], ['Rideable Type','r'], ]
+const StackBys: [StackBy, string][] = [
+    ['None', 'n'],
+    ['Region', 'r'],
+    ['Gender','g'],
+    ['User Type','u'],
+    ['Rideable Type','b'],
+]
 
 type YAxis = 'Rides' | 'Ride minutes'
 const YAxes: [YAxis, string][] = [ ['Rides', 'r'], ['Ride minutes', 'm'], ]
