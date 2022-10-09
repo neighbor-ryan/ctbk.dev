@@ -5,6 +5,7 @@ on:
       - www
 jobs:
   build:
+    name: Build + deploy www branch to ctbk.dev via GitHub Pages
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

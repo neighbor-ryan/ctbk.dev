@@ -5,6 +5,7 @@ on:
       - dev
 jobs:
   build:
+    name: Build + Sync dev branch to s3://ctbk.dev
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
