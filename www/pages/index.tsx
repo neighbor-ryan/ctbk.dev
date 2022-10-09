@@ -1,11 +1,10 @@
-import React, {Dispatch, useState} from 'react';
+import React, {useState} from 'react';
 import ReactMarkdown from 'react-markdown'
 import dynamic from 'next/dynamic'
 import * as Plotly from "plotly.js"
 import {Checklist} from "../src/checklist";
 import {Radios} from "../src/radios";
 import {Checkbox} from "../src/checkbox";
-// import createPersistedState from 'use-persisted-state';
 import moment from 'moment';
 import _ from "lodash";
 import {boolParam, enumMultiParam, enumParam, numberArrayParam, Param, ParsedParam, parseQueryParams} from "../src/utils/params";
@@ -19,8 +18,6 @@ const Plot = dynamic(() => import("react-plotly.js"), { ssr: false, })
 
 const { entries, values, keys, fromEntries } = Object
 const Arr = Array.from
-
-// const useShowLegend = createPersistedState("showLegend")
 
 type Region = 'NYC' | 'JC' | 'HB'
 const Regions: Region[] = [ 'NYC', 'JC', 'HB', ]
@@ -479,7 +476,7 @@ export default function App({ data, }: { data: Row[] }) {
 
     function icon(src: string, href: string, title: string) {
         return <a href={href} title={title}>
-            <img className="icon" src={`${basePath}/assets/${src}.png`} />
+            <img className="icon" alt={title} src={`${basePath}/assets/${src}.png`} />
         </a>
     }
 
@@ -487,7 +484,7 @@ export default function App({ data, }: { data: Row[] }) {
         <span>
             Gender
             <span data-tip data-for="gender-label-tooltip">
-                <img className="warning icon" src={`${basePath}/assets/warning.png`} />
+                <img className="warning icon" alt={"warning icon"} src={`${basePath}/assets/warning.png`} />
             </span>
         </span>
 
@@ -546,7 +543,7 @@ export default function App({ data, }: { data: Row[] }) {
             <div className="no-gutters row date-controls">
                 <div className={"col-6"}>
                 {
-                    ([ , "1y" , "2y" , "3y" , "4y" , "5y" , "All", ] as (DateRange & string)[]).map(dr =>
+                    ([ "1y" , "2y" , "3y" , "4y" , "5y" , "All", ] as (DateRange & string)[]).map(dr =>
                         <input type="button"
                             key={dr}
                             value={dr}
@@ -622,8 +619,9 @@ export default function App({ data, }: { data: Row[] }) {
                         <li><Link href={"/?r=jh"}>JC+Hoboken</Link></li>
                         <li><Link href={"/?y=m&s=g&pct=&g=mf&d=1406-2101"}>Ride minute %'s, Male vs. Female</Link> (Jun 2014 - January 2021, the window where 12mo rolling avgs are possible)</li>
                     </ul>
-                    <p>This plot should refresh when [new data is published by Citibike](https://www.citibikenyc.com/system-data) (typically around the 2nd week of each month, covering the previous month).</p>
+                    <p>This plot should refresh when <a href={"https://www.citibikenyc.com/system-data"}>new data is published by Citibike</a> (typically around the 2nd week of each month, covering the previous month).</p>
                     <p><a href={"https://github.com/neighbor-ryan/ctbk.dev"}>The GitHub repo</a> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"}>planned enhancements</a>.</p>
+                    <p>Also, check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in August 2022</Link>.</p>
                     <h3 id="qc">🚧 Data-quality issues 🚧</h3>
                     <Markdown>{`
 Several things changed in February 2021 (presumably as part of [the Lyft acquistion](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):
