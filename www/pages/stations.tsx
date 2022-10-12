@@ -7,12 +7,12 @@ import styles from '../styles/Home.module.css';
 import {floatParam, Param, ParsedParam, parseQueryParams} from "../src/utils/params";
 import {LL, llParam} from "../src/latlng";
 import * as ReactLeaflet from "react-leaflet";
-import {Dispatch, useEffect, useState} from 'react';
+import {Dispatch} from 'react';
 
 const DEFAULT_CENTER = { lat: 40.758, lng: -73.965, }
 const DEFAULT_ZOOM = 12
 
-const COUNTS_URL = 'https://ctbk.s3.amazonaws.com/aggregated/s_c_202208.json'
+const COUNTS_URL = 'https://ctbk.s3.amazonaws.com/aggregated/s_c_202209.json'
 const STATIONS_URL = 'https://ctbk.s3.amazonaws.com/stations/ids.json'
 
 const { fromEntries } = Object
@@ -102,7 +102,7 @@ export default function Home({ counts, stations, }: { counts: CountRow[], statio
         z: [ zoom, setZoom, ],
     }: ParsedParams = parseQueryParams({ params })
 
-    const title = "Citi Bike rides by station, August 2022"
+    const title = "Citi Bike rides by station, September 2022"
 
     const { url, attribution } = MAPS['alidade_smooth_dark']
 
