@@ -18,7 +18,7 @@ class Csvs(MonthsDataset):
 
     def task_df(self, start: Monthy = None, end: Monthy = None):
         df = self.src.outputs(start, end)
-        df['src'] = f'{self.src.root}/' + df.name
+        df['src'] = f'{self.src.root}/' + df.basename
         df['region_prefix'] = df.region.apply(lambda k: self.REGION_PREFIXES[k])
         df['dst_name'] = df.apply(lambda r: f'{r["region_prefix"]}{r["month"]}-citibike-tripdata', axis=1)
         df['dst'] = f'{self.root}/' + df['dst_name'] + '.csv'

@@ -137,12 +137,12 @@ class Dataset:
     @cached_property
     def parsed_basenames(self):
         df = self.listdir_df
-        basenames = df.name.apply(basename)
+        basenames = df.name.apply(basename).rename('basename')
 
         if not self.RGX:
             raise RuntimeError('No regex found for parsing output paths')
 
-        return sxs(basenames.str.extract(self.RGX), df)
+        return sxs(basenames.str.extract(self.RGX), df, basenames)
 
     def outputs(self, start: Monthy = None, end: Month = None):
         df = self.parsed_basenames
@@ -297,7 +297,7 @@ class MonthsDataset(Dataset):
                 raise RuntimeError(f"Unrecognized src_df extension: {src}")
 
         if 'dst_fd' in args:
-            dst_fd = ctx['dst_fd'] = self.fs.open(dst, 'rb')
+            dst_fd = ctx['dst_fd'] = self.fs.open(dst, 'wb')
             ctxs.append(dst_fd)
 
         if 'con' in args:
