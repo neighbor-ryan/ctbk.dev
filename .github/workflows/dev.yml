@@ -22,8 +22,6 @@ jobs:
           cd www
           npm install
       - name: Build
-        env:
-          CTBK_DEV: 1
         run: |
           cd www
           npm run export
@@ -33,4 +31,4 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.s3_ctbk_dev_secret_key }}
           AWS_DEFAULT_REGION: us-east-1
         run: |
-          aws s3 sync www/out/ s3://ctbk.dev/
+          aws s3 sync www/out/ s3://ctbkdev/

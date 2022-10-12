@@ -1,4 +1,4 @@
-import {ReactElement, ReactNode, useEffect} from 'react';
+import {ReactElement} from 'react';
 import L from 'leaflet';
 import * as ReactLeaflet from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
