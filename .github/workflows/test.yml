@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       my_var: "python ctbk/group_counts.py --s3 -ymrgtb -cd --email ${{ env.MAIL_TO }}"
+      mailto: ${{ env.MAIL_TO }}
     steps:
       - run: echo "Exposing output $my_var"
   use_var:
@@ -21,3 +22,5 @@ jobs:
       - run: |
           echo "cmd: ${{ needs.compute_var.outputs.my_var }}"
           echo "computed_var: $computed_var"
+          echo mailto: ${{ needs.compute_var.outputs.mailto }}.
+          echo MAIL_TO: ${{ env.MAIL_TO }}, ${{ secrets.MAIL_TO }}
