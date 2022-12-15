@@ -21,6 +21,7 @@ from ctbk.util.convert import Result, run, BadKey, BAD_DST, OVERWROTE, FOUND, WR
 
 PARQUET_EXTENSION = '.parquet'
 SQLITE_EXTENSION = '.db'
+JSON_EXTENSION = '.json'
 GENESIS = Month(2013, 6)
 END = Month(2022, 11)
 RGX = r'(?:(?P<region>JC)-)?(?P<year>\d{4})(?P<month>\d{2})-citibike-tripdata.csv'

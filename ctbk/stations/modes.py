@@ -1,4 +1,5 @@
 import pandas as pd
+from click import option
 from numpy import nan
 from pandas import Series
 from sys import stderr
@@ -56,6 +57,16 @@ class StationModes(MonthsDataset):
     SRC_CLS = StationMetaHist
     ROOT = f'{BKT}/stations/ids'
 
+    @classmethod
+    def cli_opts(cls):
+        return super().cli_opts() + [
+            option('--json', is_flag=True, help='Write a JSON version of the `latest` parquet (iff it is written)'),
+        ]
+
+    def __init__(self, json=False, **kwargs):
+        self.json = json
+        super().__init__(**kwargs)
+
     def output(self, start: Monthy = None, end: Month = None):
         start, end = self.month_range(start, end)
         ids_path = self.path(start=start, end=end)
@@ -74,6 +85,13 @@ class StationModes(MonthsDataset):
         if latest:
             task['extra_dst'] = self.path()
         return [task]
+
+    def convert_one(self, task, error='warn', overwrite=False):
+        result = super().convert_one(task, error, overwrite)
+        all_dst = result.attrs.get("")
+        if self.json and all_dst:
+            pass
+        return result
 
     def compute(self, src_df):
         annotated_station_names = mode_sketch(src_df.set_index('Station ID')[['Station Name', 'count']], 'Station Name')

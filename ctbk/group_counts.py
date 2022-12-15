@@ -5,7 +5,7 @@ from utz import *
 
 from ctbk import NormalizedMonths
 from ctbk.aggregator import Aggregator
-from ctbk.monthly import Reducer, BKT, PARQUET_EXTENSION, SQLITE_EXTENSION
+from ctbk.monthly import Reducer, BKT, PARQUET_EXTENSION, SQLITE_EXTENSION, JSON_EXTENSION
 
 
 class GroupCounts(Aggregator, Reducer):
@@ -19,6 +19,7 @@ class GroupCounts(Aggregator, Reducer):
             option('--email', help='Send email about outcome, from MAIL_USERNAME/MAIL_PASSWORD to this address'),
             option('--smtp', help='SMTP server URL'),
             option('--sql/--no-sql', help=f'Write a SQLite version of the output data (to default table {cls.TBL})'),
+            option('--json', is_flag=True, help='Write a JSON version of the `latest` parquet (iff it is written)'),
             option('--tbl', '--table', help=f'Write a SQLite version of the output data to this table name (default: {cls.TBL})'),
         ]
 
@@ -27,6 +28,7 @@ class GroupCounts(Aggregator, Reducer):
             email=None,
             smtp=None,
             sql=False,
+            json=False,
             tbl=None,
             **kwargs
     ):
@@ -35,6 +37,7 @@ class GroupCounts(Aggregator, Reducer):
         if tbl:
             sql = True
         self.sql = sql
+        self.json = json
         self.tbl = tbl or self.TBL
         super().__init__(**kwargs)
 
@@ -147,6 +150,22 @@ class GroupCounts(Aggregator, Reducer):
                                 with open(path, 'rb') as i, self.fs.open(db_dst, 'wb') as o:
                                     shutil.copyfileobj(i, o)
                         written_urls.append(db_dst)
+            if self.json and all_dst:
+                json_dst = splitext(all_dst)[0] + JSON_EXTENSION
+                if self.fs.exists(json_dst) and not overwrite:
+                    print(f'json exists, skipping: {json_dst}')
+                else:
+                    print(f'writing json: {json_dst}')
+                    (
+                        result.value
+                        .drop(columns='Month')
+                        .rename(columns={
+                            'Start Year': 'Year',
+                            'Start Month': 'Month',
+                        })
+                        .to_json(json_dst, 'records')
+                    )
+                written_urls.append(json_dst)
             if self.email:
                 self.maybe_email(written_urls)
         return result
