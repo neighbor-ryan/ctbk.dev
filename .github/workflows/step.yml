@@ -27,5 +27,7 @@ jobs:
           cache: pip
       - name: Install pip deps
         run: pip install -e .
+      - name: Echo cmd
+        run: echo ${{ inputs.run }}
       - name: ${{ inputs.name }}
         run: ${{ inputs.run }}

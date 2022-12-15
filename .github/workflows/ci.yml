@@ -66,4 +66,4 @@ jobs:
     uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
     with:
       name: Aggregate counts by (month, region, gender, user type, rideable type)
-      run: python ctbk/group_counts.py --s3 -ymrgtb -cd --email ${{ env.MAIL_TO }}
+      run: python ctbk/group_counts.py --s3 -ymrgtb -cd --email $MAIL_TO
