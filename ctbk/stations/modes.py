@@ -1,3 +1,5 @@
+from os.path import splitext
+
 import pandas as pd
 from click import option
 from numpy import nan
@@ -88,9 +90,9 @@ class StationModes(MonthsDataset):
 
     def convert_one(self, task, error='warn', overwrite=False):
         result = super().convert_one(task, error, overwrite)
-        all_dst = result.attrs.get("")
+        all_dst = task.get("extra_dst")
         if self.json and all_dst:
-            pass
+            self.write_json(result.value, all_dst=all_dst, overwrite=overwrite)
         return result
 
     def compute(self, src_df):

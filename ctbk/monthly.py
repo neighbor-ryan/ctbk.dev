@@ -23,7 +23,7 @@ PARQUET_EXTENSION = '.parquet'
 SQLITE_EXTENSION = '.db'
 JSON_EXTENSION = '.json'
 GENESIS = Month(2013, 6)
-END = Month(2022, 11)
+END = Month(2022, 12)
 RGX = r'(?:(?P<region>JC)-)?(?P<year>\d{4})(?P<month>\d{2})-citibike-tripdata.csv'
 BKT = 'ctbk'
 
@@ -206,6 +206,15 @@ class Dataset:
     @abstractmethod
     def compute(self, **kwargs):
         pass
+
+    def write_json(self, df, all_dst, overwrite: bool):
+        json_dst = splitext(all_dst)[0] + JSON_EXTENSION
+        if self.fs.exists(json_dst) and not overwrite:
+            print(f'json exists, skipping: {json_dst}')
+        else:
+            print(f'writing json: {json_dst}')
+            df.to_json(json_dst, 'records')
+        return json_dst
 
 
 class MonthsDataset(Dataset):
@@ -404,6 +413,9 @@ class Reducer(Dataset):
         start, end = self.month_range(start, end)
         dst = self.path(start, end)
         all_dst = self.path()
+        attrs = {}
+        if latest:
+            attrs['all_dst'] = all_dst
 
         fn = self.compute
         args = getfullargspec(fn).args
@@ -423,7 +435,7 @@ class Reducer(Dataset):
             else:
                 msg = f'Found {dst}; skipping'
                 status = FOUND
-                return Result(msg=msg, status=status, dst=dst)
+                return Result(msg=msg, status=status, dst=dst, attrs=attrs)
         else:
             msg = f'Wrote {dst}'
             status = WROTE
@@ -447,10 +459,8 @@ class Reducer(Dataset):
             print(f'Writing DataFrame to {dst}')
             value.to_parquet(dst)
 
-        attrs = {}
         if latest:
             print(f'Copying {dst} to {all_dst}')
             self.fs.copy(dst, all_dst, recursive=True)
-            attrs['all_dst'] = all_dst
 
         return Result(msg=msg, status=status, dst=dst, value=value, attrs=attrs)

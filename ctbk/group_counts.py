@@ -151,21 +151,18 @@ class GroupCounts(Aggregator, Reducer):
                                     shutil.copyfileobj(i, o)
                         written_urls.append(db_dst)
             if self.json and all_dst:
-                json_dst = splitext(all_dst)[0] + JSON_EXTENSION
-                if self.fs.exists(json_dst) and not overwrite:
-                    print(f'json exists, skipping: {json_dst}')
-                else:
-                    print(f'writing json: {json_dst}')
-                    (
-                        result.value
-                        .drop(columns='Month')
-                        .rename(columns={
-                            'Start Year': 'Year',
-                            'Start Month': 'Month',
-                        })
-                        .to_json(json_dst, 'records')
-                    )
-                written_urls.append(json_dst)
+                json_df = (
+                    result
+                    .value
+                    .drop(columns='Month')
+                    .rename(columns={
+                        'Start Year': 'Year',
+                        'Start Month': 'Month',
+                    })
+                )
+                json_dst = self.write_json(json_df, all_dst=all_dst, overwrite=overwrite)
+                if json_dst:
+                    written_urls.append(json_dst)
             if self.email:
                 self.maybe_email(written_urls)
         return result
