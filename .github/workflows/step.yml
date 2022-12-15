@@ -1,13 +1,24 @@
-name: Setup env
+name: Run step
 on:
   workflow_call:
+    inputs:
+      name:
+        required: true
+        type: string
+      run:
+        required: true
+        type: string
 jobs:
-  setup:
-    name: Setup env
+  run:
+    name: ${{ inputs.name }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-python@v2
+      - name: Setup Python 3.9
+        uses: actions/setup-python@v4
         with:
           python-version: 3.9
           cache: pip
-      - run: pip install -e .
+      - name: Install pip deps
+        run: pip install -e .
+      - name: ${{ inputs.name }}
+        run: ${{ inputs.run }}
