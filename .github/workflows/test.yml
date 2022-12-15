@@ -13,8 +13,12 @@ jobs:
       my_var: python
       mailto: ${{ env.MAIL_TO }}
       tv: ${{ env.testvar }}
+      cmd: ${{ steps.echo.outputs.cmd }}
     steps:
-      - run: echo "Exposing output $my_var"
+      - id: echo
+        run: |
+          echo "Exposing output $my_var"
+          echo "cmd=python ${{ env.MAIL_TO }} ${{ env.testvar }}" >> $GITHUB_OUTPUT
   use_var:
     needs: compute_var
     runs-on: ubuntu-latest
@@ -23,6 +27,8 @@ jobs:
       step_envar: $testvar
     steps:
       - run: |
+          echo cmd ${{ needs.compute_var.outputs.cmd }}
+          echo "cmd ${{ needs.compute_var.outputs.cmd }}"
           echo my_var ${{ needs.compute_var.outputs.my_var }}
           echo computed_var $computed_var
           echo testvar $testvar, ${{ env.testvar }}
