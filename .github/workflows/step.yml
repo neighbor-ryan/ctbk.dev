@@ -8,6 +8,13 @@ on:
       run:
         required: true
         type: string
+    secrets: inherit
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_DEFAULT_REGION: us-east-1
+  MAIL_FROM: ${{ secrets.MAIL_USERNAME }}
+  MAIL_PSWD: ${{ secrets.MAIL_PASSWORD }}
 jobs:
   run:
     name: ${{ inputs.name }}

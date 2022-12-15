@@ -6,12 +6,7 @@ on:
   schedule:
     - cron: "0 17 3-11 * *"
 env:
-  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  AWS_DEFAULT_REGION: us-east-1
-  GIT_BRANCH: ${{ github.event.pull_request && github.head_ref || github.ref_name }}
-  MAIL_FROM: ${{ secrets.MAIL_USERNAME }}
-  MAIL_PSWD: ${{ secrets.MAIL_PASSWORD }}
+  MAIL_TO: ${{ secrets.MAIL_TO }}
 jobs:
   csvs:
     uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
@@ -71,4 +66,4 @@ jobs:
     uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
     with:
       name: Aggregate counts by (month, region, gender, user type, rideable type)
-      run: python ctbk/group_counts.py --s3 -ymrgtb -cd --email ${{ secrets.MAIL_TO }}
+      run: python ctbk/group_counts.py --s3 -ymrgtb -cd --email ${{ env.MAIL_TO }}
