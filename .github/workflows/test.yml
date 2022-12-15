@@ -9,11 +9,11 @@ jobs:
   build_mailto_output:
     runs-on: ubuntu-latest
     outputs:
-      run: python ctbk/group_counts.py --s3 -ymrgtb -cd --email ${{ env.MAIL_TO }}
+      run: "python ctbk/group_counts.py --s3 -ymrgtb -cd --email ${{ env.MAIL_TO }}"
     steps:
       - run: echo "Exposing env var"
   group_counts-year-month-region-gender-type-bike-counts-durations:
-    needs: [build_mailto_output]
+    needs: build_mailto_output
     runs-on: ubuntu-latest
     steps:
       - run: |
