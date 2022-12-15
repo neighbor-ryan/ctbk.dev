@@ -6,15 +6,18 @@ on:
 env:
   MAIL_TO: ${{ secrets.MAIL_TO }}
 jobs:
-  build_mailto_output:
+  compute_var:
     runs-on: ubuntu-latest
     outputs:
-      run: "python ctbk/group_counts.py --s3 -ymrgtb -cd --email ${{ env.MAIL_TO }}"
+      my_var: "python ctbk/group_counts.py --s3 -ymrgtb -cd --email ${{ env.MAIL_TO }}"
     steps:
-      - run: echo "Exposing env var"
-  group_counts-year-month-region-gender-type-bike-counts-durations:
-    needs: build_mailto_output
+      - run: echo "Exposing output $my_var"
+  use_var:
+    needs: compute_var
     runs-on: ubuntu-latest
+    env:
+      computed_var: ${{ needs.compute_var.outputs.my_var }}
     steps:
       - run: |
-          echo "cmd: ${{ needs.build_mailto_output.outputs.run }}"
+          echo "cmd: ${{ needs.compute_var.outputs.my_var }}"
+          echo "computed_var: $computed_var"
