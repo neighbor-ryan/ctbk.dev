@@ -70,10 +70,16 @@ jobs:
       name: Build stations DB (month, station-pair)
       run: python ctbk/stations/db.py --s3 -ymse -c
     secrets: inherit
+  build_mailto_output:
+    runs-on: ubuntu-latest
+    outputs:
+      run: python ctbk/group_counts.py --s3 -ymrgtb -cd --email ${{ env.MAIL_TO }}
+    steps:
+      - run: echo "Exposing env var"
   group_counts-year-month-region-gender-type-bike-counts-durations:
-    needs: normalized
+    needs: [normalized, build_mailto_output]
     uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
     with:
       name: Aggregate counts by (month, region, gender, user type, rideable type)
-      run: python ctbk/group_counts.py --s3 -ymrgtb -cd --email $MAIL_TO
+      run: ${{ needs.build_mailto_output.outputs.run }}
     secrets: inherit
