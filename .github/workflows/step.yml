@@ -28,6 +28,8 @@ jobs:
     name: ${{ inputs.name }}
     runs-on: ubuntu-latest
     steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
       - name: Setup Python 3.9
         uses: actions/setup-python@v4
         with:
