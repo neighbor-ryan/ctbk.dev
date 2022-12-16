@@ -4,7 +4,7 @@ on:
     branches:
       - test
 env:
-  secret1: ${{ secrets.secret1 }}
+  secret1: ${{ secrets.SECRET1 }}
   var1: VAR1
   var2: VAR2
 jobs:
@@ -12,8 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       output1: python
-      output2: ${{ env.secret1 }}
+      output2: ${{ env.SECRET1 }}
       output3: ${{ env.var1 }}
+      stepoutput0: ${{ steps.echo.outputs.stepout0 }}
       stepoutput1: ${{ steps.echo.outputs.stepout1 }}
       stepoutput2: ${{ steps.echo.outputs.stepout2 }}
       stepoutput3: ${{ steps.echo.outputs.stepout3 }}
@@ -23,16 +24,18 @@ jobs:
     steps:
       - id: echo
         run: |
+          echo "stepout0=python ctbk/group_counts.py --s3 -ymrgtb -cd --email ${{ env.secret1 }}" >> $GITHUB_OUTPUT 
           echo "stepout1=python ${{ env.var1 }}" >> $GITHUB_OUTPUT
           echo "stepout2=python${{ env.var1 }}" >> $GITHUB_OUTPUT
-          echo "stepout3=python$\ ${{ env.var1 }}" >> $GITHUB_OUTPUT
+          echo "stepout3=python\ ${{ env.var1 }}" >> $GITHUB_OUTPUT
           echo "stepout4=python ${{ env.var1 }} ${{ env.secret1 }}" >> $GITHUB_OUTPUT
           echo "stepout5=python${{ env.var1 }}${{ env.secret1 }}" >> $GITHUB_OUTPUT
-          echo "stepout6=python$\ ${{ env.var1 }}\ ${{ env.secret1 }}" >> $GITHUB_OUTPUT
+          echo "stepout6=python\ ${{ env.var1 }}\ ${{ env.secret1 }}" >> $GITHUB_OUTPUT
   use_var:
     needs: compute_var
     runs-on: ubuntu-latest
     env:
+      computed_var0: ${{ needs.compute_var.outputs.output0 }}
       computed_var1: ${{ needs.compute_var.outputs.output1 }}
       computed_var2: ${{ needs.compute_var.outputs.output2 }}
       computed_var3: ${{ needs.compute_var.outputs.output3 }}
@@ -44,12 +47,14 @@ jobs:
           echo output1 ${{ needs.compute_var.outputs.output1 }}
           echo output2 ${{ needs.compute_var.outputs.output2 }}
           echo output3 ${{ needs.compute_var.outputs.output3 }}
+          echo stepoutput0 ${{ needs.compute_var.outputs.stepoutput0 }}
           echo stepoutput1 ${{ needs.compute_var.outputs.stepoutput1 }}
           echo stepoutput2 ${{ needs.compute_var.outputs.stepoutput2 }}
           echo stepoutput3 ${{ needs.compute_var.outputs.stepoutput3 }}
           echo stepoutput4 ${{ needs.compute_var.outputs.stepoutput4 }}
           echo stepoutput5 ${{ needs.compute_var.outputs.stepoutput5 }}
           echo stepoutput6 ${{ needs.compute_var.outputs.stepoutput6 }}
+          echo computed_var0 $computed_var0
           echo computed_var1 $computed_var1
           echo computed_var2 $computed_var2
           echo computed_var3 $computed_var3
