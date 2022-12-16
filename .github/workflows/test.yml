@@ -14,11 +14,15 @@ jobs:
       output1: python
       output2: ${{ env.secret1 }}
       output3: ${{ env.var1 }}
-      output4: ${{ steps.echo.outputs.stepout1 }}
+      stepoutput1: ${{ steps.echo.outputs.stepout1 }}
+      stepoutput2: ${{ steps.echo.outputs.stepout2 }}
+      stepoutput3: ${{ steps.echo.outputs.stepout3 }}
     steps:
       - id: echo
         run: |
-          echo "stepout1=python ${{ env.secret1 }} ${{ env.var1 }}" >> $GITHUB_OUTPUT
+          echo "stepout1=python ${{ env.var1 }}" >> $GITHUB_OUTPUT
+          echo "stepout2=python${{ env.var1 }}" >> $GITHUB_OUTPUT
+          echo "stepout3=python$\ {{ env.var1 }}" >> $GITHUB_OUTPUT
   use_var:
     needs: compute_var
     runs-on: ubuntu-latest
@@ -26,20 +30,19 @@ jobs:
       computed_var1: ${{ needs.compute_var.outputs.output1 }}
       computed_var2: ${{ needs.compute_var.outputs.output2 }}
       computed_var3: ${{ needs.compute_var.outputs.output3 }}
-      computed_var4: ${{ needs.compute_var.outputs.output4 }}
+      computed_var4: ${{ needs.compute_var.outputs.stepoutput1 }}
       step_var1: $var1
-      step_var2: ${{ env.var2 }}
     steps:
       - run: |
           echo var1 $var1, ${{ env.var1 }}
           echo output1 ${{ needs.compute_var.outputs.output1 }}
           echo output2 ${{ needs.compute_var.outputs.output2 }}
           echo output3 ${{ needs.compute_var.outputs.output3 }}
-          echo output4 ${{ needs.compute_var.outputs.output4 }}
-          echo "output4 ${{ needs.compute_var.outputs.output4 }}"
+          echo stepoutput1 ${{ needs.compute_var.outputs.stepoutput1 }}
+          echo stepoutput2 ${{ needs.compute_var.outputs.stepoutput2 }}
+          echo stepoutput3 ${{ needs.compute_var.outputs.stepoutput3 }}
           echo computed_var1 $computed_var1
           echo computed_var2 $computed_var2
           echo computed_var3 $computed_var3
           echo computed_var4 $computed_var4
           echo step_envar $step_var1, ${{ env.step_var1 }}
-          echo step_envar $step_var2, ${{ env.step_var2 }}
