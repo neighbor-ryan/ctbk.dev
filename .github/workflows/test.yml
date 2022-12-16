@@ -17,12 +17,18 @@ jobs:
       stepoutput1: ${{ steps.echo.outputs.stepout1 }}
       stepoutput2: ${{ steps.echo.outputs.stepout2 }}
       stepoutput3: ${{ steps.echo.outputs.stepout3 }}
+      stepoutput4: ${{ steps.echo.outputs.stepout1 }}
+      stepoutput5: ${{ steps.echo.outputs.stepout2 }}
+      stepoutput6: ${{ steps.echo.outputs.stepout3 }}
     steps:
       - id: echo
         run: |
-          echo "stepout1=python ${{ env.var1 }} ${{ env.secret1 }}" >> $GITHUB_OUTPUT
-          echo "stepout2=python${{ env.var1 }}${{ env.secret1 }}" >> $GITHUB_OUTPUT
-          echo "stepout3=python$\ ${{ env.var1 }}\ ${{ env.secret1 }}" >> $GITHUB_OUTPUT
+          echo "stepout1=python ${{ env.var1 }}" >> $GITHUB_OUTPUT
+          echo "stepout2=python${{ env.var1 }}" >> $GITHUB_OUTPUT
+          echo "stepout3=python$\ ${{ env.var1 }}" >> $GITHUB_OUTPUT
+          echo "stepout4=python ${{ env.var1 }} ${{ env.secret1 }}" >> $GITHUB_OUTPUT
+          echo "stepout5=python${{ env.var1 }}${{ env.secret1 }}" >> $GITHUB_OUTPUT
+          echo "stepout6=python$\ ${{ env.var1 }}\ ${{ env.secret1 }}" >> $GITHUB_OUTPUT
   use_var:
     needs: compute_var
     runs-on: ubuntu-latest
@@ -41,6 +47,9 @@ jobs:
           echo stepoutput1 ${{ needs.compute_var.outputs.stepoutput1 }}
           echo stepoutput2 ${{ needs.compute_var.outputs.stepoutput2 }}
           echo stepoutput3 ${{ needs.compute_var.outputs.stepoutput3 }}
+          echo stepoutput4 ${{ needs.compute_var.outputs.stepoutput4 }}
+          echo stepoutput5 ${{ needs.compute_var.outputs.stepoutput5 }}
+          echo stepoutput6 ${{ needs.compute_var.outputs.stepoutput6 }}
           echo computed_var1 $computed_var1
           echo computed_var2 $computed_var2
           echo computed_var3 $computed_var3
