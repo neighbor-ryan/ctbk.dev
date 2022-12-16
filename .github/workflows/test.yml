@@ -24,7 +24,7 @@ jobs:
     steps:
       - id: echo
         run: |
-          echo "stepout0=python ctbk/group_counts.py" >> $GITHUB_OUTPUT 
+          echo "stepout0=python ctbk/group_counts.py --s3 -ymrgtb -cd" >> $GITHUB_OUTPUT 
           echo "stepout1=python ${{ env.var1 }}" >> $GITHUB_OUTPUT
           echo "stepout2=python${{ env.var1 }}" >> $GITHUB_OUTPUT
           echo "stepout3=python\ ${{ env.var1 }}" >> $GITHUB_OUTPUT
