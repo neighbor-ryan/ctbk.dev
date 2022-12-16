@@ -1,0 +1,28 @@
+name: Run step
+on:
+  workflow_call:
+    inputs:
+      name:
+        required: true
+        type: string
+      run:
+        required: true
+        type: string
+    secrets:
+      SECRET1:
+        required: true
+env:
+  SECRET1: ${{ secrets.SECRET1 }}
+jobs:
+  run:
+    name: ${{ inputs.name }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+      - name: Setup Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+      - name: ${{ inputs.name }}
+        run: ${{ inputs.run }}
