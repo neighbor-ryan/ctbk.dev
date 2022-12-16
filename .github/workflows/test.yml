@@ -20,9 +20,9 @@ jobs:
     steps:
       - id: echo
         run: |
-          echo "stepout1=python ${{ env.var1 }}" >> $GITHUB_OUTPUT
-          echo "stepout2=python${{ env.var1 }}" >> $GITHUB_OUTPUT
-          echo "stepout3=python$\ {{ env.var1 }}" >> $GITHUB_OUTPUT
+          echo "stepout1=python ${{ env.var1 }} ${{ env.secret1 }}" >> $GITHUB_OUTPUT
+          echo "stepout2=python${{ env.var1 }}${{ env.secret1 }}" >> $GITHUB_OUTPUT
+          echo "stepout3=python$\ ${{ env.var1 }}\ ${{ env.secret1 }}" >> $GITHUB_OUTPUT
   use_var:
     needs: compute_var
     runs-on: ubuntu-latest
