@@ -73,9 +73,8 @@ jobs:
   build_mailto_output:
     runs-on: ubuntu-latest
     outputs:
-      run: python ctbk/group_counts.py --s3 -ymrgtb -cd --email ${{ env.MAIL_TO }}
-    steps:
-      - run: echo "Exposing env var"
+      run: python ctbk/group_counts.py --s3 -ymrgtb -cd --do-email
+    secrets: inherit
   group_counts-year-month-region-gender-type-bike-counts-durations:
     needs: [normalized, build_mailto_output]
     uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main

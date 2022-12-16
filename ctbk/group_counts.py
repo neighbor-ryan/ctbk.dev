@@ -16,6 +16,7 @@ class GroupCounts(Aggregator, Reducer):
     @classmethod
     def cli_opts(cls):
         return super().cli_opts() + [
+            option('--do-email', is_flag=True, help='Send email about outcome, from MAIL_USERNAME/MAIL_PASSWORD to the email address found in $MAIL_TO'),
             option('--email', help='Send email about outcome, from MAIL_USERNAME/MAIL_PASSWORD to this address'),
             option('--smtp', help='SMTP server URL'),
             option('--sql/--no-sql', help=f'Write a SQLite version of the output data (to default table {cls.TBL})'),
@@ -25,6 +26,7 @@ class GroupCounts(Aggregator, Reducer):
 
     def __init__(
             self,
+            do_email=None,
             email=None,
             smtp=None,
             sql=False,
@@ -32,7 +34,10 @@ class GroupCounts(Aggregator, Reducer):
             tbl=None,
             **kwargs
     ):
-        self.email = email or env.get('MAIL_TO')
+        self.email = email
+        if not email and do_email and env.get('MAIL_TO'):
+            print('using env email')
+            self.email = env['MAIL_TO']
         print(f"Will email on updates: {bool(self.email)}")
         self.smtp = smtp
         if tbl:
