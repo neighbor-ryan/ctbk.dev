@@ -22,14 +22,21 @@ jobs:
     needs: compute_var
     runs-on: ubuntu-latest
     env:
-      computed_var: ${{ needs.compute_var.outputs.output1 }}
+      computed_var1: ${{ needs.compute_var.outputs.output1 }}
+      computed_var2: ${{ needs.compute_var.outputs.output2 }}
+      computed_var3: ${{ needs.compute_var.outputs.output3 }}
+      computed_var4: ${{ needs.compute_var.outputs.output4 }}
       step_envar: $var1
     steps:
       - run: |
           echo var1 $var1, ${{ env.var1 }}
           echo output1 ${{ needs.compute_var.outputs.output1 }}
           echo output2 ${{ needs.compute_var.outputs.output2 }}
+          echo output3 ${{ needs.compute_var.outputs.output3 }}
           echo output4 ${{ needs.compute_var.outputs.output4 }}
           echo "output4 ${{ needs.compute_var.outputs.output4 }}"
-          echo computed_var $computed_var
+          echo computed_var1 $computed_var1
+          echo computed_var2 $computed_var2
+          echo computed_var3 $computed_var3
+          echo computed_var4 $computed_var4
           echo step_envar $step_envar, ${{ env.step_envar }}
