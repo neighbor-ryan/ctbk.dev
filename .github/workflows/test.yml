@@ -5,7 +5,8 @@ on:
       - test
 env:
   secret1: ${{ secrets.secret1 }}
-  var1: yay
+  var1: VAR1
+  var2: VAR2
 jobs:
   compute_var:
     runs-on: ubuntu-latest
@@ -26,7 +27,8 @@ jobs:
       computed_var2: ${{ needs.compute_var.outputs.output2 }}
       computed_var3: ${{ needs.compute_var.outputs.output3 }}
       computed_var4: ${{ needs.compute_var.outputs.output4 }}
-      step_envar: $var1
+      step_var1: $var1
+      step_var2: ${{ env.var2 }}
     steps:
       - run: |
           echo var1 $var1, ${{ env.var1 }}
@@ -39,4 +41,5 @@ jobs:
           echo computed_var2 $computed_var2
           echo computed_var3 $computed_var3
           echo computed_var4 $computed_var4
-          echo step_envar $step_envar, ${{ env.step_envar }}
+          echo step_envar $step_var1, ${{ env.step_var1 }}
+          echo step_envar $step_var2, ${{ env.step_var2 }}
