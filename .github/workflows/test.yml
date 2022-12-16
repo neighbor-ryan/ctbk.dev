@@ -4,34 +4,32 @@ on:
     branches:
       - test
 env:
-  MAIL_TO: ${{ secrets.MAIL_TO }}
-  testvar: yay
+  secret1: ${{ secrets.secret1 }}
+  var1: yay
 jobs:
   compute_var:
     runs-on: ubuntu-latest
     outputs:
-      my_var: python
-      mailto: ${{ env.MAIL_TO }}
-      tv: ${{ env.testvar }}
-      cmd: ${{ steps.echo.outputs.cmd }}
+      output1: python
+      output2: ${{ env.secret1 }}
+      output3: ${{ env.var1 }}
+      output4: ${{ steps.echo.outputs.stepout1 }}
     steps:
       - id: echo
         run: |
-          echo "Exposing output $my_var"
-          echo "cmd=python ${{ env.MAIL_TO }} ${{ env.testvar }}" >> $GITHUB_OUTPUT
+          echo "stepout1=python ${{ env.secret1 }} ${{ env.var1 }}" >> $GITHUB_OUTPUT
   use_var:
     needs: compute_var
     runs-on: ubuntu-latest
     env:
-      computed_var: ${{ needs.compute_var.outputs.my_var }}
-      step_envar: $testvar
+      computed_var: ${{ needs.compute_var.outputs.output1 }}
+      step_envar: $var1
     steps:
       - run: |
-          echo cmd ${{ needs.compute_var.outputs.cmd }}
-          echo "cmd ${{ needs.compute_var.outputs.cmd }}"
-          echo my_var ${{ needs.compute_var.outputs.my_var }}
+          echo var1 $var1, ${{ env.var1 }}
+          echo output1 ${{ needs.compute_var.outputs.output1 }}
+          echo output2 ${{ needs.compute_var.outputs.output2 }}
+          echo output4 ${{ needs.compute_var.outputs.output4 }}
+          echo "output4 ${{ needs.compute_var.outputs.output4 }}"
           echo computed_var $computed_var
-          echo testvar $testvar, ${{ env.testvar }}
           echo step_envar $step_envar, ${{ env.step_envar }}
-          echo mailto ${{ needs.compute_var.outputs.mailto }}
-          echo MAIL_TO ${{ env.MAIL_TO }}, ${{ secrets.MAIL_TO }}
