@@ -5,8 +5,6 @@ on:
       - main
   schedule:
     - cron: "0 17 3-11 * *"
-env:
-  MAIL_TO: ${{ secrets.MAIL_TO }}
 jobs:
   csvs:
     uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
@@ -70,15 +68,10 @@ jobs:
       name: Build stations DB (month, station-pair)
       run: python ctbk/stations/db.py --s3 -ymse -c
     secrets: inherit
-  build_mailto_output:
-    runs-on: ubuntu-latest
-    outputs:
-      run: python ctbk/group_counts.py --s3 -ymrgtb -cd --do-email
-    secrets: inherit
   group_counts-year-month-region-gender-type-bike-counts-durations:
-    needs: [normalized, build_mailto_output]
+    needs: normalized
     uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
     with:
       name: Aggregate counts by (month, region, gender, user type, rideable type)
-      run: ${{ needs.build_mailto_output.outputs.run }}
+      run: python ctbk/group_counts.py --s3 -ymrgtb -cd --do-email
     secrets: inherit
