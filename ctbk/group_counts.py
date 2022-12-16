@@ -32,7 +32,8 @@ class GroupCounts(Aggregator, Reducer):
             tbl=None,
             **kwargs
     ):
-        self.email = email
+        self.email = email or env.get('MAIL_TO')
+        print(f"Will email on updates: {bool(self.email)}")
         self.smtp = smtp
         if tbl:
             sql = True
