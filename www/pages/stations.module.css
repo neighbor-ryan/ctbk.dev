@@ -1,0 +1,44 @@
+.container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.main {
+    padding: 0 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+.title {
+    margin: 0;
+    line-height: 1.15;
+    font-size: 2rem;
+    position: fixed;
+    top: 0;
+    z-index: 1000;
+    color: white;
+}
+
+.homeMap {
+    width: 100%;
+    height: 100vh;
+}
+
+.selected {
+    z-index: 500 !important;
+}
+.circles {
+    z-index: 420 !important;
+}
+
+.lines {
+    z-index: 450 !important;
+}

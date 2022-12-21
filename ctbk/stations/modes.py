@@ -91,8 +91,18 @@ class StationModes(MonthsDataset):
     def convert_one(self, task, error='warn', overwrite=False):
         result = super().convert_one(task, error, overwrite)
         all_dst = task.get("extra_dst")
-        if self.json and all_dst:
-            self.write_json(result.value, all_dst=all_dst, overwrite=overwrite)
+        df = result.value
+        if self.json and all_dst and df is not None:
+            self.write_json(
+                df.rename(columns={
+                    'Station Name': 'name',
+                    'Latitude': 'lat',
+                    'Longitude': 'lng',
+                }),
+                all_dst=all_dst,
+                overwrite=overwrite,
+                orient='index',
+            )
         return result
 
     def compute(self, src_df):

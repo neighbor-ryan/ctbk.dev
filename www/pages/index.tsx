@@ -11,6 +11,8 @@ import {boolParam, enumMultiParam, enumParam, numberArrayParam, Param, ParsedPar
 import {DateRange, DateRange2Dates, dateRangeParam} from "../src/date-range";
 import Link from "next/link";
 import { basePath } from "../src/utils/config"
+import * as fs from "fs";
+import path from "path";
 
 const Markdown = ReactMarkdown
 const ReactTooltip = dynamic(() => import("react-tooltip"), { ssr: false, })
@@ -192,12 +194,19 @@ function vline(year: number): Partial<Plotly.Shape> {
     }
 }
 
-const JSON_URL = 'https://ctbk.s3.amazonaws.com/aggregated/ymrgtb_cd.json'
+const JSON_PATH = 'public/assets/ymrgtb_cd.json'
 
 export async function getStaticProps(context: any) {
-    const res = await fetch(JSON_URL)
-    const data = await res.json()
-    return { props: { data, } }
+    // let reader = await parquet.ParquetReader.openFile('public/assets/ymrgtb_cd.parquet');
+    // let cursor = reader.getCursor();
+    // const rows: Row[] = []
+    // let row: Row;
+    // while (row = await cursor.next() as Row) {
+    //     rows.push(row)
+    //     // console.log(record);
+    // }
+    const data = JSON.parse(fs.readFileSync(path.join(process.cwd(), JSON_PATH), 'utf-8')) as Row[]
+    return { props: { data } }
 }
 
 type Params = {

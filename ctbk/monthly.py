@@ -207,13 +207,13 @@ class Dataset:
     def compute(self, **kwargs):
         pass
 
-    def write_json(self, df, all_dst, overwrite: bool):
+    def write_json(self, df, all_dst, overwrite: bool, orient = 'records'):
         json_dst = splitext(all_dst)[0] + JSON_EXTENSION
         if self.fs.exists(json_dst) and not overwrite:
             print(f'json exists, skipping: {json_dst}')
         else:
             print(f'writing json: {json_dst}')
-            df.to_json(json_dst, 'records')
+            df.to_json(json_dst, orient=orient)
         return json_dst
 
 

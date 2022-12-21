@@ -110,6 +110,9 @@ export class Worker {
                 filters,
             }
         )
+        return this.fetchQuery(query);
+    }
+    async fetchQuery<Row>(query: string) {
         if (query in this.requests) {
             const promise = this.requests[query].promise as Promise<Row[]>
             if (!promise) {
@@ -117,7 +120,7 @@ export class Worker {
             }
             return promise
         }
-        console.log("query:", query)
+        // console.log("query:", query)
         this.requests[query] = {}
         const rows = (
             this.worker
