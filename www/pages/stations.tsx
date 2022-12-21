@@ -140,10 +140,7 @@ function MapBody(
         [ selectedStation, stationCounts, maxDst, sum, mPerPx ]
     )
 
-    const [ selectedCounts, unselectedCounts ] = [ [] as CountRow[], [] as CountRow[] ]
-    counts.forEach(count => {
-        (count.id == selectedStation ? selectedCounts : unselectedCounts).push(count)
-    })
+    const selectedCounts = counts.filter(count => count.id == selectedStation)
 
     function StationCircle({ id, count, selected }: CountRow & { selected?: boolean }) {
         const { name, lat, lng } = stations[id]
@@ -166,7 +163,7 @@ function MapBody(
                                console.log("click:", name)
                                setStationCounts(null)
                                setSelectedStation(id)
-                           }
+                           },
                            // mouseout: () => {
                            //     console.log("out:", name)
                            //     setStationCounts(null)
@@ -186,7 +183,7 @@ function MapBody(
         }</Pane>
         {lines}
         <Pane name={"circles"} className={css.circles}>{
-            unselectedCounts.map(({ id, count }) => <StationCircle key={id} id={id} count={count} />)
+            counts.map(({ id, count }) => <StationCircle key={id} id={id} count={count} />)
         }</Pane>
         <TileLayer url={url} attribution={attribution}/>
     </>
