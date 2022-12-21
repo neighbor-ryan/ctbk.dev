@@ -13,6 +13,14 @@ export type Param<T> = {
 
 export type ParsedParam<T> = [ T, Dispatch<T> ]
 
+export function stringParam(init?: string | undefined, push: boolean = true): Param<string | undefined> {
+    return {
+        encode: v => v,
+        decode: v => v,
+        push,
+    }
+}
+
 export function floatParam(init: number, push: boolean = true): Param<number> {
     return {
         encode: v => v === init ? undefined : v.toString(),
@@ -205,7 +213,7 @@ export function parseQueryParams<Params extends { [k: string]: Param<any> }, Par
                 const param = params[key]
                 if (param.push) {
                     push = true
-                    return
+                    break
                 }
             }
             const url = { pathname: router.pathname, hash, search}

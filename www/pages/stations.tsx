@@ -2,7 +2,7 @@ import Head from 'next/head';
 
 import Map from '../src/components/Map';
 
-import {floatParam, Param, ParsedParam, parseQueryParams} from "../src/utils/params";
+import {floatParam, Param, ParsedParam, parseQueryParams, stringParam} from "../src/utils/params";
 import {LL, llParam} from "../src/latlng";
 import * as ReactLeaflet from "react-leaflet";
 import type L from 'leaflet';
@@ -56,11 +56,13 @@ export const MAPS = {
 type Params = {
     ll: Param<LL>
     z: Param<number>
+    ss: Param<string | undefined>
 }
 
 type ParsedParams = {
     ll: ParsedParam<LL>
     z: ParsedParam<number>
+    ss: ParsedParam<string | undefined>
 }
 
 function getMetersPerPixel(map: L.Map) {
@@ -89,8 +91,8 @@ function MapBody(
         setZoom: Dispatch<number>
         counts: CountRow[]
         stations: Stations
-        selectedStation: string | null
-        setSelectedStation: Dispatch<string | null>
+        selectedStation: string | undefined
+        setSelectedStation: Dispatch<string | undefined>
         stationCounts: StationCount[] | null
         setStationCounts: Dispatch<StationCount[] | null>
         url: string
@@ -108,7 +110,7 @@ function MapBody(
     useMapEvents({
         moveend: () => setLL(map.getCenter()),
         zoom: () => setZoom(map.getZoom()),
-        click: () => { setSelectedStation(null) ; setStationCounts(null) },
+        click: () => { setSelectedStation(undefined) ; setStationCounts(null) },
     })
 
     const maxDst = Math.max(...(stationCounts || []).map(({ Count }) => Count))
@@ -195,10 +197,12 @@ export default function Home({ counts, stations, }: { counts: CountRow[], statio
     const params: Params = {
         ll: llParam({ init: DEFAULT_CENTER, places: 3, }),
         z: floatParam(DEFAULT_ZOOM, false),
+        ss: stringParam(),
     }
     const {
         ll: [ { lat, lng }, setLL ],
         z: [ zoom, setZoom, ],
+        ss: [ selectedStation, setSelectedStation ],
     }: ParsedParams = parseQueryParams({ params })
 
     const title = "Citi Bike rides by station, November 2022"
@@ -207,19 +211,19 @@ export default function Home({ counts, stations, }: { counts: CountRow[], statio
 
     const isSSR = typeof window === "undefined";
 
-    const [ selectedStation, setSelectedStation ] = useState<string | null>(null);
     const [ stationCounts, setStationCounts ] = useState<StationCount[] | null>(null)
 
     const query = useMemo(
         () => `
-            select ID, Count from (select
-                                       "End Station Idx",
-                                       Count
-                                   from
-                                       counts
-                                           join stations on counts."Start Station Idx" = stations.idx
-                                   where
-                                       stations.ID = "${selectedStation}") a join stations on a."End Station Idx"=stations.idx
+            select ID, Count from (
+                select
+                    "End Station Idx",
+                    Count
+                from
+                    counts
+                        join stations on counts."Start Station Idx" = stations.idx
+                where
+                    stations.ID = "${selectedStation}") a join stations on a."End Station Idx"=stations.idx
         `,
         [ selectedStation ]
     )
