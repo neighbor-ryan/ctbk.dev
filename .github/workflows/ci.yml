@@ -47,12 +47,12 @@ jobs:
       name: Aggregate counts by station-pair
       run: python ctbk/group_counts.py --s3 -se -c
     secrets: inherit
-  stations-db-start-end:
-    needs: modes
+  station_pair_jsons:
+    needs: group_counts-start-end
     uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
     with:
       name: Build stations DB (station-pair)
-      run: python ctbk/stations/db.py --s3 -se -c
+      run: python ctbk/station_pair_jsons.py --s3
     secrets: inherit
   group_counts-year-month-start-end:
     needs: normalized
@@ -60,13 +60,6 @@ jobs:
     with:
       name: Aggregate counts by (month, station-pair)
       run: python ctbk/group_counts.py --s3 -ymse -c
-    secrets: inherit
-  stations-db-year-month-start-end:
-    needs: modes
-    uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
-    with:
-      name: Build stations DB (month, station-pair)
-      run: python ctbk/stations/db.py --s3 -ymse -c
     secrets: inherit
   group_counts-year-month-region-gender-type-bike-counts-durations:
     needs: normalized

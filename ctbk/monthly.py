@@ -328,10 +328,11 @@ class MonthsDataset(Dataset):
                         path_arg = f"{arg[:-len(suffix)]}_path"
                         if path_arg in ctx:
                             fd = ctx[arg] = self.fs.open(ctx[path_arg], mode)
-                            print(f'fd arg: passing {ctx[path_arg]} as {arg}, mode {mode}')
+                            #print(f'fd arg: passing {ctx[path_arg]} as {arg}, mode {mode}')
                             ctxs.append(fd)
 
         with contexts(ctxs):
+            print(f'Computing: {ctx["dst"]}')
             value = run(fn, ctx)
 
         if isinstance(value, pd.DataFrame):

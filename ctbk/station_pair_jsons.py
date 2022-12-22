@@ -1,14 +1,14 @@
-import json
 from os.path import splitext, dirname
 
+import json
 import pandas as pd
 from utz import sxs
 
 from ctbk import MonthsDataset, GroupCounts, Monthy
-from ctbk.monthly import BKT, SQLITE_EXTENSION
+from ctbk.monthly import BKT
 
 
-class StartEndDB(MonthsDataset):
+class StationPairJSONs(MonthsDataset):
     ROOT = f'{BKT}/normalized'
     SRC_CLS = GroupCounts
 
@@ -27,7 +27,7 @@ class StartEndDB(MonthsDataset):
         start, end = self.month_range(start, end)
         # List intermediate ("reduced") DFs from GroupCounts src
         df = pd.DataFrame([ dict(src=self.src.reduced_df_path(month), month=month) for month in start.until(end) ])
-        # Convert them to SQLite
+        # Attach JSON output paths
         df = sxs(df, df.apply(self.build_task, axis=1).apply(pd.Series))
         return df
 
@@ -37,7 +37,6 @@ class StartEndDB(MonthsDataset):
         id2idx = idx2id.reset_index().set_index('ID')
         idx2id.ID.to_json(idx2id_path)
 
-        # idx2id.to_sql('stations', con)
         counts = (
             src_df
             .merge(id2idx.idx.rename('Start Station Idx'), left_on='Start Station ID', right_index=True, how='left')
@@ -58,8 +57,7 @@ class StartEndDB(MonthsDataset):
             for s, vs in stations.items()
         }
         json.dump(s_c, s_c_fdw, separators=(',', ':'), )
-        #counts.to_sql('counts', con)
 
 
 if __name__ == '__main__':
-    StartEndDB.cli()
+    StationPairJSONs.cli()
