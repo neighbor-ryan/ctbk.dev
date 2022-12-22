@@ -188,13 +188,14 @@ class Dataset:
             end,
             namespace,
             s3,
+            src_kwargs=None,
             **kwargs,
     ):
         if s3:
             if namespace and namespace != 's3://':
                 raise ValueError(f'`--s3` conflicts with `--namespace {namespace}`')
             namespace = 's3://'
-        src = cls.SRC_CLS(namespace=namespace, root=src_url or root)
+        src = cls.SRC_CLS(namespace=namespace, root=src_url or root, **(src_kwargs or {}))
         self = cls(namespace=namespace, root=dst_url or root, src=src, **kwargs)
         results = self.convert(start=start, end=end, overwrite=overwrite, parallel=parallel)
         if isinstance(results, Result):
@@ -319,6 +320,16 @@ class MonthsDataset(Dataset):
             ctx['con'] = con
             copy = copy_ctx(src=path, dst=dst, dst_fs=self.fs)
             ctxs += [ tmpdir, con, copy, ]
+
+        for arg in args:
+            if arg not in ctx:
+                for suffix, mode in [('_fd', 'wb'), ('_fdw', 'w')]:
+                    if arg.endswith(suffix):
+                        path_arg = f"{arg[:-len(suffix)]}_path"
+                        if path_arg in ctx:
+                            fd = ctx[arg] = self.fs.open(ctx[path_arg], mode)
+                            print(f'fd arg: passing {ctx[path_arg]} as {arg}, mode {mode}')
+                            ctxs.append(fd)
 
         with contexts(ctxs):
             value = run(fn, ctx)

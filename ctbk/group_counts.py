@@ -5,7 +5,7 @@ from utz import *
 
 from ctbk import NormalizedMonths
 from ctbk.aggregator import Aggregator
-from ctbk.monthly import Reducer, BKT, PARQUET_EXTENSION, SQLITE_EXTENSION, JSON_EXTENSION
+from ctbk.monthly import Reducer, BKT, PARQUET_EXTENSION, SQLITE_EXTENSION
 
 
 class GroupCounts(Aggregator, Reducer):
@@ -108,8 +108,8 @@ class GroupCounts(Aggregator, Reducer):
         counts = (
             grouped
             [select_keys]
-                .sum()
-                .reset_index()
+            .sum()
+            .reset_index()
         )
         if agg_keys.get('y') and agg_keys.get('m'):
             counts['Month'] = counts.apply(

@@ -13,10 +13,18 @@ export type Param<T> = {
 
 export type ParsedParam<T> = [ T, Dispatch<T> ]
 
-export function stringParam(init?: string | undefined, push: boolean = true): Param<string | undefined> {
+export function stringParam(push: boolean = true): Param<string | undefined> {
     return {
         encode: v => v,
         decode: v => v,
+        push,
+    }
+}
+
+export function defStringParam(init: string, push: boolean = true): Param<string> {
+    return {
+        encode: v => v,
+        decode: v => v || init,
         push,
     }
 }

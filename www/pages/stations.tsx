@@ -6,20 +6,21 @@ import {floatParam, Param, ParsedParam, parseQueryParams, stringParam} from "../
 import {LL, llParam} from "../src/latlng";
 import * as ReactLeaflet from "react-leaflet";
 import type L from 'leaflet';
-import {Dispatch, useCallback, useEffect, useMemo, useState} from 'react';
+import {Dispatch, useMemo, useState} from 'react';
 import * as fs from "fs";
 import path from "path";
 
 import css from './stations.module.css'
+import fetch from "node-fetch";
+import _ from "lodash";
 
 const DEFAULT_CENTER = { lat: 40.758, lng: -73.965, }
 const DEFAULT_ZOOM = 12
 
-const COUNTS_PATH = 'public/assets/s_c_202211.json'
-const STATIONS_PATH = 'public/assets/ids.json'
-const DB_URL = '/assets/se_c_202211_normd.db'
+// const STATIONS_PATH = 'public/assets/ids.json'
+const LAST_MONTH_PATH = 'public/assets/last-month.json'
 
-const { fromEntries } = Object
+const { entries, fromEntries } = Object
 const { sqrt } = Math
 
 type CountRow = {
@@ -35,11 +36,46 @@ type StationValue = {
 
 type Stations = { [id: string]: StationValue }
 
+async function get<T>(url: string) {
+    return await (await fetch(url)).json() as T
+}
+
+function load<T>(relPath: string) {
+    return JSON.parse(fs.readFileSync(path.join(process.cwd(), relPath), 'utf-8')) as T
+}
+
+type Idx = string
+type ID = string
+type Idx2Id = { [k: Idx]: ID }
+type StationCounts = { [k: ID]: number }
+
+type YmProps = {
+    ym: string
+    stationCounts: StationCounts
+    idx2id: Idx2Id
+}
+
+type YmState = {
+    ym: string
+    stationCounts: Promise<StationCounts>
+    idx2id: Promise<Idx2Id>
+    stationPairCounts: Promise<StationPairCounts>
+}
+
 export async function getStaticProps(context: any) {
-    const cwd = process.cwd()
-    const counts = JSON.parse(fs.readFileSync(path.join(cwd, COUNTS_PATH), 'utf-8')) as CountRow[]
-    const stations = JSON.parse(fs.readFileSync(path.join(cwd, STATIONS_PATH), 'utf-8')) as Stations
-    return { props: { counts, stations, } }
+    const ym = load<string>(LAST_MONTH_PATH)
+
+    const idx2idUrl = `https://ctbk.s3.amazonaws.com/aggregated/${ym}/idx2id.json`
+    const stationCountsUrl = `https://ctbk.s3.amazonaws.com/aggregated/${ym}/s_c.json`
+    const stationsUrl = `https://ctbk.s3.amazonaws.com/stations/ids.json`
+
+    const idx2id = await get<Idx2Id>(idx2idUrl)
+    const stationCounts: StationCounts = _.mapKeys(await get<StationCounts>(stationCountsUrl), (v, k) => idx2id[k])
+    const defaults: YmProps = { ym, idx2id, stationCounts }
+
+    const stations = await get<Stations>(stationsUrl)
+    // const stations = load<Stations>(STATIONS_PATH)
+    return { props: { defaults, stations, } }
 }
 
 export const MAPS = {
@@ -57,44 +93,45 @@ type Params = {
     ll: Param<LL>
     z: Param<number>
     ss: Param<string | undefined>
+    ym: Param<string>
 }
 
 type ParsedParams = {
     ll: ParsedParam<LL>
     z: ParsedParam<number>
     ss: ParsedParam<string | undefined>
+    ym: ParsedParam<string>
 }
 
 function getMetersPerPixel(map: L.Map) {
     const centerLatLng = map.getCenter(); // get map center
     const pointC = map.latLngToContainerPoint(centerLatLng); // convert to containerpoint (pixels)
     const pointX: L.PointExpression = [pointC.x + 1, pointC.y]; // add one pixel to x
-    const pointY: L.PointExpression = [pointC.x, pointC.y + 1]; // add one pixel to y
+    // const pointY: L.PointExpression = [pointC.x, pointC.y + 1]; // add one pixel to y
 
     // convert containerpoints to latlng's
     const latLngC = map.containerPointToLatLng(pointC);
     const latLngX = map.containerPointToLatLng(pointX);
-    const latLngY = map.containerPointToLatLng(pointY);
+    // const latLngY = map.containerPointToLatLng(pointY);
 
     const distanceX = latLngC.distanceTo(latLngX); // calculate distance between c and x (latitude)
-    const distanceY = latLngC.distanceTo(latLngY); // calculate distance between c and y (longitude)
+    // const distanceY = latLngC.distanceTo(latLngY); // calculate distance between c and y (longitude)
 
-    const zoom = map.getZoom()
+    // const zoom = map.getZoom()
     //console.log("distanceX:", distanceX, "distanceY:", distanceY, "center:", centerLatLng, "zoom:", zoom)
     return distanceX
 }
 
 function MapBody(
     {TileLayer, Marker, Circle, CircleMarker, Polyline, Pane, Tooltip, useMapEvents, useMap }: typeof ReactLeaflet,
-    { setLL, setZoom, counts, stations, selectedStation, setSelectedStation, stationCounts, setStationCounts, url, attribution }: {
+    { setLL, setZoom, stations, stationCounts, selectedStation, setSelectedStation, stationPairCounts, url, attribution }: {
         setLL: Dispatch<LL>
         setZoom: Dispatch<number>
-        counts: CountRow[]
         stations: Stations
+        stationCounts: StationCounts
         selectedStation: string | undefined
         setSelectedStation: Dispatch<string | undefined>
-        stationCounts: StationCount[] | null
-        setStationCounts: Dispatch<StationCount[] | null>
+        stationPairCounts: StationPairCounts | null
         url: string
         attribution: string
     }
@@ -102,47 +139,47 @@ function MapBody(
     // Error: No context provided: useLeafletContext() can only be used in a descendant of <MapContainer>
     const map = useMap()
     const zoom = map.getZoom()
-    const mPerPx = useMemo(() => {
-        let mPerPx = getMetersPerPixel(map)
-        // console.log("mPerPx:", mPerPx)
-        return mPerPx
-    }, [ map, zoom, ])
+    const mPerPx = useMemo(() => getMetersPerPixel(map), [ map, zoom, ])
     useMapEvents({
         moveend: () => setLL(map.getCenter()),
         zoom: () => setZoom(map.getZoom()),
-        click: () => { setSelectedStation(undefined) ; setStationCounts(null) },
+        click: () => { setSelectedStation(undefined) },
     })
-
-    const maxDst = Math.max(...(stationCounts || []).map(({ Count }) => Count))
-    const sum = (stationCounts || []).reduce((a, b) => a + b.Count, 0)
-    // const weight = sqrt(sum) / mPerPx
-    // console.log("counts:", counts)
-    //console.log("maxDst:", maxDst, "sum:", sum, "counts:", counts.filter(({ id }) => id == selectedStation)[0], "selected:", selectedStation, "num counts:", (stationCounts || []).length)
 
     const lines = useMemo(
         () => {
-            if (!selectedStation) return null
+            if (!selectedStation || !stationPairCounts) return null
+            const selectedPairCounts = stationPairCounts[selectedStation]
+            console.log("selectedPairCounts:", selectedPairCounts)
+            const selectedPairValues = Array.from(Object.values(selectedPairCounts))
+            // console.log("selectedPairValues:", selectedPairValues)
+            const maxDst = Math.max(...selectedPairValues)
+            const sum = stationCounts[selectedStation]
             const src = stations[selectedStation]
             //console.log("computing lines:", selectedStation)
             return <Pane name={"lines"} className={css.lines}>{
-                (stationCounts || []).map(({ID, Count}) => {
+                entries(selectedPairCounts).map(([ id, count ]) => {
                     // if (Count != maxDst) return
-                    const {name, lat, lng} = stations[ID]
-                    return <Polyline key={`${selectedStation}-${ID}-${zoom}`} color={"red"}
+                    if (!(id in stations)) {
+                        console.log(`id ${id} not in stations:`, stations)
+                        return
+                    }
+                    const {name, lat, lng} = stations[id]
+                    return <Polyline key={`${selectedStation}-${id}-${zoom}`} color={"red"}
                                      positions={[[src.lat, src.lng], [lat, lng],]}
-                                     weight={Math.max(0.7, Count / maxDst * sqrt(sum) / mPerPx)} opacity={0.7}>
+                                     weight={Math.max(0.7, count / maxDst * sqrt(sum) / mPerPx)} opacity={0.7}>
                         <Tooltip sticky={true}>
-                            {src.name} → {name}: {Count}
+                            {src.name} → {name}: {count}
                         </Tooltip>
                     </Polyline>
                 })
             }
             </Pane>
         },
-        [ selectedStation, stationCounts, maxDst, sum, mPerPx ]
+        [ stationPairCounts, selectedStation, stationCounts, mPerPx ]
     )
 
-    const selectedCounts = counts.filter(count => count.id == selectedStation)
+    const selectedCount: [ ID, number ] | undefined = selectedStation ? Array.from(entries(stationCounts).filter(([ id, count, ]) => id == selectedStation))[0] : undefined
 
     function StationCircle({ id, count, selected }: CountRow & { selected?: boolean }) {
         const { name, lat, lng } = stations[id]
@@ -151,26 +188,18 @@ function MapBody(
                            click: () => {
                                if (id == selectedStation) return
                                console.log("click:", name)
-                               setStationCounts(null)
                                setSelectedStation(id)
                            },
                            mouseover: () => {
                                if (id == selectedStation) return
                                console.log("over:", name)
-                               setStationCounts(null)
                                setSelectedStation(id)
                            },
                            mousedown: () => {
                                if (id == selectedStation) return
-                               console.log("click:", name)
-                               setStationCounts(null)
+                               console.log("down:", name)
                                setSelectedStation(id)
                            },
-                           // mouseout: () => {
-                           //     console.log("out:", name)
-                           //     setStationCounts(null)
-                           //     setSelectedStation(null)
-                           // }
                        }}
         >
             <Tooltip sticky={true}>
@@ -181,83 +210,122 @@ function MapBody(
 
     return <>
         <Pane name={"selected"} className={css.selected}>{
-            selectedCounts.map(({ id, count}) => <StationCircle key={id} id={id} count={count} selected={true} />)
+            selectedCount && [selectedCount].map(([ id, count ]) => <StationCircle key={id} id={id} count={count} selected={true} />)
         }</Pane>
         {lines}
         <Pane name={"circles"} className={css.circles}>{
-            counts.map(({ id, count }) => <StationCircle key={id} id={id} count={count} />)
+            entries(stationCounts).map(([ id, count ]) => <StationCircle key={id} id={id} count={count} />)
         }</Pane>
         <TileLayer url={url} attribution={attribution}/>
     </>
 }
 
-type StationCount = { ID: string, Count: number }
+export function ymParam(init: string, push: boolean = true): Param<string> {
+    const ymRegex = /^20(\d{4})$/
+    const vRegex = /^\d{4}$/
+    return {
+        encode: ym => {
+            if (ym == init) return undefined
+            const match = ym.match(ymRegex)
+            if (match) {
+                return match[1]
+            } else {
+                console.warn(`Invalid ym param: ${ym}`)
+                return undefined
+            }
+        },
+        decode: v => {
+            if (!v) return init
+            const match = v.match(vRegex)
+            if (match) {
+                return `20${v}`
+            } else {
+                console.warn(`Invalid ym param value: ${v}`)
+                return init
+            }
+        },
+        push,
+    }
+}
 
-export default function Home({ counts, stations, }: { counts: CountRow[], stations: Stations }) {
+type StationPairCounts = {
+    [k1: string]: { [k2: string]: number }
+}
+
+export default function Home({ defaults, stations }: { defaults: YmProps, stations: Stations, }) {
     const params: Params = {
         ll: llParam({ init: DEFAULT_CENTER, places: 3, }),
         z: floatParam(DEFAULT_ZOOM, false),
         ss: stringParam(),
+        ym: ymParam(defaults.ym),
     }
     const {
         ll: [ { lat, lng }, setLL ],
         z: [ zoom, setZoom, ],
         ss: [ selectedStation, setSelectedStation ],
+        ym: [ ym, setYM ],
     }: ParsedParams = parseQueryParams({ params })
 
-    const title = "Citi Bike rides by station, November 2022"
+    const [ stationCounts, setStationCounts ] = useState(defaults.stationCounts)
+    const [ stationPairCounts, setStationPairCounts ] = useState<StationPairCounts | null>(null)
+
+    const { ymString, } = useMemo(() => {
+        const year = parseInt(ym.substring(0, 4))
+        const month = parseInt(ym.substring(4))
+        const ymString = new Date(year, month - 1).toLocaleDateString('default', { month: 'short', year: 'numeric' })
+        const dir = `https://ctbk.s3.amazonaws.com/aggregated/${ym}`
+        const idx2idUrl = `${dir}/idx2id.json`
+        const stationCountsUrl = `${dir}/s_c.json`
+        const stationPairsUrl = `${dir}/se_c.json`
+
+        let idx2id: Promise<Idx2Id>
+        if (ym == defaults.ym) {
+            setStationCounts(defaults.stationCounts)
+            idx2id = Promise.resolve(defaults.idx2id)
+            console.log("Setting stationCounts to default")
+        } else {
+            console.log(`fetching ${stationCountsUrl}`)
+            idx2id = fetch(idx2idUrl)
+                .then<Idx2Id>(data => data.json())
+                .then(data => { console.log("got idx2id:", data); return data })
+
+            fetch(stationCountsUrl)
+                .then<StationCounts>(data => data.json())
+                .then(stationCounts =>
+                    idx2id.then(
+                        idx2id => {
+                            console.log("got stationCounts:", stationCounts)
+                            setStationCounts(_.mapKeys(stationCounts, (v, k) => idx2id[k]))
+                        }
+                    )
+                )
+        }
+        console.log(`fetching ${stationPairsUrl}`)
+        fetch(stationPairsUrl)
+            .then<StationPairCounts>(data => data.json())
+            .then(data =>
+                idx2id.then(
+                    idx2id => {
+                        console.log("got stationPairCounts:", data)
+                        setStationPairCounts(
+                            fromEntries(
+                                entries(data)
+                                    .map(([k1, v1]) => [
+                                        idx2id[k1],
+                                        _.mapKeys(v1, (v2, k2) => idx2id[k2])
+                                    ])
+                            )
+                        )
+                    }
+                )
+            )
+
+        return { ymString, }
+    }, [ ym ])
+
+    const title = `Citi Bike rides by station, ${ymString}`
 
     const { url, attribution } = MAPS['alidade_smooth_dark']
-
-    const isSSR = typeof window === "undefined";
-
-    const [ stationCounts, setStationCounts ] = useState<StationCount[] | null>(null)
-
-    const query = useMemo(
-        () => `
-            select ID, Count from (
-                select
-                    "End Station Idx",
-                    Count
-                from
-                    counts
-                        join stations on counts."Start Station Idx" = stations.idx
-                where
-                    stations.ID = "${selectedStation}") a join stations on a."End Station Idx"=stations.idx
-        `,
-        [ selectedStation ]
-    )
-
-    const worker = useMemo(
-        () => {
-            if (isSSR) {
-                console.log("SSR, aborting effect")
-                return
-            }
-            const WorkerModulePromise = import("../src/worker")
-
-            // console.log("Worker promise:", WorkerModulePromise,)
-            return WorkerModulePromise.then(WorkerModule => {
-                const {Worker} = WorkerModule
-                // console.log("WorkerModule:", WorkerModule, "Worker:", Worker)
-                return new Worker({url: DB_URL,})
-            })
-        },
-        [ DB_URL ]
-    )
-
-    useEffect(
-        () => {
-            console.log("fetching…")
-            worker
-                ?.then(w => w.fetchQuery<StationCount>(query))
-                ?.then(data => {
-                    console.log(`loaded ${selectedStation} counts:`, data)
-                    setStationCounts(data)
-                })
-        },
-        [ worker, query, ],
-    )
 
     return (
         <div className={css.container}>
@@ -280,7 +348,7 @@ export default function Home({ counts, stations, }: { counts: CountRow[], statio
                 (typeof window !== undefined) && <>
                     <Map className={css.homeMap} center={{ lat, lng, }} zoom={zoom} zoomControl={false} zoomSnap={0.5} zoomDelta={0.5}>{
                         (RL: typeof ReactLeaflet) => <div>{
-                            MapBody(RL, { setLL, setZoom, counts, stations, selectedStation, setSelectedStation, stationCounts, setStationCounts, url, attribution, })
+                            MapBody(RL, { setLL, setZoom, stations, stationCounts, selectedStation, setSelectedStation, stationPairCounts, url, attribution, })
                         }</div>
                     }</Map>
                     {title && <div className={css.title}>{title}</div>}

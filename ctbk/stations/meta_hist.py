@@ -40,14 +40,14 @@ class StationMetaHist(Reducer):
         )
         return stations_hist
 
-    def compute(self, combined_df):
+    def compute(self, combined_df, **kwargs):
         return (
             combined_df
-                .groupby(['Station ID', 'Station Name', 'Latitude', 'Longitude'])
-                ['count']
-                .sum()
-                .reset_index()
-                .sort_values('count')
+            .groupby(['Station ID', 'Station Name', 'Latitude', 'Longitude'])
+            ['count']
+            .sum()
+            .reset_index()
+            .sort_values('count')
         )
 
 

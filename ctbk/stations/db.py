@@ -12,7 +12,7 @@ class StationsDB(Aggregator, MonthsDataset):
     EXTENSION = SQLITE_EXTENSION
 
     def __init__(self, namespace: str = None, root: str = None, src: 'Dataset' = None, **kwargs,):
-        self.group_counts = GroupCounts(namespace=namespace,**kwargs,)
+        self.group_counts = GroupCounts(namespace=namespace, **kwargs,)
         super().__init__(namespace=namespace, root=root, src=src, **kwargs)
 
     def task_list(self, start: Monthy = None, end: Monthy = None):
@@ -40,9 +40,9 @@ class StationsDB(Aggregator, MonthsDataset):
         }
         ids_df = (
             ids_df
-                .reset_index()
-                .reset_index(drop=True)
-                .rename(columns=id_renames)
+            .reset_index()
+            .reset_index(drop=True)
+            .rename(columns=id_renames)
         )
         ids_df.index.name = 'idx'
         idx2id = ids_df.id
