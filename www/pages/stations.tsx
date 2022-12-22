@@ -17,7 +17,6 @@ import _ from "lodash";
 const DEFAULT_CENTER = { lat: 40.758, lng: -73.965, }
 const DEFAULT_ZOOM = 12
 
-// const STATIONS_PATH = 'public/assets/ids.json'
 const LAST_MONTH_PATH = 'public/assets/last-month.json'
 
 const { entries, fromEntries } = Object
