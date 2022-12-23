@@ -7,12 +7,16 @@ import {Radios} from "../src/radios";
 import {Checkbox} from "../src/checkbox";
 import moment from 'moment';
 import _ from "lodash";
-import {boolParam, enumMultiParam, enumParam, numberArrayParam, Param, ParsedParam, parseQueryParams} from "../src/utils/params";
+import {boolParam, enumMultiParam, enumParam, numberArrayParam, Param, ParsedParam, parseQueryParams} from "next-utils/params";
+import {loadSync} from "next-utils/load"
+import {getBasePath} from "next-utils/basePath"
 import {DateRange, DateRange2Dates, dateRangeParam} from "../src/date-range";
 import Link from "next/link";
-import { basePath } from "../src/utils/config"
 import * as fs from "fs";
 import path from "path";
+import {LAST_MONTH_PATH, DOMAIN, SCREENSHOTS} from "../src/utils/paths";
+import Head from "../src/utils/head"
+import {Layout} from "plotly.js";
 
 const Markdown = ReactMarkdown
 const ReactTooltip = dynamic(() => import("react-tooltip"), { ssr: false, })
@@ -197,14 +201,6 @@ function vline(year: number): Partial<Plotly.Shape> {
 const JSON_PATH = 'public/assets/ymrgtb_cd.json'
 
 export async function getStaticProps(context: any) {
-    // let reader = await parquet.ParquetReader.openFile('public/assets/ymrgtb_cd.parquet');
-    // let cursor = reader.getCursor();
-    // const rows: Row[] = []
-    // let row: Row;
-    // while (row = await cursor.next() as Row) {
-    //     rows.push(row)
-    //     // console.log(record);
-    // }
     const data = JSON.parse(fs.readFileSync(path.join(process.cwd(), JSON_PATH), 'utf-8')) as Row[]
     return { props: { data } }
 }
@@ -489,6 +485,8 @@ export default function App({ data, }: { data: Row[] }) {
 
     const traces: Plotly.Data[] = barTraces.concat(rollingTraces)
 
+    const basePath = getBasePath()
+
     function icon(src: string, href: string, title: string) {
         return <a href={href} title={title}>
             <img className="icon" alt={title} src={`${basePath}/assets/${src}.png`} />
@@ -503,8 +501,50 @@ export default function App({ data, }: { data: Row[] }) {
             </span>
         </span>
 
+    const layout: Partial<Layout> = {
+        titlefont: { size: 18 },
+        autosize: true,
+        barmode: 'stack',
+        showlegend,
+        legend: {
+            x: 0.5,
+            y: 1.12,
+            xanchor: 'center',
+            // yanchor: 'bottom',
+            orientation: 'h',
+        },
+        title,
+        xaxis: {
+            title: 'Month',
+            tickfont: { size: 14 },
+            titlefont: { size: 14 },
+        },
+        yaxis: {
+            automargin: true,
+            gridcolor: '#DDDDDD',
+            title: {
+                text: yAxisLabel,
+                // standoff: 20,
+                // position: 'top left',
+            },
+            tickfont: { size: 14 },
+            titlefont: { size: 14 },
+            range: stackRelative ? [ 0, 100, ] : undefined,
+        },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        shapes: vlines,
+        margin: { b: 40, l: 20, r: 10, },
+    }
+
     return (
         <div id="plot" className="container">
+            <Head
+                title={title}
+                description={"Graph of Citi Bike ridership over time"}
+                thumbnail={`ctbk-rides`}
+            />
+
             {/* Main plot: bar graph + rolling avg line(s) */}
             <Plot
                 onDoubleClick={() => setDateRange('All')}
@@ -518,41 +558,7 @@ export default function App({ data, }: { data: Row[] }) {
                 }}
                 data={traces}
                 useResizeHandler
-                layout={{
-                    titlefont: { size: 18 },
-                    autosize: true,
-                    barmode: 'stack',
-                    showlegend,
-                    legend: {
-                        x: 0.5,
-                        y: 1.12,
-                        xanchor: 'center',
-                        // yanchor: 'bottom',
-                        orientation: 'h',
-                    },
-                    title,
-                    xaxis: {
-                        title: 'Month',
-                        tickfont: { size: 14 },
-                        titlefont: { size: 14 },
-                    },
-                    yaxis: {
-                        automargin: true,
-                        gridcolor: '#DDDDDD',
-                        title: {
-                            text: yAxisLabel,
-                            // standoff: 20,
-                            // position: 'top left',
-                        },
-                        tickfont: { size: 14 },
-                        titlefont: { size: 14 },
-                        range: stackRelative ? [ 0, 100, ] : undefined,
-                    },
-                    paper_bgcolor: 'rgba(0,0,0,0)',
-                    plot_bgcolor: 'rgba(0,0,0,0)',
-                    shapes: vlines,
-                    margin: { b: 40, l: 20, r: 10, },
-                }}
+                layout={layout}
             />
             {/* DateRange controls */}
             <div className="no-gutters row date-controls">

@@ -1,20 +1,27 @@
-# [ctbk.dev](https://ctbk.dev/): Citibike Dashboard
+# [ctbk.dev](https://ctbk.dev/): Citi Bike Dashboard
 
-[![Screenshot of dashboard; per-month ride counts going back 5 years, with a 12mo rolling avg showing mostly steady growth](./screenshot.png)][ctbk.dev]
+[![Screenshot of dashboard; per-month ride counts going back 5 years, with a 12mo rolling avg showing mostly steady growth](www/public/screenshots/ctbk-rides.png)][ctbk.dev]
 
-- [auto-updates with new data each month](#auto-update)
-- [powered by cleaned, public data (derived from the official Citibike data)](#cleaned-data)
+### Station/Ridership Map: [ctbk.dev/stations]
+[![Map of Citi Bike stations, Hoboken NJ Transit Terminal selected, showing destinations for rides beginning there](www/public/screenshots/ctbk-stations.png)][ctbk.dev/stations]
+
+### JC & Hoboken Only: [ctbk.dev/?r=jh](https://ctbk.dev/?r=jh)
+[![Screenshot of dashboard; per-month ride counts going back 5 years, with a 12mo rolling avg showing mostly steady growth](www/public/screenshots/ctbk-nj.png)](https://ctbk.dev/?r=jh)
+
+### Ride Minute %, by Gender
+[ctbk.dev?d=1406-2101&g=mf&pct&s=g&y=m][gender pcts plot]:
+[![](./gender-percents-minutes.png)][gender pcts plot]
+Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
+
+
+- [Auto-updates with new data each month](#auto-update)
+- [Powered by cleaned, public data (derived from the official Citibike data)](#cleaned-data)
 - Interactive! Filter/Stack by:
   - user type (annual "subscriber" vs. daily "customer")
   - gender (male, female, other/unspecified; historical data up to Feb 2021 only)
   - region (NYC and/or JC)
   - date range (at monthly granularity, back to system launch in June 2013)
 - URL syncs with plot controls, for ease of linking to specific views, e.g.:
-  - JC only: [ctbk.dev#?r=jc](https://ctbk.dev/#?r=jc)
-  - Ride minute %, by gender:
-    [![](./gender-percents-minutes.png)][gender pcts plot]
-    [ctbk.dev#?d=1406-2101&g=mf&pct&s=g&y=m][gender pcts plot]; Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
-
 
 ## Cleaned, public data <a id="cleaned-data"></a>
 I fixed some rough edges in [Citibike's published data][citibike system data] and published the results to [the `ctbk` Amazon S3 bucket][`s3://ctbk`].
@@ -27,23 +34,13 @@ Some issues that [`s3://ctbk`] mitigates:
 - Harmonize column names across months (e.g. `User Type` vs. `usertype`)
 
 ## Automatic Updating <a id="auto-update"></a>
-Every day, [a GitHub Action in this repo](https://github.com/neighbor-ryan/ctbk.dev/actions):
-- checks `s3://tripdata` for a new month of official data
-- if new data is found, it gets cleaned, converted to `.parquet`, and uploaded to `s3://ctbk`.
+On each of the first few days of each month, [a GitHub Action in this repo][github actions]:
+- checks [`s3://tripdata`] for a new month of official data
+- if found, the new data gets cleaned, converted to [`.parquet`][Parquet], and uploaded to [`s3://ctbk`].
 
 Additionally, aggregated statistics are updated, which the [ctbk.dev] app reads, meaning it should stay up to date as new data is published.
 
-As of December 2021, this process has run successfully for 8 months ([most recently on November 6, processing October 2021 data][202110 GHA]):
-```
-…
-Aggregating: s3://ctbk/normalized/202109.parquet
-Aggregating: s3://ctbk/normalized/202110.parquet
-Computing: s3://ctbk/aggregated/ymrgtb_cd_201306:202111.parquet
-Wrote s3://ctbk/aggregated/ymrgtb_cd_201306:202111.parquet
-Computing: s3://ctbk/aggregated/ymrgtb_cd_201306:202111.sqlite
-Upload /tmp/tmp_pnfpl1s to ctbk:aggregated/ymrgtb_cd_201306:202111.sqlite
-Wrote s3://ctbk/aggregated/ymrgtb_cd_201306:202111.sqlite
-```
+I sometimes break this in the process of adding features and improving things, but it has mostly run automatically each month since ≈2020.
 
 ## Prior Art
 [Many][ckran-20210305] [great][toddschneider-20160113] [analyses][jc-analysis-2017] [of][jc-analysis-2018] [Citibike][datastudio-analysis] [data][cl2871-analysis] [have][tableau #citibike] [been][coursera citibike viz course] [done][juanjocarin analysis] over the years. However, I've generally found them lacking in 2 ways:
@@ -55,7 +52,7 @@ My hope is that this dashboard will solve both of these issues, by:
 - providing 5-10 orthogonal, common-sense toggles that let you easily answer a large number of basic system-level questions
 
 ## Feedback / Contributing
-Feel free to [file an issue here](https://github.com/neighbor-ryan/ctbk.dev/issues) with any comments, bug reports, or feedback!
+Feel free to [file an issue here][github new issue] with any comments, bug reports, or feedback!
 
 [ckran-20210305]: https://towardsdatascience.com/exploring-the-effects-of-the-pandemic-on-nyc-bike-share-usage-ab79f67ac2df
 [toddschneider-20160113]: https://toddwschneider.com/posts/a-tale-of-twenty-two-million-citi-bikes-analyzing-the-nyc-bike-share-system/
@@ -68,10 +65,15 @@ Feel free to [file an issue here](https://github.com/neighbor-ryan/ctbk.dev/issu
 [juanjocarin analysis]: http://juanjocarin.github.io/Citibike-viz/
 
 [citibike system data]: https://www.citibikenyc.com/system-data
-[citibike s3 index]: https://s3.amazonaws.com/tripdata/index.html
-[`s3://ctbk`]: https://s3.amazonaws.com/ctbk/index.html
 [Parquet]: https://parquet.apache.org/
-[202110 GHA]: https://github.com/neighbor-ryan/ctbk.dev/runs/4125143693#step:6:396
+
+[`s3://tripdata`]: https://s3.amazonaws.com/tripdata/index.html
+[`s3://ctbk`]: https://ctbk.s3.amazonaws.com/index.html
+
+[github actions]: https://github.com/neighbor-ryan/ctbk.dev/actions
+[github issues]: https://github.com/neighbor-ryan/ctbk.dev/issues
+[github new issue]: https://github.com/neighbor-ryan/ctbk.dev/issues/new
 
 [ctbk.dev]: https://ctbk.dev/
-[gender pcts plot]: https://ctbk.dev#?d=1406-2101&g=mf&pct&s=g&y=m
+[gender pcts plot]: https://ctbk.dev/?y=m&s=g&pct=&g=mf&d=1406-2101
+[ctbk.dev/stations]: https://ctbk.dev/stations?ll=40.733_-74.036&z=14&ss=HB102

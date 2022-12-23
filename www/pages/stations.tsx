@@ -1,23 +1,20 @@
-import Head from 'next/head';
+import Head from "../src/utils/head"
 
 import Map from '../src/components/Map';
 
-import {floatParam, Param, ParsedParam, parseQueryParams, stringParam} from "../src/utils/params";
-import {LL, llParam} from "../src/latlng";
+import {floatParam, Param, ParsedParam, parseQueryParams, stringParam, LL, llParam} from "next-utils/params";
+import {loadSync, getSync} from "next-utils/load"
 import * as ReactLeaflet from "react-leaflet";
 import type L from 'leaflet';
 import {Dispatch, useMemo, useState} from 'react';
-import * as fs from "fs";
-import path from "path";
 
 import css from './stations.module.css'
 import fetch from "node-fetch";
 import _ from "lodash";
+import {LAST_MONTH_PATH, DOMAIN, SCREENSHOTS} from "../src/utils/paths";
 
 const DEFAULT_CENTER = { lat: 40.758, lng: -73.965, }
 const DEFAULT_ZOOM = 12
-
-const LAST_MONTH_PATH = 'public/assets/last-month.json'
 
 const { entries, fromEntries } = Object
 const { sqrt } = Math
@@ -34,14 +31,6 @@ type StationValue = {
 }
 
 type Stations = { [id: string]: StationValue }
-
-async function get<T>(url: string) {
-    return await (await fetch(url)).json() as T
-}
-
-function load<T>(relPath: string) {
-    return JSON.parse(fs.readFileSync(path.join(process.cwd(), relPath), 'utf-8')) as T
-}
 
 type Idx = string
 type ID = string
@@ -62,17 +51,17 @@ type YmState = {
 }
 
 export async function getStaticProps(context: any) {
-    const ym = load<string>(LAST_MONTH_PATH)
+    const ym = loadSync<string>(LAST_MONTH_PATH)
 
     const idx2idUrl = `https://ctbk.s3.amazonaws.com/aggregated/${ym}/idx2id.json`
     const stationCountsUrl = `https://ctbk.s3.amazonaws.com/aggregated/${ym}/s_c.json`
     const stationsUrl = `https://ctbk.s3.amazonaws.com/stations/ids.json`
 
-    const idx2id = await get<Idx2Id>(idx2idUrl)
-    const stationCounts: StationCounts = _.mapKeys(await get<StationCounts>(stationCountsUrl), (v, k) => idx2id[k])
+    const idx2id = await getSync<Idx2Id>(idx2idUrl)
+    const stationCounts: StationCounts = _.mapKeys(await getSync<StationCounts>(stationCountsUrl), (v, k) => idx2id[k])
     const defaults: YmProps = { ym, idx2id, stationCounts }
 
-    const stations = await get<Stations>(stationsUrl)
+    const stations = await getSync<Stations>(stationsUrl)
     // const stations = load<Stations>(STATIONS_PATH)
     return { props: { defaults, stations, } }
 }
@@ -149,7 +138,7 @@ function MapBody(
         () => {
             if (!selectedStation || !stationPairCounts) return null
             const selectedPairCounts = stationPairCounts[selectedStation]
-            console.log("selectedPairCounts:", selectedPairCounts)
+            // console.log("selectedPairCounts:", selectedPairCounts)
             const selectedPairValues = Array.from(Object.values(selectedPairCounts))
             // console.log("selectedPairValues:", selectedPairValues)
             const maxDst = Math.max(...selectedPairValues)
@@ -286,14 +275,14 @@ export default function Home({ defaults, stations }: { defaults: YmProps, statio
             console.log(`fetching ${stationCountsUrl}`)
             idx2id = fetch(idx2idUrl)
                 .then<Idx2Id>(data => data.json())
-                .then(data => { console.log("got idx2id:", data); return data })
+                .then(data => { console.log("got idx2id"); return data })
 
             fetch(stationCountsUrl)
                 .then<StationCounts>(data => data.json())
                 .then(stationCounts =>
                     idx2id.then(
                         idx2id => {
-                            console.log("got stationCounts:", stationCounts)
+                            console.log("got stationCounts")
                             setStationCounts(_.mapKeys(stationCounts, (v, k) => idx2id[k]))
                         }
                     )
@@ -305,7 +294,7 @@ export default function Home({ defaults, stations }: { defaults: YmProps, statio
             .then(data =>
                 idx2id.then(
                     idx2id => {
-                        console.log("got stationPairCounts:", data)
+                        console.log("got stationPairCounts")
                         setStationPairCounts(
                             fromEntries(
                                 entries(data)
@@ -328,20 +317,12 @@ export default function Home({ defaults, stations }: { defaults: YmProps, statio
 
     return (
         <div className={css.container}>
-            <Head>
-                <title>{title}</title>
-                {/*<link rel="icon" href={`${basePath}/favicon.ico`} />*/}
-
-                <meta name="twitter:card" content="summary" key="twcard" />
-                <meta name="twitter:creator" content={"RunsAsCoded"} key="twhandle" />
-
-                <meta property="og:url" content="https://ctbk.dev/stations" key="ogurl" />
-                <meta property="og:type" content="website" />
-                <meta property="og:image" content="https://ctbk.dev/stations-screenshot.png" key="ogimage" />
-                <meta property="og:site_name" content="ctbk.dev" key="ogsitename" />
-                <meta property="og:title" content="Citi Bike Station Ridership Map" key="ogtitle" />
-                <meta property="og:description" content={"Map of Citi Bike stations' ridership in August 2022"} key="ogdesc" />
-            </Head>
+            <Head
+                title={title}
+                description={"Map of Citi Bike stations, including ridership counts and frequent destinations"}
+                path={`stations`}
+                thumbnail={`ctbk-stations`}
+            />
 
             <main className={css.main}>{
                 (typeof window !== undefined) && <>
