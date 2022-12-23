@@ -324,16 +324,14 @@ export default function Home({ defaults, stations }: { defaults: YmProps, statio
                 thumbnail={`ctbk-stations`}
             />
 
-            <main className={css.main}>{
-                (typeof window !== undefined) && <>
-                    <Map className={css.homeMap} center={{ lat, lng, }} zoom={zoom} zoomControl={false} zoomSnap={0.5} zoomDelta={0.5}>{
-                        (RL: typeof ReactLeaflet) => <div>{
-                            MapBody(RL, { setLL, setZoom, stations, stationCounts, selectedStation, setSelectedStation, stationPairCounts, url, attribution, })
-                        }</div>
-                    }</Map>
-                    {title && <div className={css.title}>{title}</div>}
-                </>
-            }</main>
+            <main className={css.main}>
+                <Map className={css.homeMap} center={{ lat, lng, }} zoom={zoom} zoomControl={false} zoomSnap={0.5} zoomDelta={0.5}>{
+                    (RL: typeof ReactLeaflet) => <div>{
+                        MapBody(RL, { setLL, setZoom, stations, stationCounts, selectedStation, setSelectedStation, stationPairCounts, url, attribution, })
+                    }</div>
+                }</Map>
+                {title && <div className={css.title}>{title}</div>}
+            </main>
         </div>
     )
 }

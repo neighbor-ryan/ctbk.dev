@@ -1,6 +1,6 @@
 import moment from "moment";
 import _ from "lodash";
-import {Param} from "./utils/params";
+import {Param} from "next-utils/params";
 
 export type HandleUnexpectedValue = 'Default' | 'Warn' | 'Throw'
 
