@@ -1,9 +1,8 @@
-import Head from "../src/utils/head"
-
+import Head from "../src/head"
 import Map from '../src/components/Map';
 
-import {floatParam, Param, ParsedParam, parseQueryParams, stringParam, LL, llParam} from "next-utils/params";
-import {loadSync, getSync} from "next-utils/load"
+import {floatParam, LL, llParam, Param, ParsedParam, parseQueryParams, stringParam} from "next-utils/params";
+import {getSync, loadSync} from "next-utils/load"
 import * as ReactLeaflet from "react-leaflet";
 import type L from 'leaflet';
 import {Dispatch, useMemo, useState} from 'react';
@@ -11,7 +10,7 @@ import {Dispatch, useMemo, useState} from 'react';
 import css from './stations.module.css'
 import fetch from "node-fetch";
 import _ from "lodash";
-import {LAST_MONTH_PATH, DOMAIN, SCREENSHOTS} from "../src/utils/paths";
+import {LAST_MONTH_PATH} from "../src/paths";
 
 const DEFAULT_CENTER = { lat: 40.758, lng: -73.965, }
 const DEFAULT_ZOOM = 12
