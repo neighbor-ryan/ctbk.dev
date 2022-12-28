@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {Fragment} from 'react';
 import {getBasePath} from "next-utils/basePath"
 import A from "next-utils/a";
 import MD from "next-utils/md"
@@ -28,15 +28,34 @@ function AnnualizedPcts(o: { [y: string]: number }, yrAgos?: number[]) {
     return `Annualized growth rates: ${yrsAgoStr}`
 }
 
+const genderDataDisclaimer = <div className={css.plotChildren}>{
+    MD(`Gender data stopped being reported in February 2021, (presumably as part of [the Lyft acquisition](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service))`)
+}</div>
+
+const bikeTypesDisclaimer = <div className={`${css.plotChildren} ${css.mid}`}>{
+    MD(`
+Historic "rideable type" data is pretty messy:
+- "Docked bike" and "classic bike" seem to refer to the same bike type.
+- Electric bikes were in widespread use for years before they start showing up in the data here (ca. March 2022).
+
+I'm not sure how real the apparent decline in e-bike use/% is, over 2022.
+`)
+}</div>
+
 const plotSpecs: PlotSpec<Data>[] = [
     {
         id: "all", name: "month_counts", title: "Citi Bike Rides per Month",
-        children: ({ annualizedPcts }) => <div>{MD(AnnualizedPcts(annualizedPcts.All, [1, 2, 4, 8]))}</div>
-    },
-    {
+        children: ({ annualizedPcts }) => <div className={css.plotChildren}>{MD(AnnualizedPcts(annualizedPcts.All, [1, 2, 4, 8]))}</div>
+    }, {
         id: "nj", name: "month_counts_nj", title: "Citi Bike Rides per Month (JC+HOB)",
-        children: ({ annualizedPcts }) => <div>{MD(AnnualizedPcts(annualizedPcts.NJ, [1, 2, 4, 6]))}</div>
+        children: ({ annualizedPcts }) => <div className={css.plotChildren}>{MD(AnnualizedPcts(annualizedPcts.NJ, [1, 2, 4, 6]))}</div>
     },
+    { id: "genders", name: "rides_by_gender", title: "Citi Bike Rides by Gender", children: genderDataDisclaimer, },
+    { id: "gender_pcts", name: "rides_by_gender_pct", title: "Citi Bike Rides by Gender (%)", children: genderDataDisclaimer, },
+    { id: "user_types", name: "rides_by_user_type", title: "Citi Bike Rides by User Type", },
+    { id: "user_type_pcts", name: "rides_by_user_type_pct", title: "Citi Bike Rides by User Type (%)", },
+    { id: "bike_types", name: "rides_by_bike_type", title: "Citi Bike Rides by Bike Type", children: bikeTypesDisclaimer, },
+    { id: "bike_type_pcts", name: "rides_by_bike_type_pct", title: "Citi Bike Rides by Bike Type (%)", children: bikeTypesDisclaimer, },
 ]
 
 export async function getStaticProps(context: any) {
@@ -75,9 +94,12 @@ I've cleaned, parsed, and aggregated it, and published it at [s3://ctbk](https:/
 
 See below for some visualizations and analysis; code is [on GitHub](${GitHub.href}).`
                 )}
-                {plots.map(plot => <Plot key={plot.id} {...plot} />)}
+                {plots.map(plot => <div className={css.plotSection} key={plot.id}>
+                    <Plot key={plot.id} {...plot} />
+                    <hr/>
+                </div>)}
             </main>
-            <div className="no-gutters row">
+{/*            <div className="no-gutters row">
                 <div className="col-md-12">
                     <h2>About</h2>
                     <p>Use the controls above to filter/stack by region, user type, gender, or date, and toggle aggregation of rides or total ride minutes, e.g.:</p>
@@ -105,7 +127,7 @@ Several things changed in February 2021 (presumably as part of [the Lyft acquist
                       Author: { icon('twitter',                  'https://twitter.com/RunsAsCoded',   'Twitter logo') }
                     </div>
                 </div>
-            </div>
+            </div>*/}
         </div>
     );
 }
