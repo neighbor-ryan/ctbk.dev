@@ -1,6 +1,7 @@
-import React, {Fragment} from 'react';
+import React, {Fragment, useMemo} from 'react';
 import {getBasePath} from "next-utils/basePath"
 import A from "next-utils/a";
+import {Param, ParsedParam, boolParam, enumMultiParam, parseQueryParams} from "next-utils/params"
 import MD from "next-utils/md"
 import {Nav} from "next-utils/nav";
 import {Socials} from "next-utils/socials"
@@ -11,11 +12,13 @@ import Head from "../src/head"
 import {build, Plot, PlotsDict, PlotSpec} from "next-utils/plot"
 import PlotsLoad from "next-utils/plot-load"
 import css from "./index.module.css"
-import {entries} from "lodash";
+import {mapValues, filterKeys, entries} from "next-utils/objs"
+// import {entries, mapValues} from "lodash";
+import {DateRange, dateRangeIncludes, dateRangeParam} from "../src/date-range";
 
 type AnnualizedPcts = { [k in 'All' | 'NJ']: { [y: string]: number } }
 
-type Data = { annualizedPcts: AnnualizedPcts }
+type T = { annualizedPcts: AnnualizedPcts }
 
 function AnnualizedPcts(o: { [y: string]: number }, yrAgos?: number[]) {
     console.log("AnnualizedPcts:", o, yrAgos)
@@ -42,7 +45,40 @@ I'm not sure how real the apparent decline in e-bike use/% is, over 2022.
 `)
 }</div>
 
-const plotSpecs: PlotSpec<Data>[] = [
+type Gender = 'Male' | 'Female' | 'Unspecified'
+const Genders: Gender[] = ['Male' , 'Female' , 'Unspecified']
+const GenderQueryStrings: [ Gender, string ][] = [ ['Male', 'm'], ['Female', 'f'], ['Unspecified', 'u'], ]
+// const Int2Gender: { [k: number]: Gender } = { 0: 'Unspecified', 1: 'Male', 2: 'Female' }
+// Gender data became 100% "Unspecified" from February 2021; don't bother with per-entry
+// rolling averages from that point onward
+const GenderRollingAvgCutoff = new Date('2021-02-01')
+
+type UserType = 'Annual' | 'Daily'
+const UserTypes: [UserType, string][] = [ ['Annual', 'a'], ['Daily', 'd'], ]
+
+type RideableType = 'Docked' | 'Electric' | 'Classic' | 'Unknown'
+const RideableTypes: RideableType[] = ['Docked', 'Electric', 'Classic', 'Unknown']
+const RideableTypeChars: [ RideableType, string ][] = [['Docked','d'], ['Electric','e'], ['Classic', 'c'], ['Unknown','u']]
+const NormalizeRideableType: { [k: string]: RideableType } = {
+    'docked_bike': 'Docked',
+    'classic_bike': 'Docked',
+    'electric_bike': 'Electric',
+    'unknown': 'Unknown',
+    'motivate_dockless_bike': 'Unknown',
+}
+
+type YMRGTB = {
+    [ym: string]: {
+        [r in Region]: {
+            g: { [gender in Gender]: number }
+            u: { [userType in UserType]: number }
+            r: { [rideableType in RideableType]: number }
+        }
+    }
+}
+
+const plotSpecs: PlotSpec<T>[] = [
+/*
     {
         id: "all", name: "month_counts", title: "Citi Bike Rides per Month",
         children: ({ annualizedPcts }) => <div className={css.plotChildren}>{MD(AnnualizedPcts(annualizedPcts.All, [1, 2, 4, 8]))}</div>
@@ -50,12 +86,14 @@ const plotSpecs: PlotSpec<Data>[] = [
         id: "nj", name: "month_counts_nj", title: "Citi Bike Rides per Month (JC+HOB)",
         children: ({ annualizedPcts }) => <div className={css.plotChildren}>{MD(AnnualizedPcts(annualizedPcts.NJ, [1, 2, 4, 6]))}</div>
     },
+*/
+    { id: "all", name: "rides_by_region", title: "Citi Bike Rides", /*children: genderDataDisclaimer,*/ },
     { id: "genders", name: "rides_by_gender", title: "Citi Bike Rides by Gender", children: genderDataDisclaimer, },
-    { id: "gender_pcts", name: "rides_by_gender_pct", title: "Citi Bike Rides by Gender (%)", children: genderDataDisclaimer, },
+    // { id: "gender_pcts", name: "rides_by_gender_pct", title: "Citi Bike Rides by Gender (%)", children: genderDataDisclaimer, },
     { id: "user_types", name: "rides_by_user_type", title: "Citi Bike Rides by User Type", },
-    { id: "user_type_pcts", name: "rides_by_user_type_pct", title: "Citi Bike Rides by User Type (%)", },
+    // { id: "user_type_pcts", name: "rides_by_user_type_pct", title: "Citi Bike Rides by User Type (%)", },
     { id: "bike_types", name: "rides_by_bike_type", title: "Citi Bike Rides by Bike Type", children: bikeTypesDisclaimer, },
-    { id: "bike_type_pcts", name: "rides_by_bike_type_pct", title: "Citi Bike Rides by Bike Type (%)", children: bikeTypesDisclaimer, },
+    // { id: "bike_type_pcts", name: "rides_by_bike_type_pct", title: "Citi Bike Rides by Bike Type (%)", children: bikeTypesDisclaimer, },
 ]
 
 export async function getStaticProps(context: any) {
@@ -64,7 +102,71 @@ export async function getStaticProps(context: any) {
     return { props: { plotsDict, annualizedPcts } }
 }
 
-export default function App({ plotsDict, annualizedPcts, }: { plotsDict: PlotsDict } & Data) {
+type Region = 'NYC' | 'JC' | 'HOB'
+const Regions: Region[] = [ 'NYC', 'JC', 'HOB', ]
+const RegionQueryStrings: [Region, string][] = [ ['HOB','h'], ['NYC','n'], ['JC','j'], ]
+
+type Params = {
+    // y: Param<YAxis>
+    // u: Param<UserType>
+    // s: Param<StackBy>
+    pct: Param<boolean>
+    r: Param<Region[]>
+    // g: Param<Gender[]>
+    // rt: Param<RideableType[]>
+    d: Param<DateRange>
+    // rolling: Param<number[]>
+}
+
+type ParsedParams = {
+    // y: ParsedParam<YAxis>
+    // u: ParsedParam<UserType>
+    // s: ParsedParam<StackBy>
+    pct: ParsedParam<boolean>
+    r: ParsedParam<Region[]>
+    // g: ParsedParam<Gender[]>
+    // rt: ParsedParam<RideableType[]>
+    d: ParsedParam<DateRange>
+    // rolling: ParsedParam<number[]>
+}
+
+
+
+export default function App({ plotsDict, annualizedPcts, ymrgtb, }: { plotsDict: PlotsDict, ymrgtb: YMRGTB } & T) {
+    const params: Params = {
+        // y: enumParam('Rides', YAxes),
+        // u: enumParam('All', UserTypes),
+        // s: enumParam('None', StackBys),
+        pct: boolParam,
+        r: enumMultiParam(Regions, RegionQueryStrings, ''),
+        // g: enumMultiParam(Genders, GenderQueryStrings, ''),
+        // rt: enumMultiParam(RideableTypes, RideableTypeChars, ''),
+        d: dateRangeParam(),
+        // rolling: numberArrayParam([ 12 ]),
+    }
+
+    const {
+        // y: [ yAxis, setYAxis ],
+        // u: [ userType, setUserType ],
+        // s: [ stackBy, setStackBy ],
+        pct: [ stackRelative, setStackRelative ],
+        r: [ regions, setRegions ],
+        // g: [ genders, setGenders ],
+        // rt: [ rideableTypes, setRideableTypes ],
+        d: [ dateRange, setDateRange ],
+        // rolling: [ rollingAvgs, setRollingAvgs ],
+    }: ParsedParams = parseQueryParams({ params })
+
+    const data = useMemo(
+        () => {
+            const filteredRegions = mapValues(ymrgtb, rgtb => filterKeys(rgtb, regions.includes))
+            const rollingAvg = entries(filteredRegions)
+            const filteredYMs = filterKeys(filteredRegions, (ym: string) => dateRangeIncludes(dateRange, ym))
+
+            return filteredYMs
+        },
+        [ymrgtb]
+    )
 
     const basePath = getBasePath() || ""
 
@@ -74,7 +176,7 @@ export default function App({ plotsDict, annualizedPcts, }: { plotsDict: PlotsDi
         </a>
     }
 
-    const plots = build(plotSpecs, plotsDict, { annualizedPcts, })
+    const plots = build<T>(plotSpecs, plotsDict, { annualizedPcts, })
 
     const title = "Citi Bike Dashboard"
     return (
@@ -95,7 +197,11 @@ I've cleaned, parsed, and aggregated it, and published it at [s3://ctbk](https:/
 See below for some visualizations and analysis; code is [on GitHub](${GitHub.href}).`
                 )}
                 {plots.map(plot => <div className={css.plotSection} key={plot.id}>
-                    <Plot key={plot.id} {...plot} />
+                    <Plot
+                        key={plot.id}
+                        onTraceClick={(name: string) => console.log("trace click:", name)}
+                        {...plot}
+                    />
                     <hr/>
                 </div>)}
             </main>
