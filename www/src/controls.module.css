@@ -1,0 +1,25 @@
+.control {
+    min-width: 6em;
+    /*max-width: 16vw;*/
+    margin-right: 0.6em;
+}
+.control label {
+    display: block;
+    margin: 0;
+    font-size: 16px;
+    /*font-size: 1rem;*/
+}
+.control .nowrap {
+    white-space: nowrap;
+}
+.control label > input {
+    margin-right: 0.3em;
+}
+.controlHeader {
+    font-weight: bold;
+    /*font-size: 16px;*/
+    /*font-size: 1rem;*/
+}
+.subControl {
+    margin-bottom: 0.6em
+}

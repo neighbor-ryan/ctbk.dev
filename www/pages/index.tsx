@@ -1,64 +1,52 @@
-import React, {Fragment, useMemo} from 'react';
-import {getBasePath} from "next-utils/basePath"
-import A from "next-utils/a";
-import {Param, ParsedParam, boolParam, enumMultiParam, parseQueryParams} from "next-utils/params"
-import MD from "next-utils/md"
-import {Nav} from "next-utils/nav";
-import {Socials} from "next-utils/socials"
-import {GitHub, url} from "../src/socials"
-import Link from "next/link";
-import { loadSync } from "next-utils/load"
-import Head from "../src/head"
-import {build, Plot, PlotsDict, PlotSpec} from "next-utils/plot"
-import PlotsLoad from "next-utils/plot-load"
+import 'react-tooltip/dist/react-tooltip.css'
+import controlCss from "../src/controls.module.css"
+import React, {useState} from 'react';
+import ReactMarkdown from 'react-markdown'
+import dynamic from 'next/dynamic'
 import css from "./index.module.css"
-import {mapValues, filterKeys, entries} from "next-utils/objs"
-// import {entries, mapValues} from "lodash";
-import {DateRange, dateRangeIncludes, dateRangeParam} from "../src/date-range";
+import * as Plotly from "plotly.js"
+import {Checklist} from "../src/checklist";
+import {Radios} from "../src/radios";
+import {Checkbox} from "../src/checkbox";
+import moment from 'moment';
+import _ from "lodash";
+import {boolParam, enumMultiParam, enumParam, numberArrayParam, Param, ParsedParam, parseQueryParams} from "next-utils/params";
+import {loadSync} from "next-utils/load"
+import {getBasePath} from "next-utils/basePath"
+import {DateRange, DateRange2Dates, dateRangeParam} from "../src/date-range";
+import Link from "next/link";
+import * as fs from "fs";
+import path from "path";
+import {LAST_MONTH_PATH, DOMAIN, SCREENSHOTS} from "../src/paths";
+import Head from "../src/head"
+import {Layout} from "plotly.js";
 
-type AnnualizedPcts = { [k in 'All' | 'NJ']: { [y: string]: number } }
+const Markdown = ReactMarkdown
+const Tooltip = dynamic(() => import("react-tooltip").then(m => m.Tooltip), { ssr: false, })
+const Plot = dynamic(() => import("react-plotly.js"), { ssr: false, })
 
-type T = { annualizedPcts: AnnualizedPcts }
+const { entries, values, keys, fromEntries } = Object
+const Arr = Array.from
 
-function AnnualizedPcts(o: { [y: string]: number }, yrAgos?: number[]) {
-    console.log("AnnualizedPcts:", o, yrAgos)
-    const yrsAgoStr =
-        entries(o)
-            .filter(([ k ]) => yrAgos?.includes(parseInt(k)))
-            .map(([ yrsAgo, pct ]) =>
-                `${yrsAgo}yr${yrsAgo == "1" ? "" : "s"}: ${pct}%`)
-            .join(", ")
-    return `Annualized growth rates: ${yrsAgoStr}`
-}
+type Region = 'NYC' | 'JC' | 'HB'
+const Regions: Region[] = [ 'NYC', 'JC', 'HB', ]
+const RegionQueryStrings: [Region, string][] = [ ['HB','h'], ['NYC','n'], ['JC','j'], ]
+const RegionNames = { 'NYC': 'NYC', 'JC': 'JC', 'HB': 'HOB', }
 
-const genderDataDisclaimer = <div className={css.plotChildren}>{
-    MD(`Gender data stopped being reported in February 2021, (presumably as part of [the Lyft acquisition](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service))`)
-}</div>
-
-const bikeTypesDisclaimer = <div className={`${css.plotChildren} ${css.mid}`}>{
-    MD(`
-Historic "rideable type" data is pretty messy:
-- "Docked bike" and "classic bike" seem to refer to the same bike type.
-- Electric bikes were in widespread use for years before they start showing up in the data here (ca. March 2022).
-
-I'm not sure how real the apparent decline in e-bike use/% is, over 2022.
-`)
-}</div>
+type UserType = 'All' | 'Subscriber' | 'Customer'
+const UserTypes: [UserType, string][] = [ ['All', 'a'], ['Subscriber', 's'], ['Customer','c'], ]
 
 type Gender = 'Male' | 'Female' | 'Unspecified'
 const Genders: Gender[] = ['Male' , 'Female' , 'Unspecified']
 const GenderQueryStrings: [ Gender, string ][] = [ ['Male', 'm'], ['Female', 'f'], ['Unspecified', 'u'], ]
-// const Int2Gender: { [k: number]: Gender } = { 0: 'Unspecified', 1: 'Male', 2: 'Female' }
+const Int2Gender: { [k: number]: Gender } = { 0: 'Unspecified', 1: 'Male', 2: 'Female' }
 // Gender data became 100% "Unspecified" from February 2021; don't bother with per-entry
 // rolling averages from that point onward
 const GenderRollingAvgCutoff = new Date('2021-02-01')
 
-type UserType = 'Annual' | 'Daily'
-const UserTypes: [UserType, string][] = [ ['Annual', 'a'], ['Daily', 'd'], ]
-
-type RideableType = 'Docked' | 'Electric' | 'Classic' | 'Unknown'
-const RideableTypes: RideableType[] = ['Docked', 'Electric', 'Classic', 'Unknown']
-const RideableTypeChars: [ RideableType, string ][] = [['Docked','d'], ['Electric','e'], ['Classic', 'c'], ['Unknown','u']]
+type RideableType = 'Docked' | 'Electric' | 'Unknown'
+const RideableTypes: RideableType[] = ['Docked' , 'Electric' , 'Unknown']
+const RideableTypeChars: [ RideableType, string ][] = [['Docked','d'] , ['Electric','e'] , ['Unknown','u']]
 const NormalizeRideableType: { [k: string]: RideableType } = {
     'docked_bike': 'Docked',
     'classic_bike': 'Docked',
@@ -67,108 +55,442 @@ const NormalizeRideableType: { [k: string]: RideableType } = {
     'motivate_dockless_bike': 'Unknown',
 }
 
-type YMRGTB = {
-    [ym: string]: {
-        [r in Region]: {
-            g: { [gender in Gender]: number }
-            u: { [userType in UserType]: number }
-            r: { [rideableType in RideableType]: number }
+type StackBy = 'None' | 'Region' | 'User Type' | 'Gender' | 'Rideable Type'
+const StackBys: [StackBy, string][] = [
+    ['None', 'n'],
+    ['Region', 'r'],
+    ['Gender','g'],
+    ['User Type','u'],
+    ['Rideable Type','b'],
+]
+
+type YAxis = 'Rides' | 'Ride minutes'
+const YAxes: [YAxis, string][] = [ ['Rides', 'r'], ['Ride minutes', 'm'], ]
+const yAxisLabelDict: { [k in YAxis]: { yAxis: string, title: string, hoverLabel: string } } = {
+    'Rides': { yAxis: 'Total Rides', title: 'Citibike Rides per Month', hoverLabel: 'Rides' },
+    'Ride minutes': { yAxis: 'Total Ride Minutes', title: 'Citibike Ride Minutes per Month', hoverLabel: 'Minutes', },
+}
+
+type Row = {
+    Year: number
+    Month: number
+    Count: number
+    Duration: number
+    Region: Region
+    'User Type': UserType
+    Gender: number
+    'Rideable Type': string
+}
+
+function order<T>(u: { [k: string]: T }) {
+    return keys(u).sort().reduce(
+        (o: { [k: string]: T }, k: string) => {
+            o[k] = u[k];
+            return o;
+        },
+        {}
+    );
+}
+
+function sum(arr: number[]) {
+    return arr.reduce((a, b) => a + b, 0)
+}
+
+function sumValues(o: { [k: string]: number }) {
+    return sum(values(o))
+}
+
+function mapEntries<T, V>(o: { [k: string]: T }, fn: (k: string, t: T) => [ string, V ]) {
+    return fromEntries(entries(o).map(([ k, t ]) => fn(k, t)))
+}
+
+function mapValues<T, V>(o: { [k: string]: T }, fn: (k: string, t: T) => V) {
+    return mapEntries<T, V>(o, ( k, t) => [ k, fn(k, t) ])
+}
+
+function filterEntries<T>(o: { [k: string]: T }, fn: (k: string, t: T) => boolean) {
+    return fromEntries(entries(o).filter(([ k, t ]) => fn(k, t)))
+}
+
+function rollingAvg<T>(vs: T[], n: number, fn?: (t: T) => number, ): [T, number | null][] {
+    let avgs: [ T, number | null, ][] = []
+    const f: (t: T) => number = fn ? (n => fn(n)) : (n => n as any as number)
+    let sum = 0
+    for (let i = 0; i < vs.length; i++) {
+        sum += f(vs[i])
+        if (i >= n) {
+            sum -= f(vs[i-n])
+            const avg = sum / n
+            avgs.push([ vs[i], avg, ])
+        } else {
+            avgs.push([ vs[i], null, ])
+        }
+    }
+    return avgs
+}
+
+// For stacked graphs with 1, 2, or 3 stacked features, darken the base color by these ratios
+const colorSetFades: { [k: number]: number[] } = {
+    1: [           1, ],
+    2: [      .75, 1, ],
+    3: [ .65, .80, 1, ],
+}
+
+// Hexadecimal character color for rolling average traces in stacked graphs
+const stackRollColorDicts = {
+    'None': {
+        '': '0',
+    },
+    'Region': {
+        'NYC': '6',
+        'HB': 'D',
+        'JC': 'E',
+    },
+    'User Type': {
+        'Customer': 'D',
+        'Subscriber': '7',
+    },
+    'Gender': {
+        'Male': '6',
+        'Female': 'D',
+        'Unspecified': 'E',
+    },
+    'Rideable Type': {
+        'Docked': 'E',
+        'Electric': 'D',
+        'Unknown': '6',
+    },
+}
+
+// Hex-color utilities
+function pad(num: number, size: number){
+    return ('0' + num.toString(16)).substr(-size);
+}
+function darken(c: string, f = 0.5): string {
+    return '#' + [
+        c.substring(1, 3),
+        c.substring(3, 5),
+        c.substring(5, 7)
+    ]
+        .map((s) =>
+            pad(
+                Math.round(
+                    parseInt(s, 16) * f
+                ),
+                2
+            )
+        )
+        .join('')
+}
+
+function vline(year: number): Partial<Plotly.Shape> {
+    const x: string = `${year-1}-12-20`;
+    return {
+        layer: 'below',
+        type: 'line',
+        x0: x,
+        y0: 0,
+        x1: x,
+        yref: 'paper',
+        y1: 1,//00000,
+        line: {
+            color: '#555555',
+            // width: 1.5,
+            // dash: 'dot'
         }
     }
 }
 
-const plotSpecs: PlotSpec<T>[] = [
-/*
-    {
-        id: "all", name: "month_counts", title: "Citi Bike Rides per Month",
-        children: ({ annualizedPcts }) => <div className={css.plotChildren}>{MD(AnnualizedPcts(annualizedPcts.All, [1, 2, 4, 8]))}</div>
-    }, {
-        id: "nj", name: "month_counts_nj", title: "Citi Bike Rides per Month (JC+HOB)",
-        children: ({ annualizedPcts }) => <div className={css.plotChildren}>{MD(AnnualizedPcts(annualizedPcts.NJ, [1, 2, 4, 6]))}</div>
-    },
-*/
-    { id: "all", name: "rides_by_region", title: "Citi Bike Rides", /*children: genderDataDisclaimer,*/ },
-    { id: "genders", name: "rides_by_gender", title: "Citi Bike Rides by Gender", children: genderDataDisclaimer, },
-    // { id: "gender_pcts", name: "rides_by_gender_pct", title: "Citi Bike Rides by Gender (%)", children: genderDataDisclaimer, },
-    { id: "user_types", name: "rides_by_user_type", title: "Citi Bike Rides by User Type", },
-    // { id: "user_type_pcts", name: "rides_by_user_type_pct", title: "Citi Bike Rides by User Type (%)", },
-    { id: "bike_types", name: "rides_by_bike_type", title: "Citi Bike Rides by Bike Type", children: bikeTypesDisclaimer, },
-    // { id: "bike_type_pcts", name: "rides_by_bike_type_pct", title: "Citi Bike Rides by Bike Type (%)", children: bikeTypesDisclaimer, },
-]
+const JSON_PATH = 'public/assets/ymrgtb_cd.json'
 
 export async function getStaticProps(context: any) {
-    const plotsDict: PlotsDict = PlotsLoad(plotSpecs)
-    const annualizedPcts = loadSync<AnnualizedPcts>('public/data/annualized_pcts.json')
-    return { props: { plotsDict, annualizedPcts } }
+    const data = JSON.parse(fs.readFileSync(path.join(process.cwd(), JSON_PATH), 'utf-8')) as Row[]
+    return { props: { data } }
 }
 
-type Region = 'NYC' | 'JC' | 'HOB'
-const Regions: Region[] = [ 'NYC', 'JC', 'HOB', ]
-const RegionQueryStrings: [Region, string][] = [ ['HOB','h'], ['NYC','n'], ['JC','j'], ]
-
 type Params = {
-    // y: Param<YAxis>
-    // u: Param<UserType>
-    // s: Param<StackBy>
+    y: Param<YAxis>
+    u: Param<UserType>
+    s: Param<StackBy>
     pct: Param<boolean>
     r: Param<Region[]>
-    // g: Param<Gender[]>
-    // rt: Param<RideableType[]>
+    g: Param<Gender[]>
+    rt: Param<RideableType[]>
     d: Param<DateRange>
-    // rolling: Param<number[]>
+    rolling: Param<number[]>
 }
 
 type ParsedParams = {
-    // y: ParsedParam<YAxis>
-    // u: ParsedParam<UserType>
-    // s: ParsedParam<StackBy>
+    y: ParsedParam<YAxis>
+    u: ParsedParam<UserType>
+    s: ParsedParam<StackBy>
     pct: ParsedParam<boolean>
     r: ParsedParam<Region[]>
-    // g: ParsedParam<Gender[]>
-    // rt: ParsedParam<RideableType[]>
+    g: ParsedParam<Gender[]>
+    rt: ParsedParam<RideableType[]>
     d: ParsedParam<DateRange>
-    // rolling: ParsedParam<number[]>
+    rolling: ParsedParam<number[]>
 }
 
-
-
-export default function App({ plotsDict, annualizedPcts, ymrgtb, }: { plotsDict: PlotsDict, ymrgtb: YMRGTB } & T) {
+export default function App({ data, }: { data: Row[] }) {
     const params: Params = {
-        // y: enumParam('Rides', YAxes),
-        // u: enumParam('All', UserTypes),
-        // s: enumParam('None', StackBys),
+        y: enumParam('Rides', YAxes),
+        u: enumParam('All', UserTypes),
+        s: enumParam('None', StackBys),
         pct: boolParam,
         r: enumMultiParam(Regions, RegionQueryStrings, ''),
-        // g: enumMultiParam(Genders, GenderQueryStrings, ''),
-        // rt: enumMultiParam(RideableTypes, RideableTypeChars, ''),
+        g: enumMultiParam(Genders, GenderQueryStrings, ''),
+        rt: enumMultiParam(RideableTypes, RideableTypeChars, ''),
         d: dateRangeParam(),
-        // rolling: numberArrayParam([ 12 ]),
+        rolling: numberArrayParam([ 12 ]),
     }
 
     const {
-        // y: [ yAxis, setYAxis ],
-        // u: [ userType, setUserType ],
-        // s: [ stackBy, setStackBy ],
+        y: [ yAxis, setYAxis ],
+        u: [ userType, setUserType ],
+        s: [ stackBy, setStackBy ],
         pct: [ stackRelative, setStackRelative ],
         r: [ regions, setRegions ],
-        // g: [ genders, setGenders ],
-        // rt: [ rideableTypes, setRideableTypes ],
+        g: [ genders, setGenders ],
+        rt: [ rideableTypes, setRideableTypes ],
         d: [ dateRange, setDateRange ],
-        // rolling: [ rollingAvgs, setRollingAvgs ],
+        rolling: [ rollingAvgs, setRollingAvgs ],
     }: ParsedParams = parseQueryParams({ params })
 
-    const data = useMemo(
-        () => {
-            const filteredRegions = mapValues(ymrgtb, rgtb => filterKeys(rgtb, regions.includes))
-            const rollingAvg = entries(filteredRegions)
-            const filteredYMs = filterKeys(filteredRegions, (ym: string) => dateRangeIncludes(dateRange, ym))
+    const [ showLegend, setShowLegend ] = useState(true)
 
-            return filteredYMs
-        },
-        [ymrgtb]
+    // console.log("Regions", regions, "User Type", userType, "Y-Axis", yAxis, "Date range:", dateRange, "Last row:")
+    // console.log(data && data[data.length - 1])
+
+    // let yAxisLabel = yAxisLabelDict[yAxis].yAxis
+    // let yHoverLabel = yAxisLabelDict[yAxis].hoverLabel
+    let title = yAxisLabelDict[yAxis].title
+    let parendStrings = []
+    if (regions && regions.length < Regions.length) {
+        parendStrings.push(`${regions.map(r => RegionNames[r]).join("+")}`)
+    }
+    if (stackRelative) {
+        // yAxisLabel += ' (%)'
+        // yHoverLabel += ' (%)'
+        parendStrings.push(`%, by ${stackBy}`)
+    }
+    const subtitle = (parendStrings.length) ? `${parendStrings.join(", ")}` : undefined
+
+    const filtered =
+        data
+            .map((r) => {
+                // Normalize gender, rideable type
+                const { Gender, 'Rideable Type': rideableType, ...rest } = r
+                return { Gender: Int2Gender[Gender], 'Rideable Type': NormalizeRideableType[rideableType], ...rest }
+            })
+            .filter((r) => {
+                // Apply filters
+                if (regions.indexOf(r.Region) == -1) {
+                    return false
+                }
+                if (!(userType == 'All' || userType == r['User Type'])) {
+                    return false
+                }
+                if (genders.indexOf(r.Gender) == -1) {
+                    return false
+                }
+                if (rideableTypes.indexOf(r['Rideable Type']) == -1) {
+                    console.warn("Dropping", r['Count'], "rides from with unrecognized rideable type", r['Rideable Type'], r)
+                    return false
+                }
+                return true
+            })
+
+    const stackKeyDict = {
+        'None': [''],
+        'User Type': ['Customer', 'Subscriber'],
+        'Gender': ['Unspecified', 'Male', 'Female'],
+        'Rideable Type': ['Docked', 'Electric', 'Unknown'],
+        'Region': [ 'JC', 'HB', 'NYC', ],
+    }
+    const stackKeys = stackKeyDict[stackBy]
+    const showlegend = showLegend == null ? (stackBy != 'None') : showLegend
+
+    // Build multi-index in both orders:
+    // - month -> stackVal -> count
+    // - stackVal -> month -> count
+    let monthsData: { [month: string]: { [stackVal: string]: number }} = {}
+    let stacksData: { [stackVal: string]: { [month: string]: number }} = {};
+    filtered.forEach((r) => {
+        const month: string = `${r.Year.toString()}-${r.Month.toString().padStart(2, '0')}`
+        const stackVal: Region | Gender | UserType | RideableType | '' = stackBy == 'None' ? '' : r[stackBy]
+        const count = (yAxis == 'Rides') ? r['Count'] : r['Duration'];
+
+        if (!(month in monthsData)) {
+            monthsData[month] = {}
+        }
+        let cur = monthsData[month]
+        if (!(stackVal in cur)) {
+            cur[stackVal] = 0
+        }
+        cur[stackVal] += count
+
+        if (!(stackVal in stacksData)) {
+           stacksData[stackVal] = {}
+        }
+        cur = stacksData[stackVal]
+        if (!(month in cur)) {
+            cur[month] = 0
+        }
+        cur[month] += count
+    })
+
+    // Sort months within each index
+    monthsData = order(monthsData)
+    stacksData = fromEntries(stackKeys.map((stackVal) => [ stackVal, order(stacksData[stackVal] || {}) ]))
+    let months: string[] = Arr(keys(monthsData))
+
+    if (stackBy && stackRelative) {
+        const monthTotals = mapValues(
+            monthsData,
+            (month, stackVals) => sumValues(stackVals)
+        )
+        monthsData = mapValues(
+            monthsData,
+        (month, stackVals) =>
+            mapValues(
+                stackVals,
+            (stackVal, count) => count / monthTotals[month]
+            )
+        )
+        stacksData = mapValues(
+            stacksData,
+        (stackVal, values) =>
+            mapValues(
+                values,
+            (month, count) => count / monthTotals[month]
+            )
+        )
+    }
+
+    // If `end` isn't set, default to 1d after the latest fetched data point (since it's generally treated as an
+    // exclusive bound)
+    const last = moment(_.max(data.map(r => new Date(r.Year, r.Month - 1,)))).add(1, 'd').toDate()
+    const { start, end } = DateRange2Dates(dateRange, last)
+
+    // Compute a (trailing) rolling average for:
+    // - [each time-window length in `rollingAvgs`] (typically just [12])], x
+    // - [each stacked value (e.g. "Male", "Female", "Unspecified")]
+    let rollingSeries: (number | null)[][] = []
+    rollingSeries = rollingSeries.concat(
+        ...values(stacksData)
+            .map((months) => {
+                let vals: { month: Date, v: number }[] =
+                    entries(months)
+                        .map(
+                            ([ month, v ]) => { return { month: new Date(month), v } }
+                        )
+                if (stackBy == 'Gender') {
+                    vals = vals.filter(({ month }) => month < GenderRollingAvgCutoff)
+                }
+                return (
+                    rollingAvgs
+                        .map(n =>
+                            rollingAvg(vals, n, ({ v }) => v)
+                                .filter(([ { month }, avg ]) => start <= month && month < end)
+                                .map(([ _, avg ]) => avg)
+                        )
+                )
+            })
     )
 
-    const basePath = getBasePath() || ""
+    // In stacked mode, compute an extra "total" series
+    if (stackBy != 'None' && !stackRelative) {
+        const totals: { month: Date, total: number }[] = (
+            entries(monthsData)
+                .map(([ month, stackData ]) => {
+                    return { month: new Date(month), total: sumValues(stackData) }
+                })
+        )
+        const rollingTotals =
+            rollingAvgs.map(n =>
+                rollingAvg(totals, n, ({ total }) => total)
+                    .filter(([ { month }, avg ]) => start <= month && month < end)
+                    .map(([ _, avg ]) => avg)
+            )
+        rollingSeries = rollingSeries.concat(rollingTotals)
+    }
+
+    // Filter months
+
+    const filterMonth = (month: string) => {
+        const d = new Date(month)
+        return start <= d && d < end
+    }
+    const filterMonthKey = <T,>() => (( month: string, t: T ) => filterMonth(month))
+
+    months = months.filter(filterMonth)
+
+    stacksData = mapValues(
+        stacksData,
+        (stackVal, months) => filterEntries(months, filterMonthKey())
+    )
+
+    monthsData = filterEntries(monthsData, filterMonthKey())
+
+    // Vertical lines for each year boundary
+    const allYears: Array<number> =
+        months
+            .map((m) => new Date(m))
+            .filter((d) => d.getMonth() == 0)
+            .map((d) => d.getFullYear());
+    const years: Array<number> = [...new Set(allYears)];
+    const vlines: Array<Partial<Plotly.Shape>> = years.map(vline);
+
+    const hovertemplate = stackRelative ? "%{y:.0%}" : "%{y:,.0f}"
+
+    // Create Plotly trace data, including colors (when stacking)
+    let stackRollColorDict: { [k: string]: string } = stackRollColorDicts[stackBy]
+    stackRollColorDict['Total'] = '0'  // Black
+    const rollingTraces: Plotly.Data[] = rollingSeries.map(
+        (y, idx) => {
+            const stackVal = stackKeys[idx] || 'Total'
+            const name = stackVal == 'Total' ? '12mo avg' : `${stackVal} (12mo)`
+            const char = stackRollColorDict[stackVal]
+            const color = '#' + char + char + char + char + char + char
+            // console.log("rolling color:", idx, stackVal, char, color)
+            return {
+                name,
+                x: months,
+                y,
+                type: 'scatter',
+                marker: { color, },
+                line: { width: 4, },
+                hovertemplate,
+            }
+        }
+    )
+
+    // Bar data (including color fades when stacking)
+
+    const fades = colorSetFades[stackKeys.length]
+    const baseColor = '#88aaff'
+
+    const barTraces: Plotly.Data[] =
+        entries(stacksData)
+            .map(([stackVal, values], idx) => {
+                const x = months
+                const y = months.map((month) => values[month] || 0)
+                const name = stackVal // || yHoverLabel
+                const fade = fades[idx]
+                const color = darken(baseColor, fade)
+                // console.log("trace", name, "color", color)
+                return {
+                    x, y, name,
+                    type: 'bar',
+                    marker: { color, },
+                    hovertemplate
+                }
+            })
+
+    const traces: Plotly.Data[] = barTraces.concat(rollingTraces)
+
+    const basePath = getBasePath()
 
     function icon(src: string, href: string, title: string) {
         return <a href={href} title={title}>
@@ -176,36 +498,161 @@ export default function App({ plotsDict, annualizedPcts, ymrgtb, }: { plotsDict:
         </a>
     }
 
-    const plots = build<T>(plotSpecs, plotsDict, { annualizedPcts, })
+    const GenderLabel = (suffix: number | string) =>
+        <span>
+            Gender
+            <span id={`gender-label-tooltip-${suffix}`}>
+                <img className={css.warning} alt={"warning icon"} src={`${basePath}/assets/warning.png`} />
+            </span>
+            <Tooltip anchorId={`gender-label-tooltip-${suffix}`} className={css.tooltip} events={['click', 'hover',]}>
+                <div>Gender data no longer published</div>
+                <div>(as of February 2021)</div>
+            </Tooltip>
+        </span>
 
-    const title = "Citi Bike Dashboard"
+    const gridcolor = "#ddd"
+
+    const layout: Partial<Layout> = {
+        // title: "",
+        // titlefont: { size: 18 },
+        autosize: true,
+        barmode: 'stack',
+        showlegend,
+        hovermode: "x",
+        legend: {
+            x: 0.5,
+            // y: 1.12,
+            xanchor: 'center',
+            yanchor: 'top',
+            orientation: 'h',
+        },
+        xaxis: {
+            // title: 'Month',
+            tickfont: { size: 14 },
+            titlefont: { size: 14 },
+            gridcolor,
+        },
+        yaxis: {
+            automargin: true,
+            gridcolor,
+            // title: {
+            //     text: yAxisLabel,
+                // standoff: 20,
+                // position: 'top left',
+            // },
+            tickfont: { size: 14 },
+            titlefont: { size: 14 },
+            tickformat: stackRelative ? ".0%" : undefined,
+            range: stackRelative ? [ 0, 1, ] : undefined,
+        },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        // shapes: vlines,
+        margin: { t: 0, r: 0, b: 40, l: 0, },
+    }
+
     return (
-        <div className={css.container}>
+        <div id="plot" className={css.container}>
             <Head
                 title={title}
-                description={"Graphs of Citi Bike ridership over time"}
+                description={"Graph of Citi Bike ridership over time"}
                 thumbnail={`ctbk-rides`}
             />
-
-            <main className={css.main}>
+            <div className={css.titleContainer}>
                 <h1 className={css.title}>{title}</h1>
-                {MD(`
-[Citi Bike publishes system data](https://www.citibikenyc.com/system-data) to [s3://tripdata](https://tripdata.s3.amazonaws.com/index.html) every month.
-
-I've cleaned, parsed, and aggregated it, and published it at [s3://ctbk](https://ctbk.s3.amazonaws.com/index.html).
-
-See below for some visualizations and analysis; code is [on GitHub](${GitHub.href}).`
-                )}
-                {plots.map(plot => <div className={css.plotSection} key={plot.id}>
-                    <Plot
-                        key={plot.id}
-                        onTraceClick={(name: string) => console.log("trace click:", name)}
-                        {...plot}
+                {subtitle && <p className={css.subtitle}>{subtitle}</p>}
+            </div>
+            {/* Main plot: bar graph + rolling avg line(s) */}
+            <Plot
+                className={css.plotly}
+                onDoubleClick={() => setDateRange('All')}
+                onRelayout={e => {
+                    if (!('xaxis.range[0]' in e && 'xaxis.range[1]' in e)) return
+                    let [ start, end ] = [ e['xaxis.range[0]'], e['xaxis.range[1]'], ].map(s => s ? new Date(s) : undefined)
+                    start = start ? moment(start).subtract(1, 'month').toDate() : start
+                    const dateRange = (!start && !end) ? 'All' : { start, end, }
+                    // console.log("relayout:", e, start, end, dateRange,)
+                    setDateRange(dateRange)
+                }}
+                data={traces}
+                useResizeHandler
+                layout={layout}
+                config={{ displayModeBar: false, responsive: true, }}
+            />
+            {/* DateRange controls */}
+            <div className={`no-gutters row`}>
+                <div className={`${css.dateControls} ${controlCss.control}`}>
+                    <label className={controlCss.controlHeader}>Dates</label>
+                {
+                    ([ "1y", "2y", "3y", "4y", "5y", "All" ] as (DateRange & string)[])
+                        // .map(drs => <div className={css.dateRangeButtonRow}>{drs
+                            .map(dr =>
+                                <input
+                                    type="button"
+                                    key={dr}
+                                    value={dr}
+                                    className={css.dateRangeButton}
+                                    onClick={() => setDateRange( dr) }
+                                    disabled={dateRange ==  dr}
+                                />
+                            )
+                        // }</div>)
+                }
+                </div>
+            {/*</div>*/}
+            {/* Other radio/checklist configs */}
+            {/*<div className={`no-gutters row`}>*/}
+                <Checklist
+                    label={"Region"}
+                    data={Regions.map(region => ({ name: RegionNames[region], data: region, checked: regions.includes(region), }))}
+                    cb={setRegions}
+                />
+                <Radios label="User Type" options={["All", "Subscriber", "Customer"]} cb={setUserType} choice={userType} />
+                <Radios label="Y Axis" options={["Rides", "Ride minutes"]} cb={setYAxis} choice={yAxis} />
+                <Checklist
+                    label="Rolling Avg"
+                    data={[{ name: "12mo", data: 12, checked: rollingAvgs.includes(12) }]}
+                    cb={setRollingAvgs}
+                >
+                    <Checkbox
+                        id={`${css.showlegend}`}
+                        label="Legend"
+                        checked={showlegend}
+                        cb={setShowLegend}
                     />
-                    <hr/>
-                </div>)}
-            </main>
-{/*            <div className="no-gutters row">
+                </Checklist>
+                <Radios
+                    label="Stack by"
+                    options={[
+                        "None",
+                        "Region",
+                        "User Type",
+                        {
+                            label: GenderLabel(1),
+                            data: "Gender",
+                        },
+                    ]}
+                    cb={setStackBy}
+                    choice={stackBy}
+                >
+                    <Checkbox
+                        id="stack-relative"
+                        label="Percentages"
+                        checked={stackRelative}
+                        cb={setStackRelative}
+                    />
+                </Radios>
+                <Checklist
+                    label={GenderLabel(2)}
+                    data={[
+                        { name: 'Male', data: 'Male', checked: genders.includes('Male') },
+                        { name: 'Female', data: 'Female', checked: genders.includes('Female') },
+                        { name: 'Unspecified', data: 'Unspecified', checked: genders.includes('Unspecified') },
+                    ]}
+                    cb={setGenders}
+                />
+            </div>
+            <div className={`no-gutters row ${css.row}`}>
                 <div className="col-md-12">
                     <h2>About</h2>
                     <p>Use the controls above to filter/stack by region, user type, gender, or date, and toggle aggregation of rides or total ride minutes, e.g.:</p>
@@ -217,7 +664,7 @@ See below for some visualizations and analysis; code is [on GitHub](${GitHub.hre
                     <p><a href={"https://github.com/neighbor-ryan/ctbk.dev"}>The GitHub repo</a> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"}>planned enhancements</a>.</p>
                     <p>Also, check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in August 2022</Link>.</p>
                     <h3 id="qc">🚧 Data-quality issues 🚧</h3>
-                    {MD(`
+                    <Markdown>{`
 Several things changed in February 2021 (presumably as part of [the Lyft acquistion](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):
 - "Gender" information no longer provided (all rides labeled "unknown" starting February 2021)
 - A new "Rideable Type" field was added, containing values \`docked_bike\` and \`electric_bike\` 🎉; however, it is mostly incorrect at present, and disabled above:
@@ -226,14 +673,14 @@ Several things changed in February 2021 (presumably as part of [the Lyft acquist
     - One possible explanation: [electric citibikes were launched in Jersey City and Hoboken around April 2021](https://www.hobokengirl.com/hoboken-jersey-city-citi-bike-share-program/); perhaps those bikes were part of a new fleet that show up as \`electric_bike\` in the data (while extant NYC e-citibikes don't).
     - These \`electric_bike\` rides showed up in the default ("NYC") data, not the "JC" data, but it could be all in flux; February through April 2021 were also updated when the May 2021 data release happened in early June.
 - The "User Type" values changed ("Subscriber" → "member", "Customer" → "casual"); I'm using the former/old values here, they seem equivalent.
-                    `)}
+                    `}</Markdown>
                     <div className={css.footer}>
                         Code: { icon(     'gh', 'https://github.com/neighbor-ryan/ctbk.dev#readme',    'GitHub logo') }
-                        Data: { icon(     's3',         'https://ctbk.s3.amazonaws.com/index.html', 'Amazon S3 logo') }
+                        Data: { icon(     's3',         'https://s3.amazonaws.com/ctbk/index.html', 'Amazon S3 logo') }
                       Author: { icon('twitter',                  'https://twitter.com/RunsAsCoded',   'Twitter logo') }
                     </div>
                 </div>
-            </div>*/}
+            </div>
         </div>
     );
 }
