@@ -1,15 +1,8 @@
 .container {
     padding: 0;
     margin: 0 1em;
-    /*margin: auto;*/
-    /*width: 100%;*/
     max-width: 60em;
-    /*text-align: center;*/
 }
-
-/*.row {*/
-/*    padding: 0 2em;*/
-/*}*/
 
 .button {
     font-size: 1em;
@@ -38,7 +31,7 @@
     text-align: center;
 }
 .title {
-    font-size: 3em;
+    font-size: 2em;
     margin-top: 0.2em;
     margin-bottom: 0.1em;
 }
@@ -74,10 +67,6 @@
     z-index: 1;
 }
 
-/*#gender-label-tooltip {*/
-/*    padding: 0.3rem 0.5rem 0.5rem;*/
-/*}*/
-
 #showlegend {
     font-weight: bold;
 }
@@ -85,14 +74,10 @@
 .dateControls {
     margin-bottom: 0.5em;
     max-width: 8em;
-    /*line-height: 1.6em;*/
 }
 #date-range {
     margin-top: 0.7em;
     margin-bottom: 1.3em;
-}
-.dateRangeButtonRow {
-    /*margin-bottom: 0.3em;*/
 }
 .dateRangeButton {
     margin-right: 0.3em;
@@ -107,7 +92,6 @@
 .footer {
     margin-top: 1em;
 }
-
 .footer img.icon {
     width: 2em;
     margin-right: 0.5rem;
