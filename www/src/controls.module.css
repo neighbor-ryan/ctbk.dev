@@ -1,6 +1,7 @@
 .control {
     min-width: 4em;
     margin-right: 0.6em;
+    float: left;
 }
 .control label {
     display: block;

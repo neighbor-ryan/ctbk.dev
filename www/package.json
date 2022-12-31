@@ -17,7 +17,7 @@
         "moment": "^2.29.1",
         "next": "12.3.3",
         "next-transpile-modules": "^10.0.0",
-        "next-utils": "file:../../../next-utils/dist",
+        "next-utils": "https://gitpkg.now.sh/runsascoded/next-utils/dist?0d7086d",
         "node-fetch": "^2.6.1",
         "plotly.js": "^2.0.0",
         "process": "^0.11.10",

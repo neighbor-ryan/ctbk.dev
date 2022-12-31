@@ -1,6 +1,6 @@
 import moment from 'moment';
 import _ from "lodash";
-import React, {useMemo, useState} from 'react';
+import React, {ReactNode, useMemo, useState} from 'react';
 import css from "./index.module.css"
 import controlCss from "../src/controls.module.css"
 
@@ -83,6 +83,31 @@ type ParsedParams = {
     d: ParsedParam<DateRange>
     avg: ParsedParam<number[]>
 }
+
+const WarningLabel = ({ label, id, children }: { label: string, id: string, children: ReactNode, }) => {
+    const basePath = getBasePath()
+    return (
+        <span>
+            {label}
+            <span id={id}>
+                <img className={css.warning} alt={"warning icon"} src={`${basePath}/assets/warning.png`}/>
+            </span>
+            <Tooltip anchorId={id} className={css.tooltip}>{children}</Tooltip>
+        </span>
+    )
+}
+
+const GenderLabel = (suffix: number | string) =>
+    <WarningLabel label={"Gender"} id={`gender-label-tooltip-${suffix}`}>
+        <div>Gender data no longer published</div>
+        <div>(as of February 2021)</div>
+    </WarningLabel>
+
+const BikeTypeLabel = (suffix: number | string) =>
+    <WarningLabel label={"Bike Type"} id={`bike-type-label-tooltip-${suffix}`}>
+        <div>E-bike data seems to be</div>
+        <div>mostly missing / undercounted</div>
+    </WarningLabel>
 
 export default function App({ data, }: { data: Row[] }) {
     const params: Params = {
@@ -354,30 +379,6 @@ export default function App({ data, }: { data: Row[] }) {
         margin: { t: 0, r: 0, b: 40, l: 0, },
     }
 
-    const GenderLabel = (suffix: number | string) =>
-        <span>
-            Gender
-            <span id={`gender-label-tooltip-${suffix}`}>
-                <img className={css.warning} alt={"warning icon"} src={`${basePath}/assets/warning.png`} />
-            </span>
-            <Tooltip anchorId={`gender-label-tooltip-${suffix}`} className={css.tooltip} events={['click', 'hover',]}>
-                <div>Gender data no longer published</div>
-                <div>(as of February 2021)</div>
-            </Tooltip>
-        </span>
-
-    const BikeTypeLabel = (suffix: number | string) =>
-        <span>
-            Bike Type
-            <span id={`bike-type-label-tooltip-${suffix}`}>
-                <img className={css.warning} alt={"warning icon"} src={`${basePath}/assets/warning.png`} />
-            </span>
-            <Tooltip anchorId={`bike-type-label-tooltip-${suffix}`} className={css.tooltip}>
-                <div>E-bike data seems to be</div>
-                <div>mostly missing / undercounted</div>
-            </Tooltip>
-        </span>
-
     return (
         <div id="plot" className={css.container}>
             <Head
@@ -408,90 +409,94 @@ export default function App({ data, }: { data: Row[] }) {
                     config={{ displayModeBar: false, /*responsive: true,*/ }}
                 />
                 {/* DateRange controls */}
-                <div className={`no-gutters row`}>
-                    <div className={`${css.dateControls} ${controlCss.control}`}>
-                        <label className={controlCss.controlHeader}>Dates</label>
-                        {
-                            ([ "1y", "2y", "3y", "4y", "5y", "All" ] as (DateRange & string)[])
-                                .map(dr =>
-                                    <input
-                                        type="button"
-                                        key={dr}
-                                        value={dr}
-                                        className={css.dateRangeButton}
-                                        onClick={() => setDateRange( dr) }
-                                        disabled={dateRange ==  dr}
-                                    />
-                                )
-                        }
-                    </div>
-                    <Checklist
-                        label={"Region"}
-                        data={Regions.map(region => ({ name: region, data: region, checked: regions.includes(region), }))}
-                        cb={setRegions}
-                    />
-                    <Checklist
-                        label={"User Type"}
-                        data={UserTypes.map(userType => ({ name: userType, data: userType, checked: userTypes.includes(userType), }))}
-                        cb={setUserTypes}
-                    />
-                    <Radios label="Y Axis" options={["Rides", "Ride minutes"]} cb={setYAxis} choice={yAxis} />
-                    <div className={controlCss.control}>
-                        <Checkbox
-                            label="12mo avg"
-                            checked={rollingAvgs.includes(12)}
-                            cb={v => setRollingAvgs(v ? [12] : [])}
+                <div className={css.row}>
+                    <details className={css.controls}>
+                        <summary>⚙️</summary>
+                        <div className={`${css.dateControls} ${controlCss.control}`}>
+                            <label className={controlCss.controlHeader}>Dates</label>
+                            {
+                                ([ "1y", "2y", "3y", "4y", "5y", "All" ] as (DateRange & string)[])
+                                    .map(dr =>
+                                        <input
+                                            type="button"
+                                            key={dr}
+                                            value={dr}
+                                            className={css.dateRangeButton}
+                                            onClick={() => setDateRange( dr) }
+                                            disabled={dateRange ==  dr}
+                                        />
+                                    )
+                            }
+                        </div>
+                        <Checklist
+                            label={"Region"}
+                            data={Regions.map(region => ({ name: region, data: region, checked: regions.includes(region), }))}
+                            cb={setRegions}
                         />
-                        <Checkbox
-                            label="Legend"
-                            checked={showlegend}
-                            cb={setShowLegend}
+                        <Radios
+                            label="Stack by"
+                            options={[
+                                "None",
+                                "Region",
+                                "User Type",
+                                { label: GenderLabel(1), data: "Gender", },
+                                { label: BikeTypeLabel(1), data: "Rideable Type", },
+                            ]}
+                            cb={setStackBy}
+                            choice={stackBy}
                         />
-                        <Checkbox
-                            label="Stack %"
-                            checked={stackRelative}
-                            cb={setStackRelative}
+                        <div className={controlCss.control}>
+                            <Checkbox
+                                label="12mo avg"
+                                checked={rollingAvgs.includes(12)}
+                                cb={v => setRollingAvgs(v ? [12] : [])}
+                            />
+                            <Checkbox
+                                label="Legend"
+                                checked={showlegend}
+                                cb={setShowLegend}
+                            />
+                            <Checkbox
+                                label="Stack %"
+                                checked={stackRelative}
+                                cb={setStackRelative}
+                            />
+                        </div>
+                        <Radios label="Y Axis" options={["Rides", { label: "Minutes", data: "Ride minutes", }]} cb={setYAxis} choice={yAxis} />
+                        <Checklist
+                            label={"User Type"}
+                            data={UserTypes.map(userType => ({ name: userType, data: userType, checked: userTypes.includes(userType), }))}
+                            cb={setUserTypes}
                         />
-                    </div>
-                    <Radios
-                        label="Stack by"
-                        options={[
-                            "None",
-                            "Region",
-                            "User Type",
-                            { label: GenderLabel(1), data: "Gender", },
-                            { label: BikeTypeLabel(1), data: "Rideable Type", },
-                        ]}
-                        cb={setStackBy}
-                        choice={stackBy}
-                    />
-                    <Checklist
-                        label={GenderLabel(2)}
-                        data={[
-                            { name: 'Male', data: 'Male', checked: genders.includes('Male') },
-                            { name: 'Female', data: 'Female', checked: genders.includes('Female') },
-                            { name: 'Unknown', data: 'Unknown', checked: genders.includes('Unknown') },
-                        ]}
-                        cb={setGenders}
-                    />
-                    <Checklist
-                        label={BikeTypeLabel(2)}
-                        data={[
-                            { name: 'Classic', data: 'Classic', checked: rideableTypes.includes('Classic') },
-                            // { name: 'Docked', data: 'Docked', checked: rideableTypes.includes('Docked') },
-                            { name: 'Electric', data: 'Electric', checked: rideableTypes.includes('Electric') },
-                            { name: 'Unknown', data: 'Unknown', checked: rideableTypes.includes('Unknown') },
-                        ]}
-                        cb={setRideableTypes}
-                    />
+                        <Checklist
+                            label={GenderLabel(2)}
+                            data={[
+                                { name: 'Male', data: 'Male', checked: genders.includes('Male') },
+                                { name: 'Female', data: 'Female', checked: genders.includes('Female') },
+                                { name: 'Unknown', data: 'Unknown', checked: genders.includes('Unknown') },
+                            ]}
+                            cb={setGenders}
+                        />
+                        <Checklist
+                            label={BikeTypeLabel(2)}
+                            data={[
+                                { name: 'Classic', data: 'Classic', checked: rideableTypes.includes('Classic') },
+                                // { name: 'Docked', data: 'Docked', checked: rideableTypes.includes('Docked') },
+                                { name: 'Electric', data: 'Electric', checked: rideableTypes.includes('Electric') },
+                                { name: 'Unknown', data: 'Unknown', checked: rideableTypes.includes('Unknown') },
+                            ]}
+                            cb={setRideableTypes}
+                        />
+                    </details>
                 </div>
+                <hr/>
                 <div className={`no-gutters row ${css.row}`}>
                     <div className="col-md-12">
                         <h2>About</h2>
                         <p>Use the controls above to filter/stack by region, user type, gender, or date, and toggle aggregation of rides or total ride minutes, e.g.:</p>
                         <ul>
-                            <li><Link href={"/?r=jh"}>JC+Hoboken</Link></li>
-                            <li><Link href={"/?y=m&s=g&pct=&g=mf&d=1406-2101"}>Ride minute %'s, Male vs. Female</Link> (Jun 2014 - January 2021, the window where 12mo rolling avgs are possible)</li>
+                            <li><Link href={"/?r=jh&s=r"}>JC+Hoboken, by region</Link></li>
+                            <li><Link href={"/?y=m&s=g&pct=&g=mf&d=1406-2101"}>Ride minute %'s, Male vs. Female</Link> (Jun 2014 - January 2021, where 12mo avgs are possible)</li>
                         </ul>
                         <p>This plot should refresh when <a href={"https://www.citibikenyc.com/system-data"}>new data is published by Citibike</a> (typically around the 2nd week of each month, covering the previous month).</p>
                         <p><a href={"https://github.com/neighbor-ryan/ctbk.dev"}>The GitHub repo</a> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"}>planned enhancements</a>.</p>
