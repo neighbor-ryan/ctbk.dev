@@ -256,7 +256,7 @@ export default function App({ data, }: { data: Row[] }) {
 
     // Compute a (trailing) rolling average for:
     // - [each time-window length in `rollingAvgs`] (typically just [12])], x
-    // - [each stacked value (e.g. "Male", "Female", "Unknown")]
+    // - [each stacked value (e.g. "Men", "Women", "Unknown")]
     let rollingSeries: { [stackVal: string]: { [month: string]: number }[] } = mapValues(
         stacksData,
         (stackVal, months) => {
@@ -411,7 +411,7 @@ export default function App({ data, }: { data: Row[] }) {
                 {/* DateRange controls */}
                 <div className={css.row}>
                     <details className={css.controls}>
-                        <summary>⚙️</summary>
+                        <summary><span className={css.settingsGear}>⚙</span>️</summary>
                         <div className={`${css.dateControls} ${controlCss.control}`}>
                             <label className={controlCss.controlHeader}>Dates</label>
                             {
@@ -471,8 +471,8 @@ export default function App({ data, }: { data: Row[] }) {
                         <Checklist
                             label={GenderLabel(2)}
                             data={[
-                                { name: 'Male', data: 'Male', checked: genders.includes('Male') },
-                                { name: 'Female', data: 'Female', checked: genders.includes('Female') },
+                                { name: 'Men', data: 'Men', checked: genders.includes('Men') },
+                                { name: 'Women', data: 'Women', checked: genders.includes('Women') },
                                 { name: 'Unknown', data: 'Unknown', checked: genders.includes('Unknown') },
                             ]}
                             cb={setGenders}
@@ -492,12 +492,17 @@ export default function App({ data, }: { data: Row[] }) {
                 <hr/>
                 <div className={`no-gutters row ${css.row}`}>
                     <div className="col-md-12">
-                        <h2>About</h2>
-                        <p>Use the controls above to filter/stack by region, user type, gender, or date, and toggle aggregation of rides or total ride minutes, e.g.:</p>
-                        <ul>
-                            <li><Link href={"/?r=jh&s=r"}>JC+Hoboken, by region</Link></li>
-                            <li><Link href={"/?y=m&s=g&pct=&g=mf&d=1406-2101"}>Ride minute %'s, Male vs. Female</Link> (Jun 2014 - January 2021, where 12mo avgs are possible)</li>
-                        </ul>
+                        {/*<h2>About</h2>*/}
+                        <p>Expand the "⚙️" to filter or stack by region, user type, gender, bike type, or date, or toggle aggregation of rides or total ride minutes.</p>
+                        <details>
+                            <summary style={{ marginBottom: "0.3em", }}><h4 style={{ display: "inline-block", verticalAlign: "middle", marginBottom: "0.1em", }}>Examples</h4></summary>
+                            <ul>
+                                <li><Link href={"/?r=jh&s=r"}>JC + Hoboken</Link></li>
+                                <li><Link href={"/?y=m&s=g&pct=&g=mf&d=1406-2101"}>Ride minute %'s, Men vs. Women</Link>, Jun 2014 – January 2021</li>
+                                <li><Link href={"/?s=u&pct="}>Annual vs. daily user %'s</Link></li>
+                                <li><Link href={"/"}>Default view (system-wide rides over time)</Link></li>
+                            </ul>
+                        </details>
                         <p>This plot should refresh when <a href={"https://www.citibikenyc.com/system-data"}>new data is published by Citibike</a> (typically around the 2nd week of each month, covering the previous month).</p>
                         <p><a href={"https://github.com/neighbor-ryan/ctbk.dev"}>The GitHub repo</a> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"}>planned enhancements</a>.</p>
                         <p>Also, check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in August 2022</Link>.</p>

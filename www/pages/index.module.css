@@ -51,11 +51,15 @@
 
 .controls {
     width: 100%;
-    margin-top: -2.2em;
+    margin-top: -2.8em;
 }
 .controls > summary {
-    font-weight: bold;
+    margin-bottom: 0.3em;
+}
+.settingsGear {
+    /*font-weight: bold;*/
     font-size: 1.7em;
+    vertical-align: middle;
 }
 
 .plotSection hr {

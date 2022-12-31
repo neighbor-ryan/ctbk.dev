@@ -9,13 +9,17 @@ export type UserType = 'Annual' | 'Daily'
 export const UserTypes: UserType[] = ['Annual', 'Daily']
 export const UserTypeQueryStrings: [UserType, string][] = [ ['Annual', 'a'], ['Daily','d'], ]
 
-export type Gender = 'Male' | 'Female' | 'Unknown'
-export const Genders: Gender[] = [ 'Male', 'Female', 'Unknown']
-export const GenderQueryStrings: [ Gender, string ][] = [ ['Male', 'm'], ['Female', 'f'], ['Unknown', 'u'], ]
-export const Int2Gender: { [k: number]: Gender } = { 0: 'Unknown', 1: 'Male', 2: 'Female' }
+export type Gender = 'Men' | 'Women' | 'Unknown'
+export const Genders: Gender[] = [ 'Men', 'Women', 'Unknown']
+export const GenderQueryStrings: [ Gender, string ][] = [ ['Men', 'm'], ['Women', 'f'], ['Unknown', 'u'], ]
+export const Int2Gender: { [k: number]: Gender } = { 0: 'Unknown', 1: 'Men', 2: 'Women' }
 // Gender data became 100% "Unknown" from February 2021; don't bother with per-entry
 // rolling averages from that point onward
 export const GenderRollingAvgCutoff = new Date('2021-02-01')
+export const NormalizeGender: { [k: string]: Gender } = {
+    'Male': 'Men',
+    'Female': 'Women',
+}
 
 export type RideableType = 'Classic' | 'Electric' | 'Unknown'
 export const RideableTypes: RideableType[] = ['Classic', 'Electric', 'Unknown']
@@ -46,8 +50,8 @@ export const RideableTypeColors: { [r in RideableType]: string } = {
 }
 export const GenderColors: { [g in Gender]: string } = {
     'Unknown': '#AB63FA',
-    'Male': '#19D3F3',
-    'Female': '#FFA15A',
+    'Men': '#19D3F3',
+    'Women': '#FFA15A',
 }
 export const UserTypeColors: { [u in UserType]: string } = { 'Daily': '#FF6692', 'Annual': '#FF97ff', }
 export const RegionColors: { [r in Region]: string } = { 'NYC': '#636efa', 'HOB': '#63aefa', 'JC': '#632bfa', }
@@ -80,7 +84,7 @@ export type Row = {
 export const stackKeyDict = {
     'None': [''],
     'User Type': ['Daily', 'Annual'],
-    'Gender': ['Unknown', 'Female', 'Male'],
+    'Gender': ['Unknown', 'Women', 'Men'],
     'Rideable Type': ['Electric', 'Classic', 'Unknown'],
     'Region': [ 'JC', 'HOB', 'NYC', ],
 }
