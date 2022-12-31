@@ -23,7 +23,7 @@
     align-items: center;
 }
 
-.main p > a {
+.main :is(p,li) > a {
     text-decoration: underline;
 }
 
@@ -65,10 +65,6 @@
 .tooltip {
     text-align: center;
     z-index: 1;
-}
-
-#showlegend {
-    font-weight: bold;
 }
 
 .dateControls {

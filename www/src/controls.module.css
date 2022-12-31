@@ -1,5 +1,5 @@
 .control {
-    min-width: 6em;
+    min-width: 4em;
     margin-right: 0.6em;
 }
 .control label {
@@ -15,7 +15,12 @@
 }
 .controlHeader {
     font-weight: bold;
+    white-space: nowrap;
 }
 .subControl {
     margin-bottom: 0.6em
+}
+.checkbox {
+    font-weight: bold;
+    margin-bottom: 0;
 }

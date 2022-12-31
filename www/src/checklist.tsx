@@ -71,7 +71,7 @@ export function Checklist<T>(
     })
 
     return <div className={css.control}>
-        <span className={css.controlHeader}>{label}</span>
+        <div className={css.controlHeader}>{label}</div>
         <div onChange={onChange} className={`${css.subControl}`}>{labels}</div>
         {children}
     </div>

@@ -2,7 +2,8 @@ import React, {Component} from "react";
 import css from "./controls.module.css"
 
 type Props = {
-    id: string
+    id?: string
+    className?: string
     label: string
     checked: boolean
     nowrap?: boolean
@@ -11,8 +12,8 @@ type Props = {
 
 export class Checkbox extends Component<Props, {}> {
     render() {
-        const { id, label, checked, nowrap = true, cb } = this.props
-        return <div id={id} className={css.subControl}>
+        const { id, className = css.checkbox, label, checked, nowrap = true, cb } = this.props
+        return <div id={id} className={`${css.subControl} ${className || ""}`}>
             <label className={nowrap ? css.nowrap : ""}>
                 <input
                     type="checkbox"
