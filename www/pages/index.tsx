@@ -1,3 +1,7 @@
+import * as dfd from "danfojs";
+import * as danfo from "../src/danfo"
+import {pivot, clampIndex} from "../src/danfo"
+import {DataFrame, Series} from "danfojs";
 import moment from 'moment';
 import _ from "lodash";
 import React, {ReactNode, useMemo, useState} from 'react';
@@ -16,7 +20,21 @@ import {Radios} from "../src/radios";
 import {getBasePath} from "next-utils/basePath"
 import {loadSync} from "next-utils/load"
 import MD from "next-utils/md"
-import {Arr, filterEntries, filterKeys, mapValues, order, sumValues, values, keys, fromEntries, o2a, concat, mapEntries, } from "next-utils/objs"
+import {
+    Arr,
+    filterEntries,
+    filterKeys,
+    mapValues,
+    order,
+    sumValues,
+    values,
+    keys,
+    fromEntries,
+    o2a,
+    concat,
+    mapEntries,
+    entries,
+} from "next-utils/objs"
 import { boolParam, enumMultiParam, enumParam, numberArrayParam, Param, ParsedParam, parseQueryParams, } from "next-utils/params";
 import {
     Colors,
@@ -33,10 +51,11 @@ import {
     RideableTypeChars,
     RideableTypes,
     rollingAvg,
-    Row, Series,
+    Row, NumS,
     StackBy,
     StackBys,
     stackKeyDict,
+    toYM,
     UserType,
     UserTypeQueryStrings,
     UserTypes,
@@ -134,12 +153,46 @@ export default function App({ data, }: { data: Row[] }) {
         avg: [ rollingAvgs, setRollingAvgs ],
     }: ParsedParams = parseQueryParams({ params })
 
+    // console.log("data:", data)
+
+    let df = useMemo(() => {
+            let df = new DataFrame(data)
+            let m = new Series(
+                df
+                    .loc({ columns: ['Year', 'Month'] })
+                    .apply(([ y, m ]: [ number, number ]) => `${y}-${m.toString().padStart(2, "0")}`)
+                    .values
+            )
+            df = (
+                df
+                    .drop({ columns: ['Year', 'Month'] })
+                    .addColumn("m", m)
+                    .rename({ 'Count': 'Rides', 'Duration': 'Ride Minutes', })
+            )
+            return df
+        },
+        [ data ]
+    )
+
     const [ showLegend, setShowLegend ] = useState(true)
+
+    // console.log("df:")
+    // df.print()
 
     // console.log("Regions", regions, "User Type", userType, "Y-Axis", yAxis, "Date range:", dateRange, "Last row:")
     // console.log(data && data[data.length - 1])
-    const stackPercents = useMemo(() => stackRelative && stackBy != 'None', [ stackBy, stackRelative ])
-    const hovertemplate = stackPercents ? "%{y:.0%}" : "%{y:,.0f}"
+    const { stackKeys, stackPercents, hovertemplate } = useMemo(
+        () => {
+            const stackPercents = stackRelative && stackBy != 'None'
+            const hovertemplate = stackPercents ? "%{y:.0%}" : "%{y:,.0f}"
+            return ({
+                stackKeys: stackKeyDict[stackBy],
+                stackPercents,
+                hovertemplate,
+            })
+        },
+        [ stackBy, stackRelative ]
+    )
 
     const { hoverLabel: yHoverLabel, title } = useMemo(() => yAxisLabelDict[yAxis], [ yAxis ])
     const subtitle = useMemo(() => {
@@ -154,188 +207,172 @@ export default function App({ data, }: { data: Row[] }) {
         return (parendStrings.length) ? `${parendStrings.join(", ")}` : undefined
     }, [ regions, stackPercents, stackBy, ] )
 
-    const stackKeys = stackKeyDict[stackBy]
-
-    const filtered = useMemo(
-        () =>
-            data
-                .map((r) => {
-                    // Normalize gender, rideable type
-                    const { Gender, 'Rideable Type': rideableType, ...rest } = r
-                    return { Gender: Int2Gender[Gender], 'Rideable Type': NormalizeRideableType[rideableType], ...rest }
-                })
-                .filter((r) => {
-                    // Apply filters
-                    if (regions.indexOf(r.Region) == -1) return false
-                    if (userTypes.indexOf(r['User Type']) == -1) return false
-                    if (genders.indexOf(r.Gender) == -1) return false
-                    if (rideableTypes.indexOf(r['Rideable Type']) == -1) {
-                        console.warn("Dropping", r['Count'], "rides from with unrecognized rideable type", r['Rideable Type'], r)
-                        return false
-                    }
-                    return true
-                }),
-        [ data, regions, userTypes, genders, rideableTypes ]
-    )
-
-    // Build multi-index in both orders:
-    // - month -> stackVal -> count
-    // - stackVal -> month -> count
-    let monthsData: { [month: string]: Series} = {}
-    let stacksData: { [stackVal: string]: Series} = {};
-    filtered.forEach((r) => {
-        const month: string = `${r.Year.toString()}-${r.Month.toString().padStart(2, '0')}`
-        const stackVal: Region | Gender | UserType | RideableType | '' = stackBy == 'None' ? '' : r[stackBy]
-        const count = (yAxis == 'Rides') ? r['Count'] : r['Duration'];
-
-        if (!(month in monthsData)) {
-            monthsData[month] = {}
-        }
-        let cur = monthsData[month]
-        if (!(stackVal in cur)) {
-            cur[stackVal] = 0
-        }
-        cur[stackVal] += count
-
-        if (!(stackVal in stacksData)) {
-           stacksData[stackVal] = {}
-        }
-        cur = stacksData[stackVal]
-        if (!(month in cur)) {
-            cur[month] = 0
-        }
-        cur[month] += count
-    })
-
-    stacksData = stackKeys.reduce(
-        (o: { [k: string]: Series }, k: string) => {
-            if (k in stacksData) {
-                o[k] = stacksData[k]
+    const fdf = useMemo(
+        () => {
+            const fdf = (
+                df
+                    .drop({ columns: 'Gender' })
+                    .addColumn('Gender', df.Gender.map((g: number) => Int2Gender[g]))
+                    .drop({ columns: 'Rideable Type' })
+                    .addColumn('Rideable Type', df['Rideable Type'].map((r: RideableType) => NormalizeRideableType[r]))
+            )
+            console.log("fdf0:")
+            fdf.print()
+            const filters = {
+                Region: regions,
+                'User Type': userTypes,
+                Gender: genders,
+                'Rideable Type': rideableTypes,
             }
-            return o
+            console.log("filters:", filters)
+            const [ mask0, ...masks ] = entries(filters).map(([ k, vs ]) => {
+                console.log("checking:", vs)
+                return fdf[k].apply(v => vs.includes(v))
+            })
+            const mask = masks.reduce((a, b) => a.and(b), mask0)
+            let filtered = fdf.loc({ rows: mask })
+            if (stackPercents) {
+                return filtered.div(filtered.sum(), { axis: 0 })
+            } else {
+                return filtered
+            }
         },
-        {}
+        [ df, regions, userTypes, genders, rideableTypes, stackBy, stackPercents ]
     )
 
-    // Sort months within each index
-    monthsData = order(monthsData)
-    stacksData = fromEntries(
-        stackKeys
-            .filter(stackVal => stackVal in stacksData)
-            .map(stackVal => [ stackVal, order(stacksData[stackVal]) ])
-    )
-    let months: string[] = keys(monthsData)
-
-    if (stackBy && stackPercents) {
-        const monthTotals = mapValues(
-            monthsData,
-            (month, stackVals) => sumValues(stackVals)
-        )
-        monthsData = mapValues(
-            monthsData,
-        (month, stackVals) =>
-            mapValues(
-                stackVals,
-            (stackVal, count) => count / monthTotals[month]
-            )
-        )
-        stacksData = mapValues(
-            stacksData,
-        (stackVal, values) =>
-            mapValues(
-                values,
-            (month, count) => count / monthTotals[month]
-            )
-        )
-    }
+    console.log("fdf:")
+    fdf.print()
 
     // If `end` isn't set, default to 1d after the latest fetched data point (since it's generally treated as an
     // exclusive bound)
-    const last = moment(_.max(data.map(r => new Date(r.Year, r.Month - 1,)))).add(1, 'd').toDate()
-    const { start, end } = DateRange2Dates(dateRange, last)
+    const { start, end } = useMemo(
+        () => {
+            console.log("compute start, end")
+            const last = moment(_.max(data.map(r => new Date(r.Year, r.Month - 1,)))).add(1, 'd').toDate()
+            const { start, end } = mapValues<Date, string>(
+                DateRange2Dates(dateRange, last),
+                (_, d) => toYM(d)
+            )
+            return { start, end }
+        },
+        [ data, dateRange, ]
+    )
 
-    // Compute a (trailing) rolling average for:
-    // - [each time-window length in `rollingAvgs`] (typically just [12])], x
-    // - [each stacked value (e.g. "Men", "Women", "Unknown")]
-    let rollingSeries: { [stackVal: string]: { [month: string]: number }[] } = mapValues(
-        stacksData,
-        (stackVal, months) => {
-            if (stackBy == 'Gender') {
-                months = filterKeys(months, month => new Date(month) < GenderRollingAvgCutoff)
+    const { grouped, pivoted } = useMemo(
+        () => {
+            const rename: {[k: string]: string} = {}
+            rename[`${yAxis}_sum`] = yAxis
+            let groupCols = stackBy == 'None' ? ['m'] : ['m', stackBy]
+            let grouped = fdf.groupby(groupCols).col([yAxis]).sum().rename(rename)
+            let pivoted = stackBy == 'None' ? grouped : pivot(grouped, 'm', stackBy, yAxis)
+            grouped = grouped.setIndex({ column: 'm', drop: true, }).sortIndex()
+            console.log("grouped:")
+            grouped.print()
+            pivoted = pivoted.setIndex({ column: 'm', drop: true }).sortIndex()
+            console.log("pivoted:")
+            pivoted.print()
+            return { grouped, pivoted }
+        },
+        [ yAxis, stackBy, fdf ]
+    )
+
+    const rollingSeries: { stackVal: string, n: number, s: Series }[] = useMemo(
+        () => {
+            if (stackBy == 'None') {
+                const series = grouped[yAxis] as Series
+                console.log("pre-roll:")
+                series.print()
+                return rollingAvgs.map(n => ({
+                    stackVal: '',
+                    n,
+                    s: clampIndex(
+                        danfo.rollingAvgs(series, n),
+                        {start, end}
+                    )
+                }))
+            } else {
+                let avgs: { [n: number]: DataFrame } = fromEntries(
+                    rollingAvgs.map(n => [
+                        n,
+                        clampIndex(
+                            danfo.rollingAvgs(pivoted, n),
+                            { start, end }
+                        )
+                    ])
+                )
+                return concat(
+                    o2a(
+                        avgs,
+                        (n, df) => df.columns.map(stackVal => ({ stackVal, n, s: df[stackVal] }))
+                    )
+                )
             }
-            return rollingAvgs.map(n => rollingAvg(months, n))
-        }
+        },
+        []
     )
 
-    // Filter months
+    console.log("rollingSeries:", rollingSeries, rollingSeries[0].s.shape)
 
-    const filterMonth = (month: string) => {
-        const d = new Date(month)
-        return start <= d && d < end
-    }
-    const filterMonthKey = <T,>() => (( month: string ) => filterMonth(month))
-
-    months = months.filter(filterMonth)
-
-    stacksData = mapValues(
-        stacksData,
-        (stackVal, months) => filterEntries(months, filterMonthKey())
-    )
-
-    monthsData = filterEntries(monthsData, filterMonthKey())
-    rollingSeries = mapValues(
-        rollingSeries, (_, series) => series.map(
-            series => filterKeys(series, filterMonth)
-        )
-    )
-
-    const legendRanks: { [stackVal: string]: number } = mapEntries(
-        stacksData,
-        (stackVal, _, idx) => [ stackVal, -idx ],
+    const legendRanks: { [stackVal: string]: number } = useMemo(
+        () => (
+            stackBy == 'None'
+                ? { '': 0 }
+                : fromEntries(
+                    stackKeys
+                        .filter(stackVal => pivoted.columns.includes(stackVal))
+                        .map((stackVal, idx) => [ stackVal, -idx ])
+                )
+        ),
+        [ stackBy, stackKeys, pivoted ]
     )
 
     // Create Plotly trace data, including colors (when stacking)
-    const rollingTraces: Plotly.Data[] = concat(o2a(
-        rollingSeries,
-        (stackVal, series, idx) => {
-            const stackName = stackVal || 'Total'
-            const name = stackVal ? `${stackVal} (12mo)` : '12mo avg'
-            const colors: { [k: string]: string } = Colors[stackBy]
-            const color = stackVal ? darken(colors[stackName], .75) : 'black'
-            return series.map(s => ({
-                name,
-                x: Arr(keys(s)),
-                y: Arr(values(s)),
-                type: 'scatter',
-                marker: { color, },
-                line: { width: 4, },
-                hovertemplate,
-                legendrank: 101 + 2*legendRanks[stackVal]
-            } as Plotly.Data))
-        }
-    ))
+    const traces: Plotly.Data[] = useMemo(
+        () => {
+            const rollingTraces: Plotly.Data[] = rollingSeries.map(
+                ({ stackVal, n, s }) => {
+                    const stackName = stackVal || 'Total'
+                    const name = stackVal ? `${stackVal} (${n}mo)` : `${n}mo avg`
+                    const colors: { [k: string]: string } = Colors[stackBy]
+                    const color = stackVal ? darken(colors[stackName], .75) : 'black'
+                    return {
+                        name,
+                        x: s.index,
+                        y: s.values,
+                        type: 'scatter',
+                        marker: {color,},
+                        line: {width: 4,},
+                        hovertemplate,
+                        legendrank: 101 + 2 * legendRanks[stackVal]
+                    } as Plotly.Data
+                }
+            )
+            console.log("rollingTraces:", rollingTraces)
 
-    // Bar data (including color fades when stacking)
-    const barTraces: Plotly.Data[] = o2a(
-        stacksData,
-        (stackVal, values, idx) => {
-            const x = months
-            const y = months.map((month) => values[month] || NaN)
-            const name = stackVal || yHoverLabel
-            const colors: { [k: string]: string } = Colors[stackBy]
-            const color = colors[stackVal]
-            return {
-                x, y, name,
-                type: 'bar',
-                marker: { color, },
-                hovertemplate,
-                legendrank: 100 + 2*legendRanks[stackVal],
-                //selectedpoints: selectedX ? undefined : [],
-            }
-        }
+            // Bar data (including color fades when stacking)
+            const barTraces: Plotly.Data[] = pivoted.columns.map(k => {
+                const series = pivoted[k]
+                const x = series.index
+                const y = series.values
+                const stackVal = stackBy == 'None' ? '' : k
+                const name = stackVal ? k : yHoverLabel
+                const colors: { [k: string]: string } = Colors[stackBy]
+                const color = colors[stackVal]
+                return {
+                    x, y, name,
+                    type: 'bar',
+                    marker: { color, },
+                    hovertemplate,
+                    legendrank: 100 + 2*legendRanks[stackVal],
+                    //selectedpoints: selectedX ? undefined : [],
+                }
+            })
+            console.log("barTraces:", barTraces)
+
+            return barTraces.concat(rollingTraces)
+        },
+        [ rollingSeries, pivoted, stackBy, ]
     )
-
-    const traces: Plotly.Data[] = barTraces.concat(rollingTraces)
 
     const basePath = getBasePath()
 

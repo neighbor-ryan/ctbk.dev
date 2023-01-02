@@ -16,10 +16,6 @@ export const Int2Gender: { [k: number]: Gender } = { 0: 'Unknown', 1: 'Men', 2: 
 // Gender data became 100% "Unknown" from February 2021; don't bother with per-entry
 // rolling averages from that point onward
 export const GenderRollingAvgCutoff = new Date('2021-02-01')
-export const NormalizeGender: { [k: string]: Gender } = {
-    'Male': 'Men',
-    'Female': 'Women',
-}
 
 export type RideableType = 'Classic' | 'Electric' | 'Unknown'
 export const RideableTypes: RideableType[] = ['Classic', 'Electric', 'Unknown']
@@ -89,8 +85,8 @@ export const stackKeyDict = {
     'Region': [ 'JC', 'HOB', 'NYC', ],
 }
 
-export type Series<K extends string = string> = { [k in K]: number }
-export function rollingAvg<K extends string = string>(vs: Series<K>, n: number, ): Series<K> {
+export type NumS<K extends string = string> = { [k in K]: number }
+export function rollingAvg<K extends string = string>(vs: NumS<K>, n: number, ): NumS<K> {
     let avgs: [ K, number, ][] = []
     let sum: number = 0
     let elems: number[] = [];
@@ -106,5 +102,7 @@ export function rollingAvg<K extends string = string>(vs: Series<K>, n: number, 
             avgs.push([ k, NaN, ])
         }
     })
-    return fromEntries(avgs) as Series<K>
+    return fromEntries(avgs) as NumS<K>
 }
+
+export const toYM = (d: Date) => `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`
