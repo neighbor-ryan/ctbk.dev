@@ -241,12 +241,12 @@ export default function App({ data, }: { data: Row[] }) {
     // exclusive bound)
     const { start, end } = useMemo(
         () => {
-            const last = moment(_.max(data.map(r => new Date(r.Year, r.Month - 1,)))).add(1, 'd').toDate()
+            const last = moment(_.max(data.map(r => new Date(r.Year, r.Month - 1,)))).add(1, 'M').toDate()
             const { start, end } = mapValues<Date, string>(
                 DateRange2Dates(dateRange, last),
                 (_, d) => toYM(d)
             )
-            console.log("computed start, end", { start, end })
+            console.log("computed start, end", { start, end }, "last:", last)
             return { start, end }
         },
         [ data, dateRange, ]
