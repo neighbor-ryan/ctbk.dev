@@ -1,4 +1,5 @@
 import {DataFrame, Series} from "danfojs";
+import { isSorted } from "next-utils/objs"
 
 const { fromEntries } = Object
 
@@ -38,23 +39,38 @@ export function rollingAvg(arr: number[], n: number): number[] {
     return rv
 }
 
-export function rollingAvgs(df: DataFrame, n: number): DataFrame
-export function rollingAvgs(df: Series, n: number): Series
-export function rollingAvgs(df: DataFrame | Series, n: number): DataFrame | Series {
-    if (df instanceof DataFrame) {
-        let obj = fromEntries(df.columns.map(r => [r, rollingAvg(df[r].values, n)]))
-        return new DataFrame(obj, {index: df.index})
-    } else {
-        return new Series(rollingAvg(df.values, n), { index: df.index })
+export function print(name: string, d?: DataFrame | Series | null) {
+    console.log(`${name}: shape ${d?.shape}, isDF (${d instanceof DataFrame}, ${d?.$isSeries}), cols ${d?.columns}, sorted ${isSorted(d?.index || [])}`)
+    if (d?.shape[0]) {
+        d?.print()
     }
 }
 
-export function clampIndex(df: DataFrame, { start, end }: { start: any, end: any }): DataFrame
-export function clampIndex(df: Series, { start, end }: { start: any, end: any }): Series
-export function clampIndex(df: DataFrame | Series, { start, end }: { start: any, end: any }): DataFrame | Series {
-    if (df instanceof DataFrame) {
-        return df.loc({ rows: df.index.map(v => start <= v && v < end )})
+export function rollingAvgs(df: DataFrame, n: number): DataFrame
+export function rollingAvgs(df: Series, n: number): Series
+export function rollingAvgs(df: DataFrame | Series, n: number): DataFrame | Series {
+    //print("danfo.rollingAvgs", df)
+    if (!df.$isSeries) { //df instanceof DataFrame) {
+        let obj = fromEntries(df.columns.map(k => [k, rollingAvg(df[k].values, n)]))
+        return new DataFrame(obj, {index: df.index})
     } else {
-        return df.loc(df.index.map(v => start <= v && v < end ))
+        return new Series(rollingAvg(df.values as number[], n), { index: df.index })
+    }
+}
+
+export type Bounds = { start?: any, end?: any }
+export function clampIndex(df: DataFrame, { start, end }: Bounds): DataFrame
+export function clampIndex(df: Series, { start, end }: Bounds): Series
+export function clampIndex(df: DataFrame | Series, { start, end }: Bounds): DataFrame | Series {
+    if (!df.$isSeries) {
+        return (df as DataFrame).loc({ rows: df.index.map(v =>
+                (start === undefined || start <= v) &&
+                (end === undefined || v < end)
+            )})
+    } else {
+        return df.loc(df.index.map(v =>
+            (start === undefined || start <= v) &&
+            (end === undefined || v < end)
+        ))
     }
 }

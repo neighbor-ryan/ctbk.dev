@@ -1,6 +1,6 @@
 import * as dfd from "danfojs";
 import * as danfo from "../src/danfo"
-import {pivot, clampIndex} from "../src/danfo"
+import {pivot, clampIndex, print} from "../src/danfo"
 import {DataFrame, Series} from "danfojs";
 import moment from 'moment';
 import _ from "lodash";
@@ -61,7 +61,7 @@ import {
     UserTypes,
     YAxes,
     YAxis,
-    yAxisLabelDict,
+    yAxisLabelDict, UnknownRideableCutoff,
 } from "../src/data";
 
 import dynamic from 'next/dynamic'
@@ -153,8 +153,6 @@ export default function App({ data, }: { data: Row[] }) {
         avg: [ rollingAvgs, setRollingAvgs ],
     }: ParsedParams = parseQueryParams({ params })
 
-    // console.log("data:", data)
-
     let df = useMemo(() => {
             let df = new DataFrame(data)
             let m = new Series(
@@ -167,7 +165,7 @@ export default function App({ data, }: { data: Row[] }) {
                 df
                     .drop({ columns: ['Year', 'Month'] })
                     .addColumn("m", m)
-                    .rename({ 'Count': 'Rides', 'Duration': 'Ride Minutes', })
+                    .rename({ 'Count': 'Rides', 'Duration': 'Ride minutes', })
             )
             return df
         },
@@ -176,9 +174,6 @@ export default function App({ data, }: { data: Row[] }) {
 
     const [ showLegend, setShowLegend ] = useState(true)
 
-    // console.log("df:")
-    // df.print()
-
     // console.log("Regions", regions, "User Type", userType, "Y-Axis", yAxis, "Date range:", dateRange, "Last row:")
     // console.log(data && data[data.length - 1])
     const { stackKeys, stackPercents, hovertemplate } = useMemo(
@@ -186,7 +181,7 @@ export default function App({ data, }: { data: Row[] }) {
             const stackPercents = stackRelative && stackBy != 'None'
             const hovertemplate = stackPercents ? "%{y:.0%}" : "%{y:,.0f}"
             return ({
-                stackKeys: stackKeyDict[stackBy],
+                stackKeys: stackKeyDict[stackBy] as string[],
                 stackPercents,
                 hovertemplate,
             })
@@ -207,52 +202,51 @@ export default function App({ data, }: { data: Row[] }) {
         return (parendStrings.length) ? `${parendStrings.join(", ")}` : undefined
     }, [ regions, stackPercents, stackBy, ] )
 
+    const normalized = useMemo(
+        () => (
+            df
+                .drop({ columns: 'Gender' })
+                .addColumn('Gender', df.Gender.map((g: number) => Int2Gender[g]))
+                .drop({ columns: 'Rideable Type' })
+                .addColumn('Rideable Type', df['Rideable Type'].map((r: RideableType) => NormalizeRideableType[r]))
+        ),
+        [df]
+    )
+
     const fdf = useMemo(
         () => {
-            const fdf = (
-                df
-                    .drop({ columns: 'Gender' })
-                    .addColumn('Gender', df.Gender.map((g: number) => Int2Gender[g]))
-                    .drop({ columns: 'Rideable Type' })
-                    .addColumn('Rideable Type', df['Rideable Type'].map((r: RideableType) => NormalizeRideableType[r]))
-            )
-            console.log("fdf0:")
-            fdf.print()
+            // print("normalized", normalized)
             const filters = {
                 Region: regions,
                 'User Type': userTypes,
                 Gender: genders,
                 'Rideable Type': rideableTypes,
             }
-            console.log("filters:", filters)
-            const [ mask0, ...masks ] = entries(filters).map(([ k, vs ]) => {
-                console.log("checking:", vs)
-                return fdf[k].apply(v => vs.includes(v))
-            })
+            const [ mask0, ...masks ] = o2a(
+                filters,
+                (k: string, vs: string[]) => {
+                    return normalized[k].apply((v: string) => vs.includes(v))
+                }
+            )
             const mask = masks.reduce((a, b) => a.and(b), mask0)
-            let filtered = fdf.loc({ rows: mask })
-            if (stackPercents) {
-                return filtered.div(filtered.sum(), { axis: 0 })
-            } else {
-                return filtered
-            }
+            // print("mask counts", mask.valueCounts())
+            const filtered = normalized.loc({ rows: mask })
+            // print("filtered", filtered)
+            return filtered
         },
-        [ df, regions, userTypes, genders, rideableTypes, stackBy, stackPercents ]
+        [ normalized, regions, userTypes, genders, rideableTypes, ]
     )
-
-    console.log("fdf:")
-    fdf.print()
 
     // If `end` isn't set, default to 1d after the latest fetched data point (since it's generally treated as an
     // exclusive bound)
     const { start, end } = useMemo(
         () => {
-            console.log("compute start, end")
             const last = moment(_.max(data.map(r => new Date(r.Year, r.Month - 1,)))).add(1, 'd').toDate()
             const { start, end } = mapValues<Date, string>(
                 DateRange2Dates(dateRange, last),
                 (_, d) => toYM(d)
             )
+            console.log("computed start, end", { start, end })
             return { start, end }
         },
         [ data, dateRange, ]
@@ -263,55 +257,99 @@ export default function App({ data, }: { data: Row[] }) {
             const rename: {[k: string]: string} = {}
             rename[`${yAxis}_sum`] = yAxis
             let groupCols = stackBy == 'None' ? ['m'] : ['m', stackBy]
-            let grouped = fdf.groupby(groupCols).col([yAxis]).sum().rename(rename)
-            let pivoted = stackBy == 'None' ? grouped : pivot(grouped, 'm', stackBy, yAxis)
-            grouped = grouped.setIndex({ column: 'm', drop: true, }).sortIndex()
-            console.log("grouped:")
-            grouped.print()
-            pivoted = pivoted.setIndex({ column: 'm', drop: true }).sortIndex()
-            console.log("pivoted:")
-            pivoted.print()
+            let grouped: DataFrame | null = null
+            if (fdf.shape[0]) {
+                grouped = fdf.groupby(groupCols).col([yAxis]).sum().rename(rename)
+            }
+            let pivoted: DataFrame | null = null
+            if (grouped) {
+                if (stackBy == 'None') {
+                    pivoted = grouped.setIndex({column: 'm', drop: true}).sortIndex()
+                } else {
+                    pivoted = pivot(grouped, 'm', stackBy, yAxis)
+                    const columns = pivoted.columns
+                    pivoted = pivoted.loc({columns: stackKeys.filter(k => columns.includes(k))})
+                    pivoted = pivoted.sortIndex()
+                }
+                // print("grouped", grouped)
+            }
+
+            if (stackPercents && pivoted) {
+                const sums = pivoted.sum()
+                // print("percents sums", sums)
+                pivoted = pivoted.div(sums, { axis: 0 })
+            }
+
+            // print("pivoted", pivoted)
             return { grouped, pivoted }
         },
-        [ yAxis, stackBy, fdf ]
+        [ yAxis, stackBy, stackPercents, fdf ]
     )
 
-    const rollingSeries: { stackVal: string, n: number, s: Series }[] = useMemo(
+    type NDF = { [p: number]: DataFrame }
+    type RollingSerie = { stackVal: string, n: number, s: Series }
+    const rollingSeries: RollingSerie[] = useMemo(
         () => {
             if (stackBy == 'None') {
-                const series = grouped[yAxis] as Series
-                console.log("pre-roll:")
-                series.print()
-                return rollingAvgs.map(n => ({
-                    stackVal: '',
-                    n,
-                    s: clampIndex(
-                        danfo.rollingAvgs(series, n),
-                        {start, end}
-                    )
-                }))
+                if (!grouped) return []
+                const rename: {[k: string]: string} = {}
+                rename[`${yAxis}_sum`] = yAxis
+                const series = (
+                    grouped
+                        .groupby(['m'])
+                        .col([yAxis])
+                        .sum()
+                        .rename(rename)
+                        .setIndex({column: 'm', drop: true})
+                        .sortIndex()
+                        [yAxis] as Series
+                )
+                // print("pre-roll", series)
+                return rollingAvgs.map(n => {
+                    const rolls = danfo.rollingAvgs(series, n)
+                    // print("rolls", rolls)
+                    const clamped = clampIndex(rolls, {start, end})
+                    // print("clamped", clamped)
+                    return { stackVal: '', n, s: clamped }
+                })
             } else {
-                let avgs: { [n: number]: DataFrame } = fromEntries(
-                    rollingAvgs.map(n => [
-                        n,
-                        clampIndex(
-                            danfo.rollingAvgs(pivoted, n),
-                            { start, end }
-                        )
-                    ])
+                if (!pivoted) return []
+                let clampEnd = end
+                if (stackBy == 'Gender' && end > GenderRollingAvgCutoff) {
+                    clampEnd = GenderRollingAvgCutoff
+                }
+                let avgs: NDF = fromEntries(
+                    rollingAvgs.map(n => {
+                        // print(`pre-roll pivot`, pivoted)
+                        const rolled = danfo.rollingAvgs(pivoted, n)
+                        // print(`rolled`, rolled)
+                        const clamped = clampIndex(rolled, { start, end: clampEnd })
+                        // print(`clamped`, clamped)
+                        return [ n, clamped, ]
+                    })
                 )
                 return concat(
-                    o2a(
+                    o2a<number, DataFrame, RollingSerie[]>(
                         avgs,
-                        (n, df) => df.columns.map(stackVal => ({ stackVal, n, s: df[stackVal] }))
+                        (n, df) => {
+                            // print(`rolling df`, df)
+                            return df.columns.map(stackVal => {
+                                let s = df[stackVal] as Series
+                                if (stackBy == 'Rideable Type' && stackVal == 'Unknown' && end > UnknownRideableCutoff) {
+                                    s = clampIndex(s, { end: UnknownRideableCutoff })
+                                }
+                                // print(`rolling df ${stackVal}:`, s)
+                                return {stackVal, n, s}
+                            })
+                        }
                     )
                 )
             }
         },
-        []
+        [ pivoted, grouped, start, end, yAxis, rollingAvgs, ]
     )
 
-    console.log("rollingSeries:", rollingSeries, rollingSeries[0].s.shape)
+    console.log("rollingSeries:", rollingSeries, rollingSeries[0]?.s?.shape)
 
     const legendRanks: { [stackVal: string]: number } = useMemo(
         () => (
@@ -319,11 +357,21 @@ export default function App({ data, }: { data: Row[] }) {
                 ? { '': 0 }
                 : fromEntries(
                     stackKeys
-                        .filter(stackVal => pivoted.columns.includes(stackVal))
+                        .filter(stackVal => pivoted?.columns.includes(stackVal))
                         .map((stackVal, idx) => [ stackVal, -idx ])
                 )
         ),
         [ stackBy, stackKeys, pivoted ]
+    )
+
+    const pivotedClamped = useMemo(
+        () => {
+            if (!pivoted) return null
+            const pivotedClamped = clampIndex(pivoted, { start, end })
+            // print("pivotedClamped", pivotedClamped)
+            return pivotedClamped
+        },
+        [ pivoted, start, end ]
     )
 
     // Create Plotly trace data, including colors (when stacking)
@@ -350,8 +398,8 @@ export default function App({ data, }: { data: Row[] }) {
             console.log("rollingTraces:", rollingTraces)
 
             // Bar data (including color fades when stacking)
-            const barTraces: Plotly.Data[] = pivoted.columns.map(k => {
-                const series = pivoted[k]
+            const barTraces: Plotly.Data[] = pivotedClamped && pivotedClamped.columns.map(k => {
+                const series = pivotedClamped[k]
                 const x = series.index
                 const y = series.values
                 const stackVal = stackBy == 'None' ? '' : k
@@ -366,12 +414,12 @@ export default function App({ data, }: { data: Row[] }) {
                     legendrank: 100 + 2*legendRanks[stackVal],
                     //selectedpoints: selectedX ? undefined : [],
                 }
-            })
+            }) || []
             console.log("barTraces:", barTraces)
 
             return barTraces.concat(rollingTraces)
         },
-        [ rollingSeries, pivoted, stackBy, ]
+        [ rollingSeries, pivotedClamped, stackBy, ]
     )
 
     const basePath = getBasePath()

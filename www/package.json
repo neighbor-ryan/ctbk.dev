@@ -1,7 +1,7 @@
 {
     "name": "ctbk.dev",
     "homepage": "https://ctbk.dev",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "license": "MIT",
     "author": "Ryan Williams <ryan@runsascoded.com",
     "dependencies": {
@@ -18,7 +18,7 @@
         "moment": "^2.29.1",
         "next": "12.3.3",
         "next-transpile-modules": "^10.0.0",
-        "next-utils": "https://gitpkg.now.sh/runsascoded/next-utils/dist?ffc838b",
+        "next-utils": "https://gitpkg.now.sh/runsascoded/next-utils/dist?2daa7c1",
         "node-fetch": "^2.6.1",
         "plotly.js": "^2.0.0",
         "process": "^0.11.10",
@@ -55,7 +55,8 @@
         "dev": "next dev",
         "build": "next build",
         "export": "next build && next export",
-        "start": "next start"
+        "start": "next start",
+        "install-remote": "npm-install-remote-only.sh"
     },
     "repository": {
         "type": "git",

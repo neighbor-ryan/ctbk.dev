@@ -2,7 +2,7 @@ import { entries, fromEntries } from "next-utils/objs"
 import React from "react";
 
 export type Region = 'NYC' | 'JC' | 'HOB'
-export const Regions: Region[] = [ 'NYC', 'JC', 'HOB', ]
+export const Regions: Region[] = [ 'JC', 'HOB', 'NYC', ]
 export const RegionQueryStrings: [Region, string][] = [ ['HOB','h'], ['NYC','n'], ['JC','j'], ]
 
 export type UserType = 'Annual' | 'Daily'
@@ -15,7 +15,7 @@ export const GenderQueryStrings: [ Gender, string ][] = [ ['Men', 'm'], ['Women'
 export const Int2Gender: { [k: number]: Gender } = { 0: 'Unknown', 1: 'Men', 2: 'Women' }
 // Gender data became 100% "Unknown" from February 2021; don't bother with per-entry
 // rolling averages from that point onward
-export const GenderRollingAvgCutoff = new Date('2021-02-01')
+export const GenderRollingAvgCutoff = '2021-02'
 
 export type RideableType = 'Classic' | 'Electric' | 'Unknown'
 export const RideableTypes: RideableType[] = ['Classic', 'Electric', 'Unknown']
@@ -27,6 +27,7 @@ export const NormalizeRideableType: { [k: string]: RideableType } = {
     'unknown': 'Unknown',
     'motivate_dockless_bike': 'Unknown',
 }
+export const UnknownRideableCutoff = '2021-02'
 
 export type StackBy = 'None' | 'Region' | 'User Type' | 'Gender' | 'Rideable Type'
 export const StackBys: [StackBy, string][] = [
