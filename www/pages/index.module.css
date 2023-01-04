@@ -103,6 +103,12 @@
     margin-bottom: 0.3em;
     width: 2.3em;
 }
+.activeButton {
+    font-weight: bold;
+}
+.inactiveButton {
+    font-weight: normal;
+}
 
 .plotly {
     width: 100%;

@@ -506,9 +506,8 @@ export default function App({ data, }: { data: Row[] }) {
                                             type="button"
                                             key={dr}
                                             value={dr}
-                                            className={css.dateRangeButton}
-                                            onClick={() => setDateRange( dr) }
-                                            disabled={dateRange ==  dr}
+                                            className={`${css.dateRangeButton} ${dateRange == dr && css.activeButton || css.inactiveButton}`}
+                                            onClick={() => setDateRange(dr) }
                                         />
                                     )
                             }
