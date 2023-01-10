@@ -31,11 +31,11 @@ class StationPairJSONs(MonthsDataset):
         df = sxs(df, df.apply(self.build_task, axis=1).apply(pd.Series))
         return df
 
-    def compute(self, src_df, idx2id_path, se_c_fdw, s_c_fdw):
+    def compute(self, src_df, idx2id_fdw, se_c_fdw, s_c_fdw):
         idx2id = pd.DataFrame(list(sorted(set(pd.concat([ src_df['Start Station ID'], src_df['End Station ID'] ])))), columns=['ID'])
         idx2id.index.name = 'idx'
         id2idx = idx2id.reset_index().set_index('ID')
-        idx2id.ID.to_json(idx2id_path)
+        idx2id.ID.to_json(idx2id_fdw)
 
         counts = (
             src_df

@@ -159,9 +159,9 @@ class Dataset:
         df = self.parsed_basenames
         df['month'] = df['month'].apply(Month)
         if start:
-            df = df[start <= df.month]
+            df = df[Month(start) <= df.month]
         if end:
-            df = df[df.month < end]
+            df = df[df.month < Month(end)]
         return df
 
     @classmethod
