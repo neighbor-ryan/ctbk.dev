@@ -1,15 +1,23 @@
+from os.path import basename
+
 import pandas as pd
 
-from ctbk import NormalizedMonths
+from ctbk import NormalizedMonths, Monthy, Month
 from ctbk.monthly import Reducer, BKT
+from ctbk.util import cached_property
 
 
 class StationMetaHist(Reducer):
     ROOT = f'{BKT}/stations/llname_hists/all'
     SRC_CLS = NormalizedMonths
+    RGX = r'(?P<month>\d{6})\.parquet'
 
     def reduced_df_path(self, month):
         return f'{self.parent}/{month}.parquet'
+
+    @cached_property
+    def listdir(self):
+        return self.fs.listdir(self.parent)
 
     def reduce(self, df):
         columns = {
@@ -33,10 +41,10 @@ class StationMetaHist(Reducer):
         station_entries = pd.concat([starts, ends])
         stations_hist = (
             station_entries
-                .groupby(['Station ID', 'Station Name', 'Latitude', 'Longitude'])
-                .size()
-                .rename('count')
-                .reset_index()
+            .groupby(['Station ID', 'Station Name', 'Latitude', 'Longitude'])
+            .size()
+            .rename('count')
+            .reset_index()
         )
         return stations_hist
 

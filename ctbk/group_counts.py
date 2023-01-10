@@ -47,6 +47,10 @@ class GroupCounts(Aggregator, Reducer):
         self.tbl = tbl or self.TBL
         super().__init__(**kwargs)
 
+    @property
+    def rgx(self):
+        return r'%s_%s_(?P<month>\d{6})\.parquet' % (self.agg_keys_label, self.sum_keys_label)
+
     def reduced_df_path(self, month):
         pcs = [
             self.agg_keys_label,

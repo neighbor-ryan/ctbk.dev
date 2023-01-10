@@ -4,7 +4,7 @@ import json
 import pandas as pd
 from utz import sxs
 
-from ctbk import MonthsDataset, GroupCounts, Monthy
+from ctbk import MonthsDataset, GroupCounts, Monthy, Month
 from ctbk.monthly import BKT
 
 
@@ -24,9 +24,9 @@ class StationPairJSONs(MonthsDataset):
         return dict(dst=dst, se_c_path=dst, s_c_path=f'{out_dir}/s_c.json', idx2id_path=f'{out_dir}/idx2id.json')
 
     def task_df(self, start: Monthy = None, end: Monthy = None):
-        start, end = self.month_range(start, end)
         # List intermediate ("reduced") DFs from GroupCounts src
-        df = pd.DataFrame([ dict(src=self.src.reduced_df_path(month), month=month) for month in start.until(end) ])
+        srcs_df = self.src.outputs(start=start, end=end)
+        df = sxs(srcs_df.name.rename('src'), srcs_df.month)
         # Attach JSON output paths
         df = sxs(df, df.apply(self.build_task, axis=1).apply(pd.Series))
         return df

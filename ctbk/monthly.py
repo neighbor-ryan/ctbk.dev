@@ -23,7 +23,7 @@ PARQUET_EXTENSION = '.parquet'
 SQLITE_EXTENSION = '.db'
 JSON_EXTENSION = '.json'
 GENESIS = Month(2013, 6)
-END = Month(2022, 12)
+END = None
 RGX = r'(?:(?P<region>JC)-)?(?P<year>\d{4})(?P<month>\d{2})-citibike-tripdata.csv'
 BKT = 'ctbk'
 
@@ -63,6 +63,12 @@ class Dataset:
         self.src = src or (self.SRC_CLS and self.SRC_CLS(namespace=self.namespace))
 
     @property
+    def rgx(self):
+        if self.RGX is None:
+            raise NotImplementedError
+        return self.RGX
+
+    @property
     def default_root(self):
         if self.ROOT is None:
             raise RuntimeError('root/ROOT required')
@@ -84,10 +90,13 @@ class Dataset:
         if parent != path and not self.fs.exists(parent):
             self.fs.mkdir(parent)
 
-    @staticmethod
-    def month_range(start: Monthy = None, end: Monthy = None):
+    def month_range(self, start: Monthy = None, end: Monthy = None):
         start = Month(start) if start else GENESIS
-        end = Month(end) if end else END
+        if end:
+            end = Month(end)
+        else:
+            inputs = self.src.outputs(start, end)
+            end = inputs.month.max() + 1
         return start, end
 
     @property
@@ -140,18 +149,19 @@ class Dataset:
         df = self.listdir_df
         basenames = df.name.apply(basename).rename('basename')
 
-        if not self.RGX:
+        rgx = self.rgx
+        if not rgx:
             raise RuntimeError('No regex found for parsing output paths')
 
-        return sxs(basenames.str.extract(self.RGX), df, basenames)
+        return sxs(basenames.str.extract(rgx), df, basenames)
 
     def outputs(self, start: Monthy = None, end: Month = None):
         df = self.parsed_basenames
         df['month'] = df['month'].apply(Month)
-        if start and end:
-            df = df[(start <= df.month) & (df.month < end)]
-        elif start or end:
-            raise ValueError(f'Pass both of (start, end) or neither: {start}, {end}')
+        if start:
+            df = df[start <= df.month]
+        if end:
+            df = df[df.month < end]
         return df
 
     @classmethod
@@ -347,6 +357,13 @@ class MonthsDataset(Dataset):
 
 
 class Reducer(Dataset):
+    @cached_property
+    def listdir_df(self):
+        df = super().listdir_df
+        basenames = df.name.apply(basename)
+        df = df[basenames.str.match(self.rgx)]
+        return df
+
     def task_list(self, start: Monthy = None, end: Monthy = None):
         start, end = self.month_range(start, end)
         df = self.src.outputs(start=start, end=end)
@@ -359,7 +376,7 @@ class Reducer(Dataset):
         return [task]
 
     def reduced_df_path(self, month):
-        return None
+        raise NotImplementedError
 
     def reduce_wrapper(self, src, dst=None, overwrite=False):
         fn = self.reduce
