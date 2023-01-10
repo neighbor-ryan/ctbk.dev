@@ -589,7 +589,7 @@ export default function App({ data, }: { data: Row[] }) {
                         </details>
                         <p>This plot should refresh when <a href={"https://www.citibikenyc.com/system-data"}>new data is published by Citibike</a> (typically around the 2nd week of each month, covering the previous month).</p>
                         <p><a href={"https://github.com/neighbor-ryan/ctbk.dev"}>The GitHub repo</a> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"}>planned enhancements</a>.</p>
-                        <p>Also, check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in August 2022</Link>.</p>
+                        <p>Also, check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in November 2022</Link>.</p>
                         <h3 id="qc">🚧 Data-quality issues 🚧</h3>
                         {MD(`
 Several things changed in February 2021 (presumably as part of [the Lyft acquistion](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):
