@@ -54,7 +54,17 @@
     "scripts": {
         "dev": "next dev",
         "build": "next build",
+        "docker": "scripts/docker.py",
+        "docker-build": "scripts/docker.py next build",
+        "db": "scripts/docker.py next build",
+        "docker-build-export": "scripts/docker.py -- bash -c 'next build && next export'",
+        "dbx": "scripts/docker.py -- bash -c 'next build && next export'",
+        "docker-dev": "scripts/docker.py -p 3000 next dev",
+        "dd": "scripts/docker.py -p 3000 next dev",
+        "docker-export": "scripts/docker.py next export",
+        "dx": "scripts/docker.py next export",
         "export": "next build && next export",
+        "serve": "http-server out",
         "start": "next start",
         "install-remote": "npm-install-remote-only.sh"
     },

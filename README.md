@@ -5,14 +5,13 @@
 ### Station/Ridership Map: [ctbk.dev/stations]
 [![Map of Citi Bike stations, Hoboken NJ Transit Terminal selected, showing destinations for rides beginning there](www/public/screenshots/ctbk-stations.png)][ctbk.dev/stations]
 
-### JC & Hoboken Only: [ctbk.dev/?r=jh](https://ctbk.dev/?r=jh)
-[![Screenshot of dashboard; per-month ride counts going back 5 years, with a 12mo rolling avg showing mostly steady growth](www/public/screenshots/ctbk-nj.png)](https://ctbk.dev/?r=jh)
+### JC & Hoboken Only: [ctbk.dev/?r=jh][ctbk nj plot]
+[![Screenshot of dashboard; per-month ride counts going back 5 years, with a 12mo rolling avg showing mostly steady growth](www/public/screenshots/ctbk-nj.png)][ctbk nj plot]
 
 ### Ride Minute %, by Gender
-[ctbk.dev?d=1406-2101&g=mf&pct&s=g&y=m][gender pcts plot]:
-[![](./gender-percents-minutes.png)][gender pcts plot]
+[ctbk.dev?d=1406-2101&g=mf&pct&s=g&y=m][ctbk gender pct plot]:
+[![](./gender-percents-minutes.png)][ctbk gender pct plot]
 Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
-
 
 - [Auto-updates with new data each month](#auto-update)
 - [Powered by cleaned, public data (derived from the official Citibike data)](#cleaned-data)
@@ -75,5 +74,6 @@ Feel free to [file an issue here][github new issue] with any comments, bug repor
 [github new issue]: https://github.com/neighbor-ryan/ctbk.dev/issues/new
 
 [ctbk.dev]: https://ctbk.dev/
-[gender pcts plot]: https://ctbk.dev/?y=m&s=g&pct=&g=mf&d=1406-2101
+[ctbk gender pct plot]: https://ctbk.dev/?y=m&s=g&pct=&g=mf&d=1406-2101
 [ctbk.dev/stations]: https://ctbk.dev/stations?ll=40.733_-74.036&z=14&ss=HB102
+[ctbk nj plot]: https://ctbk.dev/?r=jh

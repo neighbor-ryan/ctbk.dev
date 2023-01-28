@@ -1,7 +1,6 @@
-import * as dfd from "danfojs";
-import * as danfo from "../src/danfo"
-import {pivot, clampIndex, print} from "../src/danfo"
 import {DataFrame, Series} from "danfojs";
+import * as danfo from "../src/danfo"
+import {clampIndex, pivot} from "../src/danfo"
 import moment from 'moment';
 import _ from "lodash";
 import React, {ReactNode, useMemo, useState} from 'react';
@@ -20,22 +19,16 @@ import {Radios} from "../src/radios";
 import {getBasePath} from "next-utils/basePath"
 import {loadSync} from "next-utils/load"
 import MD from "next-utils/md"
+import {concat, fromEntries, mapValues, o2a,} from "next-utils/objs"
 import {
-    Arr,
-    filterEntries,
-    filterKeys,
-    mapValues,
-    order,
-    sumValues,
-    values,
-    keys,
-    fromEntries,
-    o2a,
-    concat,
-    mapEntries,
-    entries,
-} from "next-utils/objs"
-import { boolParam, enumMultiParam, enumParam, numberArrayParam, Param, ParsedParam, parseQueryParams, } from "next-utils/params";
+    boolParam,
+    enumMultiParam,
+    enumParam,
+    numberArrayParam,
+    Param,
+    ParsedParam,
+    parseQueryParams,
+} from "next-utils/params";
 import {
     Colors,
     Gender,
@@ -50,27 +43,28 @@ import {
     RideableType,
     RideableTypeChars,
     RideableTypes,
-    rollingAvg,
-    Row, NumS,
+    Row,
     StackBy,
     StackBys,
     stackKeyDict,
     toYM,
+    UnknownRideableCutoff,
     UserType,
     UserTypeQueryStrings,
     UserTypes,
     YAxes,
     YAxis,
-    yAxisLabelDict, UnknownRideableCutoff,
+    yAxisLabelDict,
 } from "../src/data";
 
 import dynamic from 'next/dynamic'
 import Link from "next/link";
-const Plot = dynamic(() => import("react-plotly.js"), { ssr: false, })
-const Tooltip = dynamic(() => import("react-tooltip").then(m => m.Tooltip), { ssr: false, })
 import 'react-tooltip/dist/react-tooltip.css'
 
 import {darken} from "../src/colors";
+
+const Plot = dynamic(() => import("react-plotly.js"), { ssr: false, })
+const Tooltip = dynamic(() => import("react-tooltip").then(m => m.Tooltip), { ssr: false, })
 
 const JSON_PATH = 'public/assets/ymrgtb_cd.json'
 
@@ -576,20 +570,21 @@ export default function App({ data, }: { data: Row[] }) {
                 <hr/>
                 <div className={`no-gutters row ${css.row}`}>
                     <div className="col-md-12">
-                        {/*<h2>About</h2>*/}
                         <p>Expand the "⚙️" to filter or stack by region, user type, gender, bike type, or date, or toggle aggregation of rides or total ride minutes.</p>
-                        <details>
-                            <summary style={{ marginBottom: "0.3em", }}><h4 style={{ display: "inline-block", verticalAlign: "middle", marginBottom: "0.1em", }}>Examples</h4></summary>
-                            <ul>
-                                <li><Link href={"/?r=jh&s=r"}>JC + Hoboken</Link></li>
-                                <li><Link href={"/?y=m&s=g&pct=&g=mf&d=1406-2101"}>Ride minute %'s, Men vs. Women</Link>, Jun 2014 – January 2021</li>
-                                <li><Link href={"/?s=u&pct="}>Annual vs. daily user %'s</Link></li>
-                                <li><Link href={"/"}>Default view (system-wide rides over time)</Link></li>
-                            </ul>
-                        </details>
+                        <h4>Examples</h4>
+                        <ul>
+                            <li><Link href={"/?r=jh&s=r"}>JC + Hoboken</Link></li>
+                            <li><Link href={"/?y=m&s=g&pct=&g=mf&d=1406-2101"}>Ride minute %'s, Men vs. Women</Link>, Jun 2014 – January 2021</li>
+                            <li><Link href={"/?s=u&pct="}>Annual vs. daily user %'s</Link></li>
+                            <li><Link href={"/"}>Default view (system-wide rides over time)</Link></li>
+                        </ul>
                         <p>This plot should refresh when <a href={"https://www.citibikenyc.com/system-data"}>new data is published by Citibike</a> (typically around the 2nd week of each month, covering the previous month).</p>
                         <p><a href={"https://github.com/neighbor-ryan/ctbk.dev"}>The GitHub repo</a> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"}>planned enhancements</a>.</p>
-                        <p>Also, check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in November 2022</Link>.</p>
+                        <hr/>
+                        <h3 id={"map"}>Map: Stations + Common Destinations</h3>
+                        <p>Check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in November 2022</Link>.</p>
+                        <a href={"./stations"}><img className={css.map} src={"screenshots/ctbk-stations.png"} /></a>
+                        <hr />
                         <h3 id="qc">🚧 Data-quality issues 🚧</h3>
                         {MD(`
 Several things changed in February 2021 (presumably as part of [the Lyft acquistion](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):
