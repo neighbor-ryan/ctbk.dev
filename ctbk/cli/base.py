@@ -1,7 +1,8 @@
 from click import pass_context, option, group
+from utz import o
 
 from ctbk.util import YM
-from ctbk.util.constants import GENESIS
+from ctbk.util.constants import GENESIS, S3
 
 
 @group('ctbk')
@@ -16,5 +17,5 @@ def ctbk(ctx, start, end, root, s3):
     if s3:
         if root:
             raise ValueError(f"Pass -r/--root xor --s3")
-        root = 's3://'
+        root = S3
     ctx.obj = o(start=start, end=end, root=root)

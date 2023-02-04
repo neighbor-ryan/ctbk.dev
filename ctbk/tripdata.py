@@ -1,11 +1,13 @@
 import typing
+from click import pass_context, option, Choice
 
 from typing import Literal, Tuple
 
 from ctbk import YM, Monthy
+from ctbk.cli.base import ctbk
 from ctbk.month_data import MonthsData, MonthURL
 from ctbk.util import cached_property
-from ctbk.util.constants import GENESIS
+from ctbk.util.constants import GENESIS, S3
 
 Region = Literal[ 'NYC', 'JC', ]
 REGIONS: Tuple[Region, ...] = typing.get_args(Region)
@@ -17,7 +19,7 @@ DIR = 'tripdata'
 class TripdataMonth(MonthURL):
     DIR = DIR
 
-    def __init__(self, ym, region, root='s3://'):
+    def __init__(self, ym, region, root=S3):
         if region not in REGIONS:
             raise ValueError(f"Unrecognized region: {region}")
         self.region = region
@@ -29,10 +31,13 @@ class TripdataMonth(MonthURL):
         citbike_typo_months = [ (202206, 'NYC'), (202207, 'NYC'), (202207, 'JC'), ]
         citibike = 'citbike' if (int(ym), region) in citbike_typo_months else 'citibike'
 
+        extension = 'csv.zip'
         if region == 'NYC':
-            url = f'{self.dir}/{ym}-{citibike}-tripdata.csv.zip'
+            if ym.y < 2017:
+                extension = 'zip'
+            url = f'{self.dir}/{ym}-{citibike}-tripdata.{extension}'
         else:
-            url = f'{self.dir}/{region}-{ym}-{citibike}-tripdata.csv.zip'
+            url = f'{self.dir}/{region}-{ym}-{citibike}-tripdata.{extension}'
 
         super().__init__(ym, url)
 
@@ -40,7 +45,7 @@ class TripdataMonth(MonthURL):
 class TripdataMonths:
     DIR = DIR
 
-    def __init__(self, start: Monthy = None, end: Monthy = None, root='s3://'):
+    def __init__(self, start: Monthy = None, end: Monthy = None, root=S3):
         self.root = root
         self.dir = f'{root}/{self.DIR}' if root else self.DIR
         self.start: YM = YM(start or GENESIS)
@@ -53,6 +58,7 @@ class TripdataMonths:
                 {
                     region: TripdataMonth(ym=ym, region=region, root=root)
                     for region in REGIONS
+                    if region == 'NYC' or ym >= YM(201509)
                 }
             )
             for ym in self.start.until(end)
@@ -90,7 +96,7 @@ def tripdata():
 
 @tripdata.command()
 @pass_context
-@click.option('-r', '--region', type=Choice(REGIONS))
+@option('-r', '--region', type=Choice(REGIONS))
 def urls(ctx, region):
     o = ctx.obj
     months = TripdataMonths(start=o.start, end=o.end, root=o.root)
@@ -106,8 +112,6 @@ def urls(ctx, region):
 class Tripdata(MonthsData):
     ROOT = 'tripdata'
     RGX = r'^(?:(?P<region>JC)-)?(?P<month>\d{6})[ \-]citi?bike-tripdata?(?P<csv>\.csv)?(?P<zip>\.zip)?$'
-
-
 
     @cached_property
     def parsed_basenames(self):

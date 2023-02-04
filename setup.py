@@ -7,7 +7,7 @@ setup(
     install_requires=open('requirements.txt', 'r').read(),
     entry_points={
         'console_scripts': [
-            'ctbk = ctbk.cli:ctbk',
+            'ctbk = ctbk.cli.main:main',
         ]
     }
 )

@@ -24,9 +24,9 @@ class MonthURL:
     def scheme(self):
         return self.parsed.scheme
 
-    @property
-    def path(self):
-        return self.parsed.path
+    # @property
+    # def path(self):
+    #     return self.parsed.path.lstrip('/')
 
     @cached_property
     def parsed(self):
@@ -37,7 +37,7 @@ class MonthURL:
         return fsspec.filesystem(self.scheme)
 
     def exists(self):
-        return self.fs.exists(self.path)
+        return self.fs.exists(self.url)
 
     def fd(self, mode):
         return self.fs.open(self.path, mode)

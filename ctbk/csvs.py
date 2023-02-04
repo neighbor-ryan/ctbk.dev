@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 
 import dask.dataframe as dd
+from click import pass_context, option, Choice
 from utz import *
 from zipfile import ZipFile
 
+from ctbk.cli.base import ctbk
 from ctbk import YM, MonthsDataset, Monthy
 from ctbk.month_data import MonthData, Compute
 from ctbk.tripdata import Tripdata, REGIONS, TripdataMonths, TripdataMonth, Region
-from ctbk.util.constants import BKT
+from ctbk.util.constants import BKT, S3
 from ctbk.util.convert import WROTE
 
 DIR = 'ctbk/csvs'
@@ -16,7 +18,7 @@ DIR = 'ctbk/csvs'
 class TripdataCsv(MonthData):
     DIR = DIR
 
-    def __init__(self, ym, region, root='s3://'):
+    def __init__(self, ym, region, root=S3):
         self.root = root
         self.dir = f'{root}/{self.DIR}' if root else self.DIR
         if region not in REGIONS:
@@ -59,7 +61,7 @@ class TripdataCsv(MonthData):
 class TripdataCsvs:
     DIR = DIR
 
-    def __init__(self, start: Monthy = None, end: Monthy = None, root='s3://'):
+    def __init__(self, start: Monthy = None, end: Monthy = None, root=S3):
         self.root = root
         self.dir = f'{root}/{self.DIR}' if root else self.DIR
         src = self.src = TripdataMonths(start=start, end=end, root=root)
@@ -118,6 +120,24 @@ class TripdataCsvs:
         csvs = self.csvs
         for csv in csvs:
             csv.create(compute=compute)
+
+
+@ctbk.group()
+def csvs():
+    pass
+
+
+@csvs.command()
+@pass_context
+@option('-r', '--region', type=Choice(REGIONS))
+def urls(ctx, region):
+    o = ctx.obj
+    months = TripdataCsvs(start=o.start, end=o.end, root=o.root)
+    csvs = months.csvs
+    if region:
+        csvs = [ csv for csv in csvs if csv.region == region ]
+    for csv in csvs:
+        print(csv.url)
 
 
 class Csvs(MonthsDataset):
