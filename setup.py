@@ -5,4 +5,9 @@ setup(
     use_scm_version=True,
     packages=find_packages(),
     install_requires=open('requirements.txt', 'r').read(),
+    entry_points={
+        'console_scripts': [
+            'ctbk = ctbk.cli:ctbk',
+        ]
+    }
 )

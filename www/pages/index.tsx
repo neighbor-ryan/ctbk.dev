@@ -20,41 +20,9 @@ import {getBasePath} from "next-utils/basePath"
 import {loadSync} from "next-utils/load"
 import MD from "next-utils/md"
 import {concat, fromEntries, mapValues, o2a,} from "next-utils/objs"
-import {
-    boolParam,
-    enumMultiParam,
-    enumParam,
-    numberArrayParam,
-    Param,
-    ParsedParam,
-    parseQueryParams,
+import { boolParam, enumMultiParam, enumParam, numberArrayParam, Param, ParsedParam, parseQueryParams,
 } from "next-utils/params";
-import {
-    Colors,
-    Gender,
-    GenderQueryStrings,
-    GenderRollingAvgCutoff,
-    Genders,
-    Int2Gender,
-    NormalizeRideableType,
-    Region,
-    RegionQueryStrings,
-    Regions,
-    RideableType,
-    RideableTypeChars,
-    RideableTypes,
-    Row,
-    StackBy,
-    StackBys,
-    stackKeyDict,
-    toYM,
-    UnknownRideableCutoff,
-    UserType,
-    UserTypeQueryStrings,
-    UserTypes,
-    YAxes,
-    YAxis,
-    yAxisLabelDict,
+import { Colors, Gender, GenderQueryStrings, GenderRollingAvgCutoff, Genders, Int2Gender, NormalizeRideableType, Region, RegionQueryStrings, Regions, RideableType, RideableTypeChars, RideableTypes, Row, StackBy, StackBys, stackKeyDict, toYM, UnknownRideableCutoff, UserType, UserTypeQueryStrings, UserTypes, YAxes, YAxis, yAxisLabelDict,
 } from "../src/data";
 
 import dynamic from 'next/dynamic'

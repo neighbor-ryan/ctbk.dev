@@ -5,7 +5,8 @@ from utz import *
 
 from ctbk import NormalizedMonths
 from ctbk.aggregator import Aggregator
-from ctbk.monthly import Reducer, BKT, PARQUET_EXTENSION, SQLITE_EXTENSION
+from ctbk.monthly import Reducer, PARQUET_EXTENSION
+from ctbk.util.constants import SQLITE_EXTENSION, BKT
 
 
 class GroupCounts(Aggregator, Reducer):

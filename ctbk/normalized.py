@@ -1,8 +1,8 @@
-import click
 from utz import *
 
-from ctbk import Csvs, cached_property, Month, Monthy
-from ctbk.monthly import BKT, MonthsDataset, PARQUET_EXTENSION
+from ctbk import Csvs, Monthy
+from ctbk.monthly import MonthsDataset, PARQUET_EXTENSION
+from ctbk.util.constants import BKT
 
 fields = {
     'Trip Duration',

@@ -4,7 +4,7 @@ import json
 import pandas as pd
 from utz import sxs
 
-from ctbk import MonthsDataset, GroupCounts, Monthy, Month
+from ctbk import MonthsDataset, GroupCounts, Monthy, YM
 from ctbk.monthly import BKT
 
 

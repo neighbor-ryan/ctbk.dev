@@ -1,10 +1,9 @@
-from os.path import basename
-
 import pandas as pd
 
-from ctbk import NormalizedMonths, Monthy, Month
-from ctbk.monthly import Reducer, BKT
+from ctbk import NormalizedMonths
+from ctbk.monthly import Reducer
 from ctbk.util import cached_property
+from ctbk.util.constants import BKT
 
 
 class StationMetaHist(Reducer):

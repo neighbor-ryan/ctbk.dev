@@ -1,5 +1,3 @@
-from os.path import splitext
-
 import pandas as pd
 from click import option
 from numpy import nan
@@ -7,9 +5,10 @@ from pandas import Series
 from sys import stderr
 from utz import sxs
 
+from ctbk.monthly import MonthsDataset
 from ctbk.stations.meta_hist import StationMetaHist
-from ctbk.util import Month, Monthy
-from ctbk.monthly import BKT, MonthsDataset, GENESIS
+from ctbk.util import YM, Monthy
+from ctbk.util.constants import BKT
 
 
 def row_sketch(a):
@@ -69,12 +68,12 @@ class StationModes(MonthsDataset):
         self.json = json
         super().__init__(**kwargs)
 
-    def output(self, start: Monthy = None, end: Month = None):
+    def output(self, start: Monthy = None, end: YM = None):
         start, end = self.month_range(start, end)
         ids_path = self.path(start=start, end=end)
         return self.fs.info(ids_path)
 
-    def outputs(self, start: Monthy = None, end: Month = None):
+    def outputs(self, start: Monthy = None, end: YM = None):
         output = self.output(start, end)
         return pd.DataFrame([ output ])
 

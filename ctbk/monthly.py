@@ -15,17 +15,11 @@ from typing import Type, Literal
 from urllib.parse import urlparse
 from utz import sxs
 
-from ctbk import cached_property, Month, contexts, Monthy
+from ctbk import cached_property, YM, contexts, Monthy
+from ctbk.util.constants import PARQUET_EXTENSION, JSON_EXTENSION, GENESIS
 from ctbk.util.context import copy_ctx
 from ctbk.util.convert import Result, run, BadKey, BAD_DST, OVERWROTE, FOUND, WROTE
 
-PARQUET_EXTENSION = '.parquet'
-SQLITE_EXTENSION = '.db'
-JSON_EXTENSION = '.json'
-GENESIS = Month(2013, 6)
-END = None
-RGX = r'(?:(?P<region>JC)-)?(?P<year>\d{4})(?P<month>\d{2})-citibike-tripdata.csv'
-BKT = 'ctbk'
 
 Error = Literal["warn", "error"]
 
@@ -91,9 +85,9 @@ class Dataset:
             self.fs.mkdir(parent)
 
     def month_range(self, start: Monthy = None, end: Monthy = None):
-        start = Month(start) if start else GENESIS
+        start = YM(start) if start else GENESIS
         if end:
-            end = Month(end)
+            end = YM(end)
         else:
             inputs = self.src.outputs(start, end)
             end = inputs.month.max() + 1
@@ -155,13 +149,13 @@ class Dataset:
 
         return sxs(basenames.str.extract(rgx), df, basenames)
 
-    def outputs(self, start: Monthy = None, end: Month = None):
+    def outputs(self, start: Monthy = None, end: YM = None):
         df = self.parsed_basenames
-        df['month'] = df['month'].apply(Month)
+        df['month'] = df['month'].apply(YM)
         if start:
-            df = df[Month(start) <= df.month]
+            df = df[YM(start) <= df.month]
         if end:
-            df = df[df.month < Month(end)]
+            df = df[df.month < YM(end)]
         return df
 
     @classmethod
@@ -231,8 +225,8 @@ class Dataset:
 class MonthsDataset(Dataset):
     def convert(
             self,
-            start: Month = None,
-            end: Month = None,
+            start: YM = None,
+            end: YM = None,
             error: Error = 'warn',
             overwrite: bool = False,
             parallel: bool = False,
@@ -411,8 +405,8 @@ class Reducer(Dataset):
 
     def convert(
             self,
-            start: Month = None,
-            end: Month = None,
+            start: YM = None,
+            end: YM = None,
             parallel: bool = False,
             **kwargs,
     ):
@@ -432,8 +426,8 @@ class Reducer(Dataset):
     def convert_one(
             self,
             task,
-            start: Month = None,
-            end: Month = None,
+            start: YM = None,
+            end: YM = None,
             error: Error = 'warn',
             overwrite: bool = False,
             parallel: bool = False,
