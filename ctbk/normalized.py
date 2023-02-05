@@ -1,13 +1,17 @@
+from re import match, sub
 import dask.dataframe as dd
-from click import pass_context
-from utz import *
 
-from ctbk.cli.base import ctbk
+from click import pass_context, option
+from numpy import nan
+
 from ctbk import Monthy
-from ctbk.csvs import TripdataCsv
-from ctbk.month_data import MonthData, MonthsData, Compute
-from ctbk.tripdata import REGIONS, Region
-from ctbk.util.constants import DataFrame, BKT
+from ctbk.cli.base import ctbk
+from ctbk.csvs import TripdataCsv, TripdataCsvs
+from ctbk.month_data import MonthData, MonthsData
+from ctbk.util import cached_property, stderr
+from ctbk.util.constants import BKT
+from ctbk.util.df import DataFrame, value_counts
+from ctbk.zips import REGIONS, Region
 
 DIR = f'{BKT}/normalized'
 
@@ -79,7 +83,7 @@ def get_region(station_id, file_region=None):
         if match(rgx, station_id)
     ]
     if not regions:
-        stderr.write('Unrecognized station: %s\n' % station_id)
+        stderr(f'Unrecognized station: {station_id}')
         return nan
     if len(regions) > 1:
         raise ValueError(f'Station ID {station_id} matches regions {",".join(regions)}')
@@ -90,26 +94,6 @@ def get_region(station_id, file_region=None):
     return region
 
 
-def add_region(df: DataFrame, region: Region) -> DataFrame:
-    df['Start Region'] = df['Start Station ID'].fillna(NONE).apply(get_region, file_region=region)
-    df['End Region'] = df['End Station ID'].fillna(NONE).apply(get_region, file_region=region)
-
-    sys_none_start = df['Start Region'].isin({NONE, 'SYS'})
-    sys_none_end = df['End Region'].isin({NONE, 'SYS'})
-    sys_none = sys_none_start | sys_none_end
-    sys_nones = df[sys_none]
-    sys_nones[['Start Region', 'End Region']].value_counts().sort_index()
-
-    no_end = df['End Region'] == NONE
-    df.loc[no_end, 'End Region'] = df.loc[no_end, 'Start Region']  # assume incomplete rides ended in the region they started in
-    print(f'Dropping {sys_none.sum()} SYS/NONE records')
-    df = df[~sys_none]
-    region_matrix = df[['Start Region', 'End Region']].value_counts().sort_index().rename('Count')
-    print('Region matrix:')
-    print(region_matrix)
-    return df
-
-
 def normalize_fields(df: DataFrame, dst, region: Region) -> DataFrame:
     rename_dict = {}
     for col in df.columns:
@@ -117,18 +101,18 @@ def normalize_fields(df: DataFrame, dst, region: Region) -> DataFrame:
         if normalized_col in normalize_fields_map:
             rename_dict[col] = normalize_fields_map[normalized_col]
         else:
-            stderr.write('Unexpected field: %s (%s)\n' % (normalized_col, col))
+            stderr(f'Unexpected field: {normalized_col} ({col})')
 
     df = df.rename(columns=rename_dict)
     if 'Gender' not in df:
-        stderr.write('%s: "Gender" column not found; setting to 0 ("unknown") for all rows\n' % dst)
+        stderr(f'{dst}: "Gender" column not found; setting to 0 ("unknown") for all rows')
         df['Gender'] = 0  # unknown
     if 'Rideable Type' not in df:
-        stderr.write('%s: "Rideable Type" column not found; setting to "unknown" for all rows\n' % dst)
+        stderr(f'{dst}: "Rideable Type" column not found; setting to "unknown" for all rows')
         df['Rideable Type'] = 'unknown'
     if 'Member/Casual' in df:
         assert 'User Type' not in df
-        stderr.write('%s: renaming/harmonizing "member_casual" → "User Type", substituting "member" → "Subscriber", "casual" → "customer" \n' % dst)
+        stderr(f'{dst}: renaming/harmonizing "member_casual" → "User Type", substituting "member" → "Subscriber", "casual" → "customer"')
         df['User Type'] = df['Member/Casual'].map({'member':'Subscriber','casual':'Customer'})
         del df['Member/Casual']
 
@@ -138,11 +122,41 @@ def normalize_fields(df: DataFrame, dst, region: Region) -> DataFrame:
     return df
 
 
+def add_region(df: DataFrame, region: Region) -> DataFrame:
+    meta = lambda k: (k, 'str') if isinstance(df, dd.DataFrame) else lambda k: None
+    df['Start Region'] = df['Start Station ID'].fillna(NONE).apply(get_region, file_region=region, meta=meta('Start Station ID'))
+    df['End Region'] = df['End Station ID'].fillna(NONE).apply(get_region, file_region=region, meta=meta('End Station ID'))
+
+    sys_none_start = df['Start Region'].isin({NONE, 'SYS'})
+    sys_none_end = df['End Region'].isin({NONE, 'SYS'})
+    sys_none = sys_none_start | sys_none_end
+    sys_nones = df[sys_none]
+
+    stderr("Computing sys_none_counts…")
+    sys_none_counts = value_counts(sys_nones[['Start Region', 'End Region']]).sort_index()
+    stderr("sys_none_counts:")
+    stderr(sys_none_counts)
+
+    no_end = df['End Region'] == NONE
+    df.loc[no_end, 'End Region'] = df.loc[no_end, 'Start Region']  # assume incomplete rides ended in the region they started in
+    stderr(f'Dropping {sys_none_counts.sum()} SYS/NONE records')
+    df = df[~sys_none]
+    region_matrix = value_counts(df[['Start Region', 'End Region']]).sort_index().rename('Count')
+    stderr('Region matrix:')
+    stderr(region_matrix)
+    return df
+
+
 class NormalizedMonth(MonthData):
     DIR = DIR
+    WRITE_CONFIG_NAMES = [ 'normalized', 'norm', ]
+
+    @property
+    def url(self):
+        return f'{self.dir}/{self.ym}.pqt'
 
     def csv(self, region):
-        return TripdataCsv(ym=self.ym, region=region)
+        return TripdataCsv(ym=self.ym, region=region, **self.kwargs)
 
     @cached_property
     def csvs(self):
@@ -150,23 +164,13 @@ class NormalizedMonth(MonthData):
 
     def normalized_df(self, region):
         csv = self.csv(region)
-        df = normalize_fields(csv.df, csv.url, region=region)
+        df = csv.df
+        df = normalize_fields(df, csv.url, region=region)
         return df
 
-    def normalized_dd(self, region):
-        csv = self.csv(region)
-        df = normalize_fields(csv.dd, csv.url, region=region)
-        return df
-
-    def compute_df(self):
-        return pd.concat([
+    def compute(self):
+        return self.concat([
             self.normalized_df(region)
-            for region in REGIONS
-        ])
-
-    def compute_dd(self):
-        return dd.concat([
-            self.normalized_dd(region)
             for region in REGIONS
         ])
 
@@ -174,11 +178,12 @@ class NormalizedMonth(MonthData):
 class NormalizedMonths(MonthsData):
     DIR = DIR
 
-    def __init__(self, start: Monthy, end: Monthy, root=None, compute: Compute = None):
-        self.root = root
-        self.dir = f'{root}/{self.DIR}' if root else self.DIR
-        url_fn = '%s/{ym}.pqt' % self.dir
-        super().__init__(start, end, url_fn, compute)
+    def __init__(self, start: Monthy = None, end: Monthy = None, **kwargs):
+        src = self.src = TripdataCsvs(start=start, end=end, **kwargs)
+        super().__init__(start=src.start, end=src.end, **kwargs)
+
+    def month(self, ym: Monthy) -> NormalizedMonth:
+        return NormalizedMonth(ym, **self.kwargs)
 
 
 @ctbk.group()
@@ -190,7 +195,19 @@ def normalized():
 @pass_context
 def urls(ctx):
     o = ctx.obj
-    normalized = NormalizedMonths(start=o.start, end=o.end, root=o.root, compute=o.compute)
+    normalized = NormalizedMonths(**o)
+    months = normalized.months
+    for month in months:
+        print(month.url)
+
+
+@normalized.command()
+@pass_context
+@option('-d', '--dask', is_flag=True)
+def create(ctx, dask):
+    o = ctx.obj
+    normalized = NormalizedMonths(dask=dask, **o)
+    normalized.create()
     months = normalized.months
     for month in months:
         print(month.url)

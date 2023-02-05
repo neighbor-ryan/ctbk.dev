@@ -7,31 +7,33 @@ from zipfile import ZipFile
 
 from ctbk import YM, Monthy
 from ctbk.cli.base import ctbk
-from ctbk.month_data import MonthData, Compute
-from ctbk.tripdata import REGIONS, TripdataMonths, TripdataMonth, Region
-from ctbk.util.constants import S3, BKT
+from ctbk.month_data import MonthData, HasRoot
+from ctbk.util.constants import BKT
+from ctbk.util.df import DataFrame
+from ctbk.zips import REGIONS, TripdataZips, TripdataZip, Region
 
 DIR = f'{BKT}/csvs'
 
 
 class TripdataCsv(MonthData):
     DIR = DIR
+    WRITE_CONFIG_NAMES = ['csv']
 
-    def __init__(self, ym, region, root=S3, compute: Compute = None):
-        self.root = root
-        self.dir = f'{root}/{self.DIR}' if root else self.DIR
-        self.compute = compute
+    def __init__(self, ym, region, **kwargs):
         if region not in REGIONS:
             raise ValueError(f"Unrecognized region: {region}")
         self.region = region
         ym = YM(ym)
-        region_str = 'JC-' if region == 'JC' else ''
-        url = f'{self.dir}/{region_str}{ym}-citibike-tripdata.csv'
-        super().__init__(ym, url)
+        super().__init__(ym, **kwargs)
 
     @property
-    def src(self) -> TripdataMonth:
-        return TripdataMonth(ym=self.ym, region=self.region, root=self.root)
+    def url(self):
+        region_str = 'JC-' if self.region == 'JC' else ''
+        return f'{self.dir}/{region_str}{self.ym}-citibike-tripdata.csv'
+
+    @property
+    def src(self) -> TripdataZip:
+        return TripdataZip(ym=self.ym, region=self.region)  # TODO: allow zips to be local?
 
     def create_fn(self):
         src = self.src
@@ -42,37 +44,35 @@ class TripdataCsv(MonthData):
         csvs = [ f for f in names if f.endswith('.csv') and not f.startswith('_') ]
         name = singleton(csvs)
 
-        with z.open(name, 'r') as i, self.fs.open(self.url, 'w') as o:
+        with z.open(name, 'r') as i, self.fd('wb') as o:
             copyfileobj(i, o)
 
-    def compute_df(self):
+    def read(self) -> DataFrame:
+        if self.dask:
+            return dd.read_csv(self.url, dtype=str)
+        else:
+            return pd.read_csv(self.url, dtype=str)
+
+    def compute(self):
         self.create_fn()
-        df = pd.read_csv(self.url, dtype=str)
+        df = self.read()
         df['region'] = self.region
         return df
 
-    def compute_dd(self):
-        self.create_fn()
-        df = dd.read_csv(self.url, dtype=str)
-        df['region'] = self.region
-        return df
 
-
-class TripdataCsvs:
+class TripdataCsvs(HasRoot):
     DIR = DIR
 
-    def __init__(self, start: Monthy = None, end: Monthy = None, root=S3, compute: Compute = None):
-        self.root = root
-        self.dir = f'{root}/{self.DIR}' if root else self.DIR
-        self.compute = compute
-        src = self.src = TripdataMonths(start=start, end=end, root=root)
+    def __init__(self, start: Monthy = None, end: Monthy = None, **kwargs):
+        src = self.src = TripdataZips(start=start, end=end)
         self.start: YM = src.start
         self.end: YM = src.end
+        super().__init__(**kwargs)
 
     @cached_property
     def csvs(self) -> list[TripdataCsv]:
         return [
-            TripdataCsv(ym=u.ym, region=u.region, root=self.root, compute=self.compute)
+            TripdataCsv(ym=u.ym, region=u.region, **self.kwargs)
             for u in self.src.urls
         ]
 
@@ -81,25 +81,22 @@ class TripdataCsvs:
         m2r2u = self.src.m2r2u
         return {
             ym: {
-                region: TripdataCsv(ym=ym, region=region, root=self.root, compute=self.compute)
+                region: TripdataCsv(ym=ym, region=region, **self.kwargs)
                 for region in r2u
             }
             for ym, r2u in m2r2u.items()
         }
 
+    def concat(self, dfs):
+        if self.dask:
+            return dd.concat(dfs)
+        else:
+            return pd.concat(dfs)
+
     def m2df(self):
         return {
-            m: pd.concat([
+            m: self.concat([
                 csv.df
-                for r, csv in r2csv.items()
-            ])
-            for m, r2csv in self.m2r2csv.items()
-        }
-
-    def m2dd(self):
-        return {
-            m: dd.concat([
-                csv.dd
                 for r, csv in r2csv.items()
             ])
             for m, r2csv in self.m2r2csv.items()
@@ -107,20 +104,14 @@ class TripdataCsvs:
 
     @cached_property
     def df(self):
-        raise NotImplementedError("Unified DataFrame is large, you probably want .dd instead (.dd.compute() if you must)")
+        if self.dask:
+            return self.concat([ csv.df for csv in self.csvs ])
+        else:
+            raise NotImplementedError("Unified DataFrame is large, you probably want .dd instead (.dd.compute() if you must)")
 
-    @cached_property
-    def dd(self):
-        return dd.concat([
-            csv.dd
-            for m, r2csv in self.m2r2csv.items()
-            for r, csv in r2csv.items()
-        ])
-
-    def create(self, dask=True):
+    def create(self):
         for csv in self.csvs:
-            compute_fn = csv.compute_dd if dask else csv.compute_df
-            csv.create(compute_fn=compute_fn)
+            csv.create()
 
 
 @ctbk.group()
@@ -133,7 +124,7 @@ def csvs():
 @option('-r', '--region', type=Choice(REGIONS))
 def urls(ctx, region):
     o = ctx.obj
-    months = TripdataCsvs(start=o.start, end=o.end, root=o.root, compute=o.compute)
+    months = TripdataCsvs(start=o.start, end=o.end, root=o.root, write_configs=o.write_configs)
     csvs = months.csvs
     if region:
         csvs = [ csv for csv in csvs if csv.region == region ]

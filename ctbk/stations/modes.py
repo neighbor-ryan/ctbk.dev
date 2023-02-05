@@ -106,8 +106,8 @@ class StationModes(MonthsDataset):
 
     def compute(self, src_df):
         annotated_station_names = mode_sketch(src_df.set_index('Station ID')[['Station Name', 'count']], 'Station Name')
-        annotated_stations = mode_sketch(src_df.set_index('Station ID')[['Latitude', 'Longitude', 'count',]], ['Latitude', 'Longitude',])
-        return sxs(annotated_station_names['Station Name'], annotated_stations[['Latitude', 'Longitude',]])
+        annotated_stations = mode_sketch(src_df.set_index('Station ID')[[ 'Latitude', 'Longitude', 'count', ]], [ 'Latitude', 'Longitude', ])
+        return sxs(annotated_station_names['Station Name'], annotated_stations[[ 'Latitude', 'Longitude', ]])
 
 
 if __name__ == '__main__':

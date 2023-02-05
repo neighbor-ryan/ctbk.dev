@@ -76,8 +76,8 @@ class YM:
     def __int__(self):
         return int(str(self))
 
-    def format(self, url):
-        return url.format(ym=str(self), y=str(self.y), m=str(self.m))
+    def format(self, url, **kwargs):
+        return url.format(ym=str(self), y=str(self.y), m=str(self.m), **kwargs)
 
     @property
     def dt(self) -> DatetimeScalar:

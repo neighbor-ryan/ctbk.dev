@@ -32,6 +32,21 @@ class Result:
         return self.status == WROTE or self.status == OVERWROTE
 
 
+def decos(decs):
+    def _fn(fn):
+        for dec in reversed(decs):
+            fn = dec(fn)
+        return fn
+
+    return _fn
+
+
+def args(fn, kwargs):
+    spec = getfullargspec(fn)
+    args = spec.args
+    return { k: v for k, v in kwargs.items() if k in args }
+
+
 def run(fn, ctx, **kwargs):
     spec = getfullargspec(fn)
     args = spec.args
