@@ -1,12 +1,10 @@
 import typing
 from click import pass_context, option, Choice
-
 from typing import Literal, Tuple
 
 from ctbk import YM, Monthy
 from ctbk.cli.base import ctbk
-from ctbk.month_data import MonthsData, MonthURL
-from ctbk.util import cached_property
+from ctbk.month_data import MonthURL
 from ctbk.util.constants import GENESIS, S3
 
 Region = Literal[ 'NYC', 'JC', ]
@@ -105,17 +103,3 @@ def urls(ctx, region):
         urls = [ url for url in urls if url.region == region ]
     for url in urls:
         print(url.url)
-
-
-
-
-class Tripdata(MonthsData):
-    ROOT = 'tripdata'
-    RGX = r'^(?:(?P<region>JC)-)?(?P<month>\d{6})[ \-]citi?bike-tripdata?(?P<csv>\.csv)?(?P<zip>\.zip)?$'
-
-    @cached_property
-    def parsed_basenames(self):
-        df = super().parsed_basenames
-        df = df.dropna(subset=['month']).astype({ 'month': int })
-        df['region'] = df['region'].fillna('NYC')
-        return df

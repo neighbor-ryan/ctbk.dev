@@ -1,8 +1,15 @@
+import dask.dataframe as dd
+from click import pass_context
 from utz import *
 
-from ctbk import Csvs, Monthy
-from ctbk.monthly import MonthsDataset, PARQUET_EXTENSION
-from ctbk.util.constants import BKT
+from ctbk.cli.base import ctbk
+from ctbk import Monthy
+from ctbk.csvs import TripdataCsv
+from ctbk.month_data import MonthData, MonthsData, Compute
+from ctbk.tripdata import REGIONS, Region
+from ctbk.util.constants import DataFrame, BKT
+
+DIR = f'{BKT}/normalized'
 
 fields = {
     'Trip Duration',
@@ -66,12 +73,16 @@ rgxs = {
 
 
 def get_region(station_id, file_region=None):
-    regions = [ region for region, rgx in rgxs.items() if match(rgx, station_id) ]
+    regions = [
+        region
+        for region, rgx in rgxs.items()
+        if match(rgx, station_id)
+    ]
     if not regions:
         stderr.write('Unrecognized station: %s\n' % station_id)
         return nan
     if len(regions) > 1:
-        raise ValueError(f'Station ID {station_id} matches regions {",".regions}')
+        raise ValueError(f'Station ID {station_id} matches regions {",".join(regions)}')
 
     region = regions[0]
     if region == 'NYC' and file_region == 'JC':
@@ -79,9 +90,9 @@ def get_region(station_id, file_region=None):
     return region
 
 
-def add_region(df, file_region):
-    df['Start Region'] = df['Start Station ID'].fillna(NONE).apply(get_region, file_region=file_region)
-    df['End Region'] = df['End Station ID'].fillna(NONE).apply(get_region, file_region=file_region)
+def add_region(df: DataFrame, region: Region) -> DataFrame:
+    df['Start Region'] = df['Start Station ID'].fillna(NONE).apply(get_region, file_region=region)
+    df['End Region'] = df['End Station ID'].fillna(NONE).apply(get_region, file_region=region)
 
     sys_none_start = df['Start Region'].isin({NONE, 'SYS'})
     sys_none_end = df['End Region'].isin({NONE, 'SYS'})
@@ -99,7 +110,7 @@ def add_region(df, file_region):
     return df
 
 
-def normalize_fields(df, dst, file_region):
+def normalize_fields(df: DataFrame, dst, region: Region) -> DataFrame:
     rename_dict = {}
     for col in df.columns:
         normalized_col = normalize_field(col)
@@ -121,33 +132,65 @@ def normalize_fields(df, dst, file_region):
         df['User Type'] = df['Member/Casual'].map({'member':'Subscriber','casual':'Customer'})
         del df['Member/Casual']
 
-    df = add_region(df, file_region=file_region)
+    df = add_region(df, region=region)
+    df = df.astype({ k: v for k, v in dtypes.items() if k in df })
 
     return df
 
 
-class NormalizedMonths(MonthsDataset):
-    ROOT = f'{BKT}/normalized'
-    SRC_CLS = Csvs
-    RGX = '(?P<month>\\d{6})\\' + PARQUET_EXTENSION
+class NormalizedMonth(MonthData):
+    DIR = DIR
 
-    def task_df(self, start: Monthy = None, end: Monthy = None):
-        df = self.src.outputs(start=start, end=end)
-        df['srcs'] = sxs(df.region, df.name.rename('src')).to_dict('records')
-        df = df.groupby('month')['srcs'].apply(list).reset_index()
-        df['dst'] = df['month'].apply(lambda m: f'{self.root}/{m}{PARQUET_EXTENSION}')
+    def csv(self, region):
+        return TripdataCsv(ym=self.ym, region=region)
+
+    @cached_property
+    def csvs(self):
+        return [ self.csv(region) for region in REGIONS ]
+
+    def normalized_df(self, region):
+        csv = self.csv(region)
+        df = normalize_fields(csv.df, csv.url, region=region)
         return df
 
-    def normalize_csv(self, src, region, dst):
-        with self.src.fs.open(src, 'r') as f:
-            df = pd.read_csv(f, dtype=str)
-        df = normalize_fields(df, dst, file_region=region)
-        df = df.astype({ k: v for k, v in dtypes.items() if k in df })
+    def normalized_dd(self, region):
+        csv = self.csv(region)
+        df = normalize_fields(csv.dd, csv.url, region=region)
         return df
 
-    def compute(self, srcs, dst):
-        return pd.concat([ self.normalize_csv(**entry, dst=dst) for entry in srcs ])
+    def compute_df(self):
+        return pd.concat([
+            self.normalized_df(region)
+            for region in REGIONS
+        ])
+
+    def compute_dd(self):
+        return dd.concat([
+            self.normalized_dd(region)
+            for region in REGIONS
+        ])
 
 
-if __name__ == '__main__':
-    NormalizedMonths.cli()
+class NormalizedMonths(MonthsData):
+    DIR = DIR
+
+    def __init__(self, start: Monthy, end: Monthy, root=None, compute: Compute = None):
+        self.root = root
+        self.dir = f'{root}/{self.DIR}' if root else self.DIR
+        url_fn = '%s/{ym}.pqt' % self.dir
+        super().__init__(start, end, url_fn, compute)
+
+
+@ctbk.group()
+def normalized():
+    pass
+
+
+@normalized.command()
+@pass_context
+def urls(ctx):
+    o = ctx.obj
+    normalized = NormalizedMonths(start=o.start, end=o.end, root=o.root, compute=o.compute)
+    months = normalized.months
+    for month in months:
+        print(month.url)

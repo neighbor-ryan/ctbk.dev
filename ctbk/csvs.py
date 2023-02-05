@@ -5,22 +5,22 @@ from click import pass_context, option, Choice
 from utz import *
 from zipfile import ZipFile
 
+from ctbk import YM, Monthy
 from ctbk.cli.base import ctbk
-from ctbk import YM, MonthsDataset, Monthy
 from ctbk.month_data import MonthData, Compute
-from ctbk.tripdata import Tripdata, REGIONS, TripdataMonths, TripdataMonth, Region
-from ctbk.util.constants import BKT, S3
-from ctbk.util.convert import WROTE
+from ctbk.tripdata import REGIONS, TripdataMonths, TripdataMonth, Region
+from ctbk.util.constants import S3, BKT
 
-DIR = 'ctbk/csvs'
+DIR = f'{BKT}/csvs'
 
 
 class TripdataCsv(MonthData):
     DIR = DIR
 
-    def __init__(self, ym, region, root=S3):
+    def __init__(self, ym, region, root=S3, compute: Compute = None):
         self.root = root
         self.dir = f'{root}/{self.DIR}' if root else self.DIR
+        self.compute = compute
         if region not in REGIONS:
             raise ValueError(f"Unrecognized region: {region}")
         self.region = region
@@ -42,18 +42,18 @@ class TripdataCsv(MonthData):
         csvs = [ f for f in names if f.endswith('.csv') and not f.startswith('_') ]
         name = singleton(csvs)
 
-        with z.open(name, 'r') as i, self.fs.open(self.path, 'w') as o:
+        with z.open(name, 'r') as i, self.fs.open(self.url, 'w') as o:
             copyfileobj(i, o)
 
     def compute_df(self):
         self.create_fn()
-        df = pd.read_parquet(self.url)
+        df = pd.read_csv(self.url, dtype=str)
         df['region'] = self.region
         return df
 
     def compute_dd(self):
         self.create_fn()
-        df = dd.read_parquet(self.url)
+        df = dd.read_csv(self.url, dtype=str)
         df['region'] = self.region
         return df
 
@@ -61,65 +61,66 @@ class TripdataCsv(MonthData):
 class TripdataCsvs:
     DIR = DIR
 
-    def __init__(self, start: Monthy = None, end: Monthy = None, root=S3):
+    def __init__(self, start: Monthy = None, end: Monthy = None, root=S3, compute: Compute = None):
         self.root = root
         self.dir = f'{root}/{self.DIR}' if root else self.DIR
+        self.compute = compute
         src = self.src = TripdataMonths(start=start, end=end, root=root)
         self.start: YM = src.start
         self.end: YM = src.end
 
-    @property
+    @cached_property
     def csvs(self) -> list[TripdataCsv]:
-        return [ TripdataCsv(ym=u.ym, region=u.region, root=self.root) for u in self.src.urls ]
+        return [
+            TripdataCsv(ym=u.ym, region=u.region, root=self.root, compute=self.compute)
+            for u in self.src.urls
+        ]
 
     @property
     def m2r2csv(self) -> dict[YM, dict[Region, TripdataCsv]]:
         m2r2u = self.src.m2r2u
         return {
-            m: {
-                r: TripdataCsv(ym=m, region=r, root=self.root)
-                for r in r2u
+            ym: {
+                region: TripdataCsv(ym=ym, region=region, root=self.root, compute=self.compute)
+                for region in r2u
             }
-            for m, r2u in m2r2u.items()
+            for ym, r2u in m2r2u.items()
         }
 
-    def m2df(self, compute: Compute = None):
+    def m2df(self):
         return {
             m: pd.concat([
-                csv.df(compute=compute)
+                csv.df
                 for r, csv in r2csv.items()
             ])
             for m, r2csv in self.m2r2csv.items()
         }
 
-    def m2dd(self, compute: Compute = None):
+    def m2dd(self):
         return {
             m: dd.concat([
-                csv.dd(compute=compute)
+                csv.dd
                 for r, csv in r2csv.items()
             ])
             for m, r2csv in self.m2r2csv.items()
         }
 
-    def df(self, compute: Compute = None):
+    @cached_property
+    def df(self):
         raise NotImplementedError("Unified DataFrame is large, you probably want .dd instead (.dd.compute() if you must)")
-        # return pd.concat([
-        #     csv.df(compute=compute)
-        #     for m, r2csv in self.m2r2csv.items()
-        #     for r, csv in r2csv.items()
-        # ])
 
-    def dd(self, compute: Compute = None):
+    @cached_property
+    def dd(self):
         return dd.concat([
-            csv.dd(compute=compute)
+            csv.dd
             for m, r2csv in self.m2r2csv.items()
             for r, csv in r2csv.items()
         ])
 
-    def create(self, compute: Compute = None):
-        csvs = self.csvs
-        for csv in csvs:
-            csv.create(compute=compute)
+    def create(self, dask=True):
+        for csv in self.csvs:
+            compute_fn = csv.compute_dd if dask else csv.compute_df
+            csv.create(compute_fn=compute_fn)
 
 
 @ctbk.group()
@@ -132,48 +133,9 @@ def csvs():
 @option('-r', '--region', type=Choice(REGIONS))
 def urls(ctx, region):
     o = ctx.obj
-    months = TripdataCsvs(start=o.start, end=o.end, root=o.root)
+    months = TripdataCsvs(start=o.start, end=o.end, root=o.root, compute=o.compute)
     csvs = months.csvs
     if region:
         csvs = [ csv for csv in csvs if csv.region == region ]
     for csv in csvs:
         print(csv.url)
-
-
-class Csvs(MonthsDataset):
-    ROOT = f'{BKT}/csvs'
-    SRC_CLS = Tripdata
-    RGX = r'(?:(?P<region>JC)-)?(?P<month>\d{6})-citibike-tripdata.csv'
-
-    REGION_PREFIXES = { 'JC': 'JC-', 'NYC': '', }
-
-    def task_df(self, start: Monthy = None, end: Monthy = None):
-        df = self.src.outputs(start, end)
-        df['src'] = f'{self.src.root}/' + df.basename
-        df['region_prefix'] = df.region.apply(lambda k: self.REGION_PREFIXES[k])
-        df['dst_name'] = df.apply(lambda r: f'{r["region_prefix"]}{r["month"]}-citibike-tripdata', axis=1)
-        df['dst'] = f'{self.root}/' + df['dst_name'] + '.csv'
-        df = df[['month', 'region', 'src', 'dst']]
-        return df
-
-    def outputs(self, start: Monthy = None, end: YM = None):
-        df = super().outputs(start, end)
-        df['region'] = df['region'].fillna('NYC')
-        return df
-
-    def compute(self, src_fd, src_name, dst_fd):
-        z = ZipFile(src_fd)
-        names = z.namelist()
-        print(f'{src_name}: zip names: {names}')
-
-        csvs = [ f for f in names if f.endswith('.csv') and not f.startswith('_') ]
-        name = singleton(csvs)
-
-        with z.open(name, 'r') as i:
-            dst_fd.write(i.read())
-
-        return WROTE
-
-
-if __name__ == '__main__':
-    Csvs.cli()
