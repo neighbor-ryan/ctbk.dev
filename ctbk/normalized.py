@@ -94,7 +94,7 @@ def get_region(station_id, file_region=None):
     return region
 
 
-def normalize_fields(df: DataFrame, dst, region: Region) -> DataFrame:
+def normalize_fields(df: DataFrame, src, region: Region) -> DataFrame:
     rename_dict = {}
     for col in df.columns:
         normalized_col = normalize_field(col)
@@ -105,14 +105,14 @@ def normalize_fields(df: DataFrame, dst, region: Region) -> DataFrame:
 
     df = df.rename(columns=rename_dict)
     if 'Gender' not in df:
-        stderr(f'{dst}: "Gender" column not found; setting to 0 ("unknown") for all rows')
+        stderr(f'{src}: "Gender" column not found; setting to 0 ("unknown") for all rows')
         df['Gender'] = 0  # unknown
     if 'Rideable Type' not in df:
-        stderr(f'{dst}: "Rideable Type" column not found; setting to "unknown" for all rows')
+        stderr(f'{src}: "Rideable Type" column not found; setting to "unknown" for all rows')
         df['Rideable Type'] = 'unknown'
     if 'Member/Casual' in df:
         assert 'User Type' not in df
-        stderr(f'{dst}: renaming/harmonizing "member_casual" → "User Type", substituting "member" → "Subscriber", "casual" → "customer"')
+        stderr(f'{src}: renaming/harmonizing "member_casual" → "User Type", substituting "member" → "Subscriber", "casual" → "customer"')
         df['User Type'] = df['Member/Casual'].map({'member':'Subscriber','casual':'Customer'})
         del df['Member/Casual']
 
@@ -130,20 +130,22 @@ def add_region(df: DataFrame, region: Region) -> DataFrame:
     sys_none_start = df['Start Region'].isin({NONE, 'SYS'})
     sys_none_end = df['End Region'].isin({NONE, 'SYS'})
     sys_none = sys_none_start | sys_none_end
-    sys_nones = df[sys_none]
+    # sys_nones = df[sys_none]
+    # stderr("Computing sys_none_counts…")
+    # sys_none_counts = value_counts(sys_nones[['Start Region', 'End Region']]).sort_index()
+    # stderr("sys_none_counts:")
+    # stderr(str(sys_none_counts))
 
-    stderr("Computing sys_none_counts…")
-    sys_none_counts = value_counts(sys_nones[['Start Region', 'End Region']]).sort_index()
-    stderr("sys_none_counts:")
-    stderr(sys_none_counts)
-
-    no_end = df['End Region'] == NONE
-    df.loc[no_end, 'End Region'] = df.loc[no_end, 'Start Region']  # assume incomplete rides ended in the region they started in
-    stderr(f'Dropping {sys_none_counts.sum()} SYS/NONE records')
+    def fill_ends(r):
+        return r['Start Region'] if r['End Region'] == NONE else r['End Region']
+    df['End Region'] = df[['Start Region', 'End Region']].apply(fill_ends, axis=1, meta=(None, str))
+    # no_end = df['End Region'] == NONE
+    # df.loc[no_end, 'End Region'] = df.loc[no_end, 'Start Region']  # assume incomplete rides ended in the region they started in
+    # stderr(f'Dropping {sys_none_counts.sum()} SYS/NONE records')
     df = df[~sys_none]
-    region_matrix = value_counts(df[['Start Region', 'End Region']]).sort_index().rename('Count')
-    stderr('Region matrix:')
-    stderr(region_matrix)
+    # region_matrix = value_counts(df[['Start Region', 'End Region']]).sort_index().rename('Count')
+    # stderr('Region matrix:')
+    # stderr(str(region_matrix))
     return df
 
 
@@ -162,13 +164,14 @@ class NormalizedMonth(MonthData):
     def csvs(self):
         return [ self.csv(region) for region in REGIONS ]
 
-    def normalized_df(self, region):
+    def normalized_df(self, region) -> DataFrame:
         csv = self.csv(region)
         df = csv.df
         df = normalize_fields(df, csv.url, region=region)
         return df
 
-    def compute(self):
+    @cached_property
+    def _df(self) -> DataFrame:
         return self.concat([
             self.normalized_df(region)
             for region in REGIONS

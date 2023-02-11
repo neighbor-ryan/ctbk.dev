@@ -1,15 +1,18 @@
 from os.path import dirname
+from typing import Union
 
 import dask.dataframe as dd
 import fsspec
 import pandas as pd
 from abc import ABC, abstractmethod
+from dask import delayed
+from dask.delayed import Delayed
 from urllib.parse import urlparse
 
 from ctbk.util import cached_property, YM, Monthy, stderr
 from ctbk.util.constants import DEFAULT_ROOT
-from ctbk.util.df import DataFrame
-from ctbk.write import Overread, Overwrite, IfAbsent, Never, WriteConfigs
+from ctbk.util.df import DataFrame, checkpoint, RV
+from ctbk.write import Overwrite, IfAbsent, Never, WriteConfigs
 
 
 class HasRoot:
@@ -23,10 +26,11 @@ class HasRoot:
         self.dir = f'{root}/{self.DIR}' if root else self.DIR
         self.write_configs = write_configs
         self.write = IfAbsent
-        for write_config_name in self.WRITE_CONFIG_NAMES or []:
-            if write_config_name in write_configs:
-                self.write = write_configs[write_config_name]
-                break
+        if write_configs:
+            for write_config_name in self.WRITE_CONFIG_NAMES or []:
+                if write_config_name in write_configs:
+                    self.write = write_configs[write_config_name]
+                    break
         self.dask = dask
         super().__init__(*args)
 
@@ -101,52 +105,43 @@ class MonthData(MonthURL, HasRoot, ABC):
         MonthURL.__init__(self, *args)
         HasRoot.__init__(self, **kwargs)
 
-    def create_fn(self):
-        df = self.compute()
-        self.save(df)
-        return df
+    def _df(self) -> DataFrame:
+        raise NotImplementedError
 
-    def create(self):
+    # def create_read(self, rv: RV = 'read'):
+    #     return self.read()
+
+    def create_write(self, rv: RV = 'read'):
+        return checkpoint(self._df(), self.url, rv=rv)
+
+    def create(self, rv: RV = 'read') -> Union[DataFrame, Delayed]:
         write = self.write
-        if write is Overwrite:
-            stderr(f'{"Overwriting" if self.exists() else "Writing"} {self.url}')
-            return self.create_fn()
-        elif write is Overread:
-            stderr(f'{"Overwriting" if self.exists() else "Writing"} {self.url} (then reading)')
-            self.create_fn()
-            return self.read()
-        elif self.exists():
-            return None
-        elif write is IfAbsent:
-            stderr(f'Creating {self.url}')
-            return self.create_fn()
+        if self.exists():
+            if write is Overwrite:
+                stderr(f'Overwriting {self.url}')
+                return self.create_write(rv=rv)
+            elif rv is None:
+                def exists_noop():
+                    pass
+                return delayed(exists_noop)(dask_key_name=f'read {self.url}')
+            else:
+                stderr(f'Reading {self.url}')
+                return self.read()
         elif write is Never:
             raise RuntimeError(f"{self.url} doesn't exist")
         else:
-            raise ValueError(f"Unrecognized `write`: {write}")
+            stderr(f'Writing {self.url}')
+            return self.create_write(rv=rv)
 
     @cached_property
     def df(self) -> DataFrame:
-        df = self.create()
-        if df is not None:
-            return df
-        return self.read()
+        return self.create(rv='read')
 
     def read(self) -> DataFrame:
         if self.dask:
             return dd.read_parquet(self.url)
         else:
             return pd.read_parquet(self.url)
-
-    def save(self, df):
-        if self.dask:
-            df.compute().to_parquet(self.fd('wb'))
-        else:
-            df.to_parquet(self.fd('wb'))
-
-    @abstractmethod
-    def compute(self):
-        raise NotImplementedError
 
     def concat(self, *args, **kwargs):
         concat_fn = dd.concat if self.dask else pd.concat

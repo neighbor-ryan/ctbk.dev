@@ -1,21 +1,22 @@
-from dataclasses import dataclass
+from typing import Optional
+
+from dataclasses import dataclass, field
 
 
-class Write: pass
-class Never(Write): pass
-class IfAbsent(Write): pass
-class Overwrite(Write): pass
-class Overread(Write): pass
+class WriteType: pass
+class Never(WriteType): pass
+class IfAbsent(WriteType): pass
+class Overwrite(WriteType): pass
 
 
-WRITES = [ Never, IfAbsent, Overwrite, Overread ]
+Write = type[WriteType]
+WRITES = [ Never, IfAbsent, Overwrite, ]
 
 
 WRITE_2_NAME = {
     Never: ['0', 'never', 'n', ],
     IfAbsent: [ '1', 'ifabsent', 'ifabs', 'w', ],
     Overwrite: [ '2', 'overwrite', 'write', 'ow', 'ww', ],
-    Overread: [ '3', 'overread', 'or', 'www', ],
 }
 NAME_2_WRITE = {
     name: write for
@@ -32,8 +33,8 @@ def parse(name: str) -> Write:
 
 @dataclass
 class WriteConfigs:
-    configs: dict[str, Write]
-    default: Write = None
+    configs: dict[str, Write] = field(default_factory=dict)
+    default: Optional[Write] = IfAbsent
 
     @staticmethod
     def load(write_configs: list[str]) -> 'WriteConfigs':

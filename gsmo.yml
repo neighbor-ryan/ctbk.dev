@@ -1,4 +1,4 @@
 mount:
 - home:/home
 sudo: true
-
+apt: graphviz

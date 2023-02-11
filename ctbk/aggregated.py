@@ -2,8 +2,9 @@ from dataclasses import dataclass
 
 import dask.dataframe as dd
 import pandas as pd
-from click import option, pass_context
+from click import option, pass_context, argument
 from pandas import Series
+from utz import process
 
 from ctbk import Monthy
 from ctbk.cli.base import ctbk
@@ -11,6 +12,7 @@ from ctbk.month_data import MonthData, MonthsData
 from ctbk.normalized import NormalizedMonth, NormalizedMonths
 from ctbk.util.constants import BKT
 from ctbk.util.convert import run, args, decos
+from ctbk.util.df import DataFrame
 
 DIR = f'{BKT}/aggregated'
 
@@ -86,7 +88,7 @@ class AggregatedMonth(MonthData):
     def url(self):
         return f'{self.dir}/{self.agg_keys.label}_{self.sum_keys.label}_{self.ym}.pqt'
 
-    def compute(self):
+    def _df(self) -> DataFrame:
         src = NormalizedMonth(self.ym, **self.kwargs)
         df = src.df
         agg_keys = dict(self.agg_keys)
@@ -235,3 +237,24 @@ def create(ctx, dask, **kwargs):
     months = aggregated.months
     for month in months:
         print(month.url)
+
+
+@aggregated.command()
+@pass_context
+@decos(GROUP_KEY_ARGS)
+@option('-O', '--no-open', is_flag=True)
+@argument('filename')
+def dag(ctx, no_open, filename, **kwargs):
+    o = ctx.obj
+    agg_keys = AggKeys(**args(AggKeys, kwargs))
+    sum_keys = SumKeys(**args(SumKeys, kwargs))
+    aggregated = AggregatedMonths(
+        agg_keys=agg_keys,
+        sum_keys=sum_keys,
+        **o,
+        dask=True,
+    )
+    df = aggregated.df
+    df.visualize(filename)
+    if not no_open:
+        process.run('open', filename)

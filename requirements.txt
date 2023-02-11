@@ -5,6 +5,7 @@ click==8.1.3
 dask[dataframe]==2021.12.0
 fsspec
 geopy
+graphviz
 html_dsl==0.4.1
 kaleido==0.2.1
 lxml==4.9.2
