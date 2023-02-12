@@ -1,6 +1,6 @@
 import typing
 from click import pass_context, option, Choice
-from typing import Literal, Tuple
+from typing import Literal, Optional, Tuple
 
 from ctbk import YM, Monthy
 from ctbk.cli.base import ctbk
@@ -50,9 +50,10 @@ class TripdataZip(MonthURL):
 class TripdataZips:
     DIR = DIR
 
-    def __init__(self, start: Monthy = None, end: Monthy = None):
+    def __init__(self, start: Monthy = None, end: Monthy = None, regions: Optional[list[str]] = None):
         self.start: YM = YM(start or GENESIS)
         end = end or YM()
+        self.regions = regions or REGIONS
 
         # "month" to "region" to "url" map
         m2r2u = [
@@ -60,7 +61,7 @@ class TripdataZips:
                 ym,
                 {
                     region: TripdataZip(ym=ym, region=region, root=S3)
-                    for region in REGIONS
+                    for region in self.regions
                     if region == 'NYC' or ym >= YM(201509)
                 }
             )
@@ -84,7 +85,7 @@ class TripdataZips:
         self.end: YM = end
 
     @property
-    def urls(self) -> list[TripdataZip]:
+    def zips(self) -> list[TripdataZip]:
         return [
             u
             for r2u in self.m2r2u.values()
@@ -102,8 +103,8 @@ def zips():
 @option('-r', '--region', type=Choice(REGIONS))
 def urls(ctx, region):
     o = ctx.obj
-    months = TripdataZips(start=o.start, end=o.end)
-    urls = months.urls
+    months = TripdataZips(start=o.start, end=o.end, regions=[region] if region else None)
+    urls = months.zips
     if region:
         urls = [ url for url in urls if url.region == region ]
     for url in urls:

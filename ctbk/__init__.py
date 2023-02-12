@@ -1,6 +1,7 @@
 from .util import cached_property, contexts, YM, MonthSet, Monthy
 from .monthly import MonthsDataset, PARQUET_EXTENSION
 from . import zips
+from . import sampled_zip
 from . import csvs
 from . import normalized
 from . import aggregated

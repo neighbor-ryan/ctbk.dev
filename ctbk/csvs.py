@@ -1,32 +1,29 @@
 #!/usr/bin/env python
-from typing import Union
-
-from shutil import copyfileobj
+from contextlib import contextmanager
+from os.path import basename
+from typing import Optional
 
 import dask.dataframe as dd
 import pandas as pd
 from click import pass_context, option, Choice
-from dask.delayed import Delayed, delayed
+from dask.delayed import delayed
+from gzip_stream import GZIPCompressedStream
+from shutil import copyfileobj
 from utz import singleton
-#from utz import *
 from zipfile import ZipFile
 
 from ctbk import YM, Monthy
 from ctbk.cli.base import ctbk
 from ctbk.month_data import MonthData, HasRoot
-from ctbk.util import cached_property, stderr
+from ctbk.util import cached_property
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame, RV, checkpoint
-from ctbk.write import Overwrite, Never
 from ctbk.zips import REGIONS, TripdataZips, TripdataZip, Region
 
 DIR = f'{BKT}/csvs'
 
 
-class TripdataCsv(MonthData):
-    DIR = DIR
-    WRITE_CONFIG_NAMES = ['csv']
-
+class ReadsTripdataZip(MonthData):
     def __init__(self, ym, region, **kwargs):
         if region not in REGIONS:
             raise ValueError(f"Unrecognized region: {region}")
@@ -34,35 +31,45 @@ class TripdataCsv(MonthData):
         ym = YM(ym)
         super().__init__(ym, **kwargs)
 
-    @property
-    def url(self):
-        region_str = 'JC-' if self.region == 'JC' else ''
-        return f'{self.dir}/{region_str}{self.ym}-citibike-tripdata.csv'
-
-    @property
+    @cached_property
     def src(self) -> TripdataZip:
         return TripdataZip(ym=self.ym, region=self.region)  # TODO: allow zips to be local?
 
     def create_fn(self):
-        with self.zip_csv_fd() as i, self.fd('wb') as o:
-            copyfileobj(i, o)
+        raise NotImplementedError
 
     def create_write(self, rv: RV = 'read'):
         if rv is None:
-            return delayed(self.create_fn)()
+            return delayed(lambda: self.create_fn())()
         else:
             return checkpoint(self._df(), self.url, rv=rv)
 
+
+class TripdataCsv(ReadsTripdataZip):
+    DIR = DIR
+    WRITE_CONFIG_NAMES = ['csv']
+
+    @cached_property
+    def url(self):
+        region_str = 'JC-' if self.region == 'JC' else ''
+        return f'{self.dir}/{region_str}{self.ym}-citibike-tripdata.csv.gz'
+
+    def create_fn(self):
+        with self.zip_csv_fd() as i, self.fd('wb') as o:
+            copyfileobj(GZIPCompressedStream(i, compression_level=7), o)
+
+    @contextmanager
     def zip_csv_fd(self):
         src = self.src
-        z = ZipFile(src.fd('rb'))
-        names = z.namelist()
-        print(f'{src.url}: zip names: {names}')
+        with src.fd('rb') as z_in:
+            z = ZipFile(z_in)
+            names = z.namelist()
+            print(f'{src.url}: zip names: {names}')
 
-        csvs = [ f for f in names if f.endswith('.csv') and not f.startswith('_') ]
-        name = singleton(csvs)
+            csvs = [ f for f in names if f.endswith('.csv') and not f.startswith('_') ]
+            name = singleton(csvs)
 
-        return z.open(name, 'r')
+            yield z.open(name, 'r')
 
     def meta(self):
         if self.exists():
@@ -85,8 +92,8 @@ class TripdataCsv(MonthData):
 class TripdataCsvs(HasRoot):
     DIR = DIR
 
-    def __init__(self, start: Monthy = None, end: Monthy = None, **kwargs):
-        src = self.src = TripdataZips(start=start, end=end)
+    def __init__(self, start: Monthy = None, end: Monthy = None, regions: Optional[list[str]] = None, **kwargs):
+        src = self.src = TripdataZips(start=start, end=end, regions=regions)
         self.start: YM = src.start
         self.end: YM = src.end
         super().__init__(**kwargs)
@@ -95,7 +102,7 @@ class TripdataCsvs(HasRoot):
     def csvs(self) -> list[TripdataCsv]:
         return [
             TripdataCsv(ym=u.ym, region=u.region, **self.kwargs)
-            for u in self.src.urls
+            for u in self.src.zips
         ]
 
     @property
@@ -108,12 +115,6 @@ class TripdataCsvs(HasRoot):
             }
             for ym, r2u in m2r2u.items()
         }
-
-    def concat(self, dfs):
-        if self.dask:
-            return dd.concat(dfs)
-        else:
-            return pd.concat(dfs)
 
     def m2df(self):
         return {
@@ -132,8 +133,9 @@ class TripdataCsvs(HasRoot):
             raise NotImplementedError("Unified DataFrame is large, you probably want .dd instead (.dd.compute() if you must)")
 
     def create(self):
-        for csv in self.csvs:
-            csv.create()
+        creates = [ csv.create(rv=None) for csv in self.csvs ]
+        if self.dask:
+            return delayed(lambda x: x)(creates)
 
 
 @ctbk.group()
@@ -152,3 +154,21 @@ def urls(ctx, region):
         csvs = [ csv for csv in csvs if csv.region == region ]
     for csv in csvs:
         print(csv.url)
+
+
+@csvs.command()
+@pass_context
+@option('--dask', is_flag=True)
+@option('-r', '--region', type=Choice(REGIONS))
+def create(ctx, dask, region):
+    o = ctx.obj
+    csvs = TripdataCsvs(
+        start=o.start, end=o.end,
+        regions=[region] if region else None,
+        dask=dask,
+        root=o.root,
+        write_configs=o.write_configs,
+    )
+    created = csvs.create()
+    if dask:
+        created.compute()

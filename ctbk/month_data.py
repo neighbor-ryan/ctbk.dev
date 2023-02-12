@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from os.path import dirname
 from typing import Union
 
@@ -37,6 +38,10 @@ class HasRoot:
     @property
     def kwargs(self):
         return dict(root=self.root, write_configs=self.write_configs, dask=self.dask)
+
+    def concat(self, *args, **kwargs):
+        concat_fn = dd.concat if self.dask else pd.concat
+        return concat_fn(*args, **kwargs)
 
 
 class MonthURL(ABC):
@@ -79,15 +84,15 @@ class MonthURL(ABC):
             fs.mkdirs(dir, exist_ok=True)
             return dir
 
+    @contextmanager
     def fd(self, mode):
         made_dir = self.mkdirs()
         fs = self.fs
         url = self.url
         succeeded = False
         try:
-            fd = fs.open(url, mode)
+            yield fs.open(url, mode)
             succeeded = True
-            return fd
         finally:
             if not succeeded:
                 if fs.exists(url):
@@ -107,9 +112,6 @@ class MonthData(MonthURL, HasRoot, ABC):
 
     def _df(self) -> DataFrame:
         raise NotImplementedError
-
-    # def create_read(self, rv: RV = 'read'):
-    #     return self.read()
 
     def create_write(self, rv: RV = 'read'):
         return checkpoint(self._df(), self.url, rv=rv)
@@ -142,10 +144,6 @@ class MonthData(MonthURL, HasRoot, ABC):
             return dd.read_parquet(self.url)
         else:
             return pd.read_parquet(self.url)
-
-    def concat(self, *args, **kwargs):
-        concat_fn = dd.concat if self.dask else pd.concat
-        return concat_fn(*args, **kwargs)
 
 
 class MonthsData(HasRoot):
