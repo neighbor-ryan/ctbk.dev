@@ -2,26 +2,24 @@
 from abc import ABC
 
 from contextlib import contextmanager
-from os.path import basename
 from typing import Optional, Union
 
 import dask.dataframe as dd
 import pandas as pd
-from click import pass_context, option, Choice
+from click import pass_context, option
 from dask.delayed import delayed, Delayed
 from gzip_stream import GZIPCompressedStream
 from shutil import copyfileobj
-from utz import singleton
+from utz import singleton, Unset
 from zipfile import ZipFile
 
 from ctbk import YM, Monthy
-from ctbk.cli.base import ctbk, dask
+from ctbk.cli.base import ctbk, dask, region
 from ctbk.month_data import MonthData, HasRoot, MonthDataDF
 from ctbk.read import Read
 from ctbk.util import cached_property
 from ctbk.util.constants import BKT, GENESIS
-from ctbk.util.defaultdict import Unset
-from ctbk.util.df import DataFrame, RV, checkpoint
+from ctbk.util.df import DataFrame
 from ctbk.zips import REGIONS, TripdataZips, TripdataZip, Region
 
 DIR = f'{BKT}/csvs'
@@ -37,12 +35,13 @@ class ReadsTripdataZip(MonthData, ABC):
 
     @cached_property
     def src(self) -> TripdataZip:
-        return TripdataZip(ym=self.ym, region=self.region)  # TODO: allow zips to be local?
+        return TripdataZip(ym=self.ym, region=self.region, roots=self.roots)
 
 
 class TripdataCsv(ReadsTripdataZip, MonthDataDF):
     DIR = DIR
     NAMES = ['csv']
+    COMPRESSION_LEVEL = 7
 
     @cached_property
     def url(self):
@@ -51,7 +50,7 @@ class TripdataCsv(ReadsTripdataZip, MonthDataDF):
 
     def extract_csv_from_zip(self):
         with self.zip_csv_fd() as i, self.fd('wb') as o:
-            copyfileobj(GZIPCompressedStream(i, compression_level=7), o)
+            copyfileobj(GZIPCompressedStream(i, compression_level=self.COMPRESSION_LEVEL), o)
 
     def _create(self, read: Union[None, Read] = Unset) -> Union[None, Delayed]:
         read = self.read if read is Unset else read
@@ -61,7 +60,7 @@ class TripdataCsv(ReadsTripdataZip, MonthDataDF):
             else:
                 self.extract_csv_from_zip()
         else:
-            return checkpoint(self._df(), self.url, rv=self.read)
+            return self.checkpoint(read=read)
 
     @contextmanager
     def zip_csv_fd(self):
@@ -85,20 +84,34 @@ class TripdataCsv(ReadsTripdataZip, MonthDataDF):
                 return pd.read_csv(i, dtype=str, nrows=0)
 
     def _df(self) -> DataFrame:
-        def create_and_read(created):
-            return pd.read_csv(self.url, dtype=str)
+        if self.dask:
+            def create_and_read(created):
+                return pd.read_csv(self.url, dtype=str)
 
-        meta = self.meta()
-        df = dd.from_delayed([ delayed(create_and_read)(self.create()) ], meta=meta)
+            meta = self.meta()
+            df = dd.from_delayed([ delayed(create_and_read)(self._create(read=None)) ], meta=meta)
+        else:
+            self._create(read=None)
+            df = pd.read_csv(self.url, dtype=str)
         df['region'] = self.region
         return df
+
+    @property
+    def checkpoint_kwargs(self):
+        return dict(fmt='csv', write_kwargs=dict(index=False))
+
+    def _read(self) -> DataFrame:
+        if self.dask:
+            return dd.read_csv(self.url, dtype=str, blocksize=None)
+        else:
+            return pd.read_csv(self.url, dtype=str)
 
 
 class TripdataCsvs(HasRoot):
     DIR = DIR
 
     def __init__(self, start: Monthy = None, end: Monthy = None, regions: Optional[list[str]] = None, **kwargs):
-        src = self.src = TripdataZips(start=start, end=end, regions=regions)
+        src = self.src = TripdataZips(start=start, end=end, regions=regions, roots=kwargs.get('roots'))
         self.start: YM = src.start
         self.end: YM = src.end
         super().__init__(**kwargs)
@@ -137,8 +150,9 @@ class TripdataCsvs(HasRoot):
         else:
             raise NotImplementedError("Unified DataFrame is large, you probably want .dd instead (.dd.compute() if you must)")
 
-    def create(self):
-        creates = [ csv.create(rv=None) for csv in self.csvs ]
+    def create(self, read: Union[None, Read] = Unset):
+        csvs = self.csvs
+        creates = [ csv.create(read=read) for csv in csvs ]
         if self.dask:
             return delayed(lambda x: x)(creates)
 
@@ -146,7 +160,7 @@ class TripdataCsvs(HasRoot):
 @ctbk.group('csvs')
 @pass_context
 @option('-d', '--dates')
-@option('-r', '--region', type=Choice(REGIONS))
+@region
 def csvs(ctx, dates, region):
     if dates:
         pcs = dates.split('-')
@@ -166,7 +180,7 @@ def csvs(ctx, dates, region):
 
     ctx.obj.start = start
     ctx.obj.end = end
-    ctx.obj.region = [region] if region else None
+    ctx.obj.regions = [region] if region else None
 
 
 @csvs.command()
@@ -183,6 +197,6 @@ def urls(ctx, dask):
 @dask
 def create(ctx, dask):
     csvs = TripdataCsvs(dask=dask, **ctx.obj)
-    created = csvs.create()
+    created = csvs.create(read=None)
     if dask:
         created.compute()

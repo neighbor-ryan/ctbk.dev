@@ -7,7 +7,8 @@ from numpy import nan
 from ctbk import Monthy
 from ctbk.cli.base import ctbk
 from ctbk.csvs import TripdataCsv, TripdataCsvs
-from ctbk.month_data import MonthData, MonthsData
+from ctbk.month_data import MonthData
+from ctbk.months_data import MonthsData
 from ctbk.util import cached_property, stderr
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame, value_counts

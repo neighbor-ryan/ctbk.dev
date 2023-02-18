@@ -1,14 +1,14 @@
-from click import pass_context, option, group
-from utz import o
+from click import pass_context, option, group, Choice
+from utz import o, DefaultDict
 
 from ctbk import write, read
 from ctbk.read import Disk
 from ctbk.util.constants import S3, DEFAULT_ROOT
-from ctbk.util.defaultdict import load_defaultdict
 from ctbk.write import IfAbsent
+from ctbk.zips import REGIONS
 
 dask = option('--dask', is_flag=True)
-
+region = option('-r', '--region', type=Choice(REGIONS))
 
 @group('ctbk')
 @pass_context
@@ -19,7 +19,7 @@ dask = option('--dask', is_flag=True)
 def ctbk(ctx, reads, roots, writes, s3):
     if s3:
         roots = [S3] + (roots or [])
-    roots = load_defaultdict(roots, fallback=DEFAULT_ROOT)
-    reads = load_defaultdict(reads, name2value=read.parse, fallback=Disk)
-    writes = load_defaultdict(writes, name2value=write.parse, fallback=IfAbsent)
+    roots = DefaultDict.load(roots, fallback=DEFAULT_ROOT)
+    reads = DefaultDict.load(reads, name2value=read.parse, fallback=Disk)
+    writes = DefaultDict.load(writes, name2value=write.parse, fallback=IfAbsent)
     ctx.obj = o(roots=roots, reads=reads, writes=writes)

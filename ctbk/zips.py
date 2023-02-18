@@ -1,10 +1,11 @@
 import typing
-from click import pass_context, option, Choice
+from click import pass_context
 from typing import Literal, Optional, Tuple
+from utz import DefaultDict
 
 from ctbk import YM, Monthy
-from ctbk.cli.base import ctbk
-from ctbk.month_data import MonthURL
+from ctbk.cli.base import ctbk, region
+from ctbk.month_data import MonthURL, HasRoot
 from ctbk.util import cached_property
 from ctbk.util.constants import GENESIS, S3
 
@@ -15,17 +16,17 @@ REGIONS: Tuple[Region, ...] = typing.get_args(Region)
 DIR = 'tripdata'
 
 
-class TripdataZip(MonthURL):
+class TripdataZip(MonthURL, HasRoot):
     DIR = DIR
+    NAMES = ['zip']
 
-    def __init__(self, ym, region, root=S3):
+    def __init__(self, ym, region, roots: Optional[DefaultDict[str]] = None):
         if region not in REGIONS:
             raise ValueError(f"Unrecognized region: {region}")
         self.region = region
-        self.root = root
-        self.dir = f'{root}/{self.DIR}' if root else self.DIR
         ym = YM(ym)
-        super().__init__(ym)
+        MonthURL.__init__(self, ym)
+        HasRoot.__init__(self, roots=roots if roots else DefaultDict(configs={ self.NAMES[0]: S3 }))
 
     @cached_property
     def url(self):
@@ -49,7 +50,13 @@ class TripdataZip(MonthURL):
 class TripdataZips:
     DIR = DIR
 
-    def __init__(self, start: Monthy = None, end: Monthy = None, regions: Optional[list[str]] = None):
+    def __init__(
+            self,
+            start: Monthy = None,
+            end: Monthy = None,
+            regions: Optional[list[str]] = None,
+            roots: Optional[DefaultDict[str]] = None,
+    ):
         self.start: YM = YM(start or GENESIS)
         end = end or YM()
         self.regions = regions or REGIONS
@@ -59,7 +66,7 @@ class TripdataZips:
             (
                 ym,
                 {
-                    region: TripdataZip(ym=ym, region=region, root=S3)
+                    region: TripdataZip(ym=ym, region=region, roots=roots)
                     for region in self.regions
                     if region == 'NYC' or ym >= YM(201509)
                 }
@@ -99,10 +106,10 @@ def zips():
 
 @zips.command()
 @pass_context
-@option('-r', '--region', type=Choice(REGIONS))
+@region
 def urls(ctx, region):
     o = ctx.obj
-    months = TripdataZips(start=o.start, end=o.end, regions=[region] if region else None)
+    months = TripdataZips(start=o.start, end=o.end, regions=[region] if region else None, roots=o.roots)
     urls = months.zips
     if region:
         urls = [ url for url in urls if url.region == region ]

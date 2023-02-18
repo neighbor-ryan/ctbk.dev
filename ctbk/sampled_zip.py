@@ -1,25 +1,22 @@
-from contextlib import nullcontext
 from os.path import basename
-from tempfile import TemporaryDirectory
 
-from typing import Optional
-
-from click import pass_context, option, Choice, argument
+from click import pass_context, option, argument
 from dask import delayed
-from dask.delayed import Delayed
 from shutil import copyfileobj
-from utz import process
+from typing import Optional, Union
+from utz import process, Unset
 from zipfile import ZipFile, ZIP_LZMA
 
 from ctbk import Monthy, YM
-from ctbk.cli.base import ctbk
+from ctbk.cli.base import ctbk, dask, region
 from ctbk.csvs import ReadsTripdataZip
 from ctbk.month_data import HasRoot
+from ctbk.read import Read
 from ctbk.util import cached_property, stderr
 from ctbk.util.constants import BKT
-from ctbk.zips import TripdataZips, REGIONS, Region
+from ctbk.zips import TripdataZips
 
-DIR = f'{BKT}/sampled'
+DIR = f'{BKT}/sampled/tripdata'
 DEFAULT_NROWS = 1000
 
 
@@ -63,9 +60,10 @@ class SampledZip(ReadsTripdataZip):
 
 class SampledZips(HasRoot):
     DIR = DIR
+    NAMES = ['sampled_zip', 'szip', 'sz']
 
     def __init__(self, start: Monthy = None, end: Monthy = None, nrows=DEFAULT_NROWS, regions: Optional[list[str]] = None, **kwargs):
-        src = self.src = TripdataZips(start=start, end=end, regions=regions)
+        src = self.src = TripdataZips(start=start, end=end, regions=regions, roots=kwargs.get('roots'))
         self.start: YM = src.start
         self.end: YM = src.end
         self.nrows = nrows
@@ -81,8 +79,8 @@ class SampledZips(HasRoot):
             for zip in self.src.zips
         ]
 
-    def create(self):
-        creates = [ zip.create(rv=None) for zip in self.zips ]
+    def create(self, read: Union[None, Read] = Unset):
+        creates = [ zip.create(read=read) for zip in self.zips ]
         if self.dask:
             def all(x):
                 return x
@@ -96,7 +94,7 @@ def sampled_zips():
 
 @sampled_zips.command()
 @pass_context
-@option('-r', '--region', type=Choice(REGIONS))
+@region
 def urls(ctx, region):
     o = ctx.obj
     zips = SampledZips(start=o.start, end=o.end, root=o.root, write_config=o.write_config)
@@ -108,8 +106,8 @@ def urls(ctx, region):
 
 @sampled_zips.command()
 @pass_context
-@option('--dask', is_flag=True)
-@option('-r', '--region', type=Choice(REGIONS))
+@dask
+@region
 def create(ctx, dask, region):
     o = ctx.obj
     zips = SampledZips(
@@ -124,7 +122,7 @@ def create(ctx, dask, region):
 
 @sampled_zips.command()
 @pass_context
-@option('-r', '--region', type=Choice(REGIONS))
+@region
 @option('-O', '--no-open', is_flag=True)
 @argument('filename', required=False)
 def dag(ctx, region, no_open, filename):

@@ -1,7 +1,7 @@
 import dask.dataframe as dd
 import pandas as pd
 from dask.delayed import Delayed, delayed
-from typing import Optional
+from typing import Optional, Literal
 from typing import Union
 
 from ctbk.read import Read, Disk, Memory
@@ -16,32 +16,72 @@ def value_counts(df: DataFrame) -> pd.Series:
         return df.value_counts()
 
 
-def checkpoint(df: dd.DataFrame, url: str, rv: Optional[Read] = Disk) -> Union[None, Delayed, DataFrame]:
-    if isinstance(df, pd.DataFrame):
-        df.to_parquet(url)
-        if rv is Disk:
-            return pd.read_parquet(url)
-        elif rv is Memory:
-            return df
-        else:
-            return None
+def checkpoint_df(
+        df: pd.DataFrame,
+        url: str,
+        read: Optional[Read] = Disk,
+        fmt: Literal['pqt', 'csv'] = 'pqt',
+        read_kwargs: Optional[dict] = None,
+        write_kwargs: Optional[dict] = None,
+) -> Union[None, pd.DataFrame]:
+    write_kwargs = write_kwargs or {}
+    if fmt == 'pqt':
+        df.to_parquet(url, **write_kwargs)
+    elif fmt == 'csv':
+        df.to_csv(url, **write_kwargs)
     else:
-        name = f'{url} ({rv})'
-        if rv is None:
-            def none_checkpoint(df):
-                df.to_parquet(url)
-
-            [partition] = df.to_delayed()
-            return delayed(none_checkpoint)(partition, dask_key_name=name)
+        raise ValueError(f"Unrecognized fmt: {fmt}")
+    if read is Disk:
+        read_kwargs = read_kwargs or dict()
+        if fmt == 'pqt':
+            return pd.read_parquet(url, **read_kwargs)
+        elif fmt == 'csv':
+            return pd.read_csv(url, **read_kwargs)
         else:
-            df = df.repartition(npartitions=1)
-            print(f'url: {url}')
-            return df.map_partitions(checkpoint, url, rv=rv, token=name, meta=df._meta)
+            raise ValueError(f"Unrecognized fmt: {fmt}")
+    elif read is Memory:
+        return df
+    else:
+        return None
+
+
+def checkpoint_dd(
+        df: dd.DataFrame,
+        url: str, read: Optional[Read] = Disk,
+        fmt: Literal['pqt', 'csv'] = 'pqt',
+        write_kwargs: Optional[dict] = None,
+        read_kwargs: Optional[dict] = None,
+) -> Union[None, Delayed, dd.DataFrame]:
+    name = f'{url} ({read})'
+    if read is None:
+        [partition] = df.repartition(npartitions=1).to_delayed()
+        return delayed(checkpoint_df)(
+            df=partition,
+            url=url,
+            read=read,
+            fmt=fmt,
+            read_kwargs=read_kwargs,
+            write_kwargs=write_kwargs,
+            dask_key_name=name,
+        )
+    else:
+        df = df.repartition(npartitions=1)
+        print(f'url: {url}')
+        return df.map_partitions(
+            checkpoint_df,
+            url=url,
+            read=read,
+            fmt=fmt,
+            read_kwargs=read_kwargs,
+            write_kwargs=write_kwargs,
+            token=name,
+            meta=df._meta,
+        )
 
 
 if __name__ == '__main__':
     df = dd.read_parquet('s3/ctbk/aggregated/ymse_c_202212.pqt')
-    d1 = checkpoint(df, 'd1.pqt',)
-    # d2 = checkpoint(df, 'd2.pqt', rv='orig')
-    # d3 = checkpoint(df, 'd3.pqt', rv=None)
+    d1 = checkpoint_dd(df, 'd1.pqt',)
+    # d2 = checkpoint(df, 'd2.pqt', read='orig')
+    # d3 = checkpoint(df, 'd3.pqt', read=None)
     d1.visualize(filename='d1.png')

@@ -1,8 +1,10 @@
-import dask.dataframe as dd
-import pandas as pd
+from typing import Union
+from utz import Unset
 
 from ctbk import Monthy
-from ctbk.month_data import HasRoot, MonthData
+from ctbk.has_root import HasRoot
+from ctbk.month_data import MonthData, MonthDataDF
+from ctbk.read import Read
 from ctbk.util import cached_property, YM
 from ctbk.util.df import DataFrame
 
@@ -23,6 +25,15 @@ class MonthsData(HasRoot):
             for ym in self.start.until(self.end)
         ]
 
+    def create(self, read: Union[None, Read] = Unset):
+        for month in self.months:
+            month.create(read=read)
+
+
+class MonthsDataDF(MonthsData):
+    def month(self, ym: Monthy) -> MonthDataDF:
+        return MonthDataDF(ym, **self.kwargs)
+
     def ym_df(self, ym: Monthy, add=False) -> DataFrame:
         month = self.month(ym)
         df = month.df
@@ -39,11 +50,4 @@ class MonthsData(HasRoot):
 
     @cached_property
     def df(self):
-        if self.dask:
-            return dd.concat(self.dfs)
-        else:
-            return pd.concat(self.dfs)
-
-    def create(self):
-        for month in self.months:
-            month.create()
+        return self.concat(self.dfs)
