@@ -1,10 +1,14 @@
+from contextlib import nullcontext
 from os.path import basename
+from tempfile import TemporaryDirectory
+
 from typing import Optional
 
-from click import pass_context, option, Choice
+from click import pass_context, option, Choice, argument
 from dask import delayed
 from dask.delayed import Delayed
 from shutil import copyfileobj
+from utz import process
 from zipfile import ZipFile, ZIP_LZMA
 
 from ctbk import Monthy, YM
@@ -80,7 +84,9 @@ class SampledZips(HasRoot):
     def create(self):
         creates = [ zip.create(rv=None) for zip in self.zips ]
         if self.dask:
-            return delayed(lambda x: x)(creates)
+            def all(x):
+                return x
+            return delayed(all)(creates)
 
 
 @ctbk.group()
@@ -93,7 +99,7 @@ def sampled_zips():
 @option('-r', '--region', type=Choice(REGIONS))
 def urls(ctx, region):
     o = ctx.obj
-    zips = SampledZips(start=o.start, end=o.end, root=o.root, write_configs=o.write_configs)
+    zips = SampledZips(start=o.start, end=o.end, root=o.root, write_config=o.write_config)
     for zip in zips.zips:
         if region and zip.region != region:
             continue
@@ -111,6 +117,32 @@ def create(ctx, dask, region):
         regions=[region] if region else None,
         dask=dask,
         root=o.root,
-        write_configs=o.write_configs,
+        write_config=o.write_config,
     )
     print(zips.create().compute())
+
+
+@sampled_zips.command()
+@pass_context
+@option('-r', '--region', type=Choice(REGIONS))
+@option('-O', '--no-open', is_flag=True)
+@argument('filename', required=False)
+def dag(ctx, region, no_open, filename):
+    o = ctx.obj
+    zips = SampledZips(
+        start=o.start, end=o.end,
+        regions=[region] if region else None,
+        dask=True,
+        root=o.root,
+        write_config=o.write_config,
+    )
+    result = zips.create()
+    filename = filename or 'sampled_zip_dag.png'
+    # ctx = nullcontext() if filename else TemporaryDirectory()
+    # with ctx as tmpdir:
+    #     if not filename:
+    #         filename = f'{tmpdir}/result.png'
+    stderr(f"Writing to {filename}")
+    result.visualize(filename)
+    if not no_open:
+        process.run('open', filename)

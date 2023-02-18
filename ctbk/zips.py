@@ -17,7 +17,6 @@ DIR = 'tripdata'
 
 class TripdataZip(MonthURL):
     DIR = DIR
-    WRITE_CONFIG_NAMES = ['zip']
 
     def __init__(self, ym, region, root=S3):
         if region not in REGIONS:

@@ -1,29 +1,33 @@
 #!/usr/bin/env python
+from abc import ABC
+
 from contextlib import contextmanager
 from os.path import basename
-from typing import Optional
+from typing import Optional, Union
 
 import dask.dataframe as dd
 import pandas as pd
 from click import pass_context, option, Choice
-from dask.delayed import delayed
+from dask.delayed import delayed, Delayed
 from gzip_stream import GZIPCompressedStream
 from shutil import copyfileobj
 from utz import singleton
 from zipfile import ZipFile
 
 from ctbk import YM, Monthy
-from ctbk.cli.base import ctbk
-from ctbk.month_data import MonthData, HasRoot
+from ctbk.cli.base import ctbk, dask
+from ctbk.month_data import MonthData, HasRoot, MonthDataDF
+from ctbk.read import Read
 from ctbk.util import cached_property
-from ctbk.util.constants import BKT
+from ctbk.util.constants import BKT, GENESIS
+from ctbk.util.defaultdict import Unset
 from ctbk.util.df import DataFrame, RV, checkpoint
 from ctbk.zips import REGIONS, TripdataZips, TripdataZip, Region
 
 DIR = f'{BKT}/csvs'
 
 
-class ReadsTripdataZip(MonthData):
+class ReadsTripdataZip(MonthData, ABC):
     def __init__(self, ym, region, **kwargs):
         if region not in REGIONS:
             raise ValueError(f"Unrecognized region: {region}")
@@ -35,31 +39,33 @@ class ReadsTripdataZip(MonthData):
     def src(self) -> TripdataZip:
         return TripdataZip(ym=self.ym, region=self.region)  # TODO: allow zips to be local?
 
-    def create_fn(self):
-        raise NotImplementedError
 
-    def create_write(self, rv: RV = 'read'):
-        if rv is None:
-            return delayed(lambda: self.create_fn())()
-        else:
-            return checkpoint(self._df(), self.url, rv=rv)
-
-
-class TripdataCsv(ReadsTripdataZip):
+class TripdataCsv(ReadsTripdataZip, MonthDataDF):
     DIR = DIR
-    WRITE_CONFIG_NAMES = ['csv']
+    NAMES = ['csv']
 
     @cached_property
     def url(self):
         region_str = 'JC-' if self.region == 'JC' else ''
         return f'{self.dir}/{region_str}{self.ym}-citibike-tripdata.csv.gz'
 
-    def create_fn(self):
+    def extract_csv_from_zip(self):
         with self.zip_csv_fd() as i, self.fd('wb') as o:
             copyfileobj(GZIPCompressedStream(i, compression_level=7), o)
 
+    def _create(self, read: Union[None, Read] = Unset) -> Union[None, Delayed]:
+        read = self.read if read is Unset else read
+        if read is None:
+            if self.dask:
+                return delayed(self.extract_csv_from_zip)()
+            else:
+                self.extract_csv_from_zip()
+        else:
+            return checkpoint(self._df(), self.url, rv=self.read)
+
     @contextmanager
     def zip_csv_fd(self):
+        """Return a read fd for the single CSV in the source .zip."""
         src = self.src
         with src.fd('rb') as z_in:
             z = ZipFile(z_in)
@@ -78,13 +84,12 @@ class TripdataCsv(ReadsTripdataZip):
             with self.zip_csv_fd() as i:
                 return pd.read_csv(i, dtype=str, nrows=0)
 
-    @cached_property
-    def df(self) -> DataFrame:
+    def _df(self) -> DataFrame:
         def create_and_read(created):
             return pd.read_csv(self.url, dtype=str)
 
         meta = self.meta()
-        df = dd.from_delayed([ delayed(create_and_read)(self.create(rv=None)) ], meta=meta)
+        df = dd.from_delayed([ delayed(create_and_read)(self.create()) ], meta=meta)
         df['region'] = self.region
         return df
 
@@ -138,37 +143,46 @@ class TripdataCsvs(HasRoot):
             return delayed(lambda x: x)(creates)
 
 
-@ctbk.group()
-def csvs():
-    pass
+@ctbk.group('csvs')
+@pass_context
+@option('-d', '--dates')
+@option('-r', '--region', type=Choice(REGIONS))
+def csvs(ctx, dates, region):
+    if dates:
+        pcs = dates.split('-')
+        if len(pcs) == 2:
+            [ start, end ] = pcs
+            start = YM(start) if start else GENESIS
+            end = YM(end) if end else None
+        elif len(pcs) == 1:
+            [ym] = pcs
+            ym = YM(ym)
+            start = ym
+            end = ym + 1
+        else:
+            raise ValueError(f"Unrecognized -d/--dates: {dates}")
+    else:
+        start, end = GENESIS, None
+
+    ctx.obj.start = start
+    ctx.obj.end = end
+    ctx.obj.region = [region] if region else None
 
 
 @csvs.command()
 @pass_context
-@option('-r', '--region', type=Choice(REGIONS))
-def urls(ctx, region):
-    o = ctx.obj
-    months = TripdataCsvs(start=o.start, end=o.end, root=o.root, write_configs=o.write_configs)
-    csvs = months.csvs
-    if region:
-        csvs = [ csv for csv in csvs if csv.region == region ]
-    for csv in csvs:
+@dask
+def urls(ctx, dask):
+    csvs = TripdataCsvs(dask=dask, **ctx.obj)
+    for csv in csvs.csvs:
         print(csv.url)
 
 
 @csvs.command()
 @pass_context
-@option('--dask', is_flag=True)
-@option('-r', '--region', type=Choice(REGIONS))
-def create(ctx, dask, region):
-    o = ctx.obj
-    csvs = TripdataCsvs(
-        start=o.start, end=o.end,
-        regions=[region] if region else None,
-        dask=dask,
-        root=o.root,
-        write_configs=o.write_configs,
-    )
+@dask
+def create(ctx, dask):
+    csvs = TripdataCsvs(dask=dask, **ctx.obj)
     created = csvs.create()
     if dask:
         created.compute()

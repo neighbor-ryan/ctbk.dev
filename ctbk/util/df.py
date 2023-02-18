@@ -1,11 +1,13 @@
 import dask.dataframe as dd
 import pandas as pd
 from dask.delayed import Delayed, delayed
-from typing import Literal
+from typing import Optional
 from typing import Union
 
+from ctbk.read import Read, Disk, Memory
+
 DataFrame = Union[pd.DataFrame, dd.DataFrame]
-RV = Literal['read', 'orig', None]
+
 
 def value_counts(df: DataFrame) -> pd.Series:
     if isinstance(df, dd.DataFrame):
@@ -14,12 +16,12 @@ def value_counts(df: DataFrame) -> pd.Series:
         return df.value_counts()
 
 
-def checkpoint(df: dd.DataFrame, url: str, rv: RV = 'read') -> Union[None, DataFrame, Delayed]:
+def checkpoint(df: dd.DataFrame, url: str, rv: Optional[Read] = Disk) -> Union[None, Delayed, DataFrame]:
     if isinstance(df, pd.DataFrame):
         df.to_parquet(url)
-        if rv == 'read':
+        if rv is Disk:
             return pd.read_parquet(url)
-        elif rv == 'orig':
+        elif rv is Memory:
             return df
         else:
             return None
@@ -39,7 +41,7 @@ def checkpoint(df: dd.DataFrame, url: str, rv: RV = 'read') -> Union[None, DataF
 
 if __name__ == '__main__':
     df = dd.read_parquet('s3/ctbk/aggregated/ymse_c_202212.pqt')
-    d1 = checkpoint(df, 'd1.pqt', rv='read')
+    d1 = checkpoint(df, 'd1.pqt',)
     # d2 = checkpoint(df, 'd2.pqt', rv='orig')
     # d3 = checkpoint(df, 'd3.pqt', rv=None)
     d1.visualize(filename='d1.png')

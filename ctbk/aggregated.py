@@ -71,7 +71,7 @@ class SumKeys(Keys):
 
 class AggregatedMonth(MonthData):
     DIR = DIR
-    WRITE_CONFIG_NAMES = [ 'aggregated', 'agg', ]
+    NAMES = [ 'aggregated', 'agg', ]
 
     def __init__(
             self,
