@@ -1,14 +1,15 @@
 from click import pass_context, option, group, Choice
 from utz import o, DefaultDict
 
-from ctbk import write, read
-from ctbk.read import Disk
+from ctbk.util import write, read
+from ctbk.util.read import Disk
 from ctbk.util.constants import S3, DEFAULT_ROOT
-from ctbk.write import IfAbsent
-from ctbk.zips import REGIONS
+from ctbk.util.region import REGIONS
+from ctbk.util.write import IfAbsent
 
 dask = option('--dask', is_flag=True)
 region = option('-r', '--region', type=Choice(REGIONS))
+
 
 @group('ctbk')
 @pass_context

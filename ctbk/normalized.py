@@ -12,7 +12,7 @@ from ctbk.months_data import MonthsData
 from ctbk.util import cached_property, stderr
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame, value_counts
-from ctbk.zips import REGIONS, Region
+from ctbk.util.region import REGIONS, Region
 
 DIR = f'{BKT}/normalized'
 

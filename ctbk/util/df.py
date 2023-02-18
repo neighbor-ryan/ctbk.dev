@@ -4,7 +4,7 @@ from dask.delayed import Delayed, delayed
 from typing import Optional, Literal
 from typing import Union
 
-from ctbk.read import Read, Disk, Memory
+from ctbk.util.read import Read, Disk, Memory
 
 DataFrame = Union[pd.DataFrame, dd.DataFrame]
 

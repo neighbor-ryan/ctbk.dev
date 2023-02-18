@@ -11,7 +11,7 @@ from ctbk import Monthy, YM
 from ctbk.cli.base import ctbk, dask, region
 from ctbk.csvs import ReadsTripdataZip
 from ctbk.month_data import HasRoot
-from ctbk.read import Read
+from ctbk.util.read import Read
 from ctbk.util import cached_property, stderr
 from ctbk.util.constants import BKT
 from ctbk.zips import TripdataZips
@@ -117,7 +117,7 @@ def create(ctx, dask, region):
         root=o.root,
         write_config=o.write_config,
     )
-    print(zips.create().compute())
+    print(zips.create(read=None).compute())
 
 
 @sampled_zips.command()

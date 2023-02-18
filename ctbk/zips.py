@@ -1,6 +1,5 @@
-import typing
 from click import pass_context
-from typing import Literal, Optional, Tuple
+from typing import Optional
 from utz import DefaultDict
 
 from ctbk import YM, Monthy
@@ -8,10 +7,7 @@ from ctbk.cli.base import ctbk, region
 from ctbk.month_data import MonthURL, HasRoot
 from ctbk.util import cached_property
 from ctbk.util.constants import GENESIS, S3
-
-Region = Literal[ 'NYC', 'JC', ]
-REGIONS: Tuple[Region, ...] = typing.get_args(Region)
-
+from ctbk.util.region import REGIONS, Region
 
 DIR = 'tripdata'
 
