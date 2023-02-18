@@ -1,26 +1,25 @@
 #!/usr/bin/env python
-from abc import ABC
-
-from contextlib import contextmanager
-from typing import Optional, Union
-
 import dask.dataframe as dd
 import pandas as pd
+from abc import ABC
 from click import pass_context, option, argument
+from contextlib import contextmanager
 from dask.delayed import delayed, Delayed
 from gzip_stream import GZIPCompressedStream
 from shutil import copyfileobj
+from typing import Optional, Union
 from utz import singleton, Unset, process
 from zipfile import ZipFile
 
 from ctbk import YM, Monthy
 from ctbk.cli.base import ctbk, dask, region
 from ctbk.month_data import MonthData, HasRoot, MonthDataDF
-from ctbk.util.read import Read
 from ctbk.util import cached_property, stderr
-from ctbk.util.constants import BKT, GENESIS
+from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
+from ctbk.util.read import Read
 from ctbk.util.region import REGIONS, Region
+from ctbk.util.ym import dates
 from ctbk.zips import TripdataZips, TripdataZip
 
 DIR = f'{BKT}/csvs'
@@ -160,25 +159,9 @@ class TripdataCsvs(HasRoot):
 
 @ctbk.group('csvs')
 @pass_context
-@option('-d', '--dates')
+@dates
 @region
-def csvs(ctx, dates, region):
-    if dates:
-        pcs = dates.split('-')
-        if len(pcs) == 2:
-            [ start, end ] = pcs
-            start = YM(start) if start else GENESIS
-            end = YM(end) if end else None
-        elif len(pcs) == 1:
-            [ym] = pcs
-            ym = YM(ym)
-            start = ym
-            end = ym + 1
-        else:
-            raise ValueError(f"Unrecognized -d/--dates: {dates}")
-    else:
-        start, end = GENESIS, None
-
+def csvs(ctx, start, end, region=None):
     ctx.obj.start = start
     ctx.obj.end = end
     ctx.obj.regions = [region] if region else None
@@ -208,21 +191,9 @@ def create(ctx, dask):
 @option('-O', '--no-open', is_flag=True)
 @argument('filename', required=False)
 def dag(ctx, no_open, filename):
-    # o = ctx.obj
     csvs = TripdataCsvs(dask=True, **ctx.obj)
-    # zips = SampledZips(
-    #     start=o.start, end=o.end,
-    #     regions=[region] if region else None,
-    #     dask=True,
-    #     root=o.root,
-    #     write_config=o.write_config,
-    # )
     result = csvs.create(read=None)
     filename = filename or 'csvs_dag.png'
-    # ctx = nullcontext() if filename else TemporaryDirectory()
-    # with ctx as tmpdir:
-    #     if not filename:
-    #         filename = f'{tmpdir}/result.png'
     stderr(f"Writing to {filename}")
     result.visualize(filename)
     if not no_open:

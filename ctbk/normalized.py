@@ -1,18 +1,18 @@
-from re import match, sub
 import dask.dataframe as dd
-
-from click import pass_context, option
+from click import pass_context
 from numpy import nan
+from re import match, sub
 
 from ctbk import Monthy
-from ctbk.cli.base import ctbk
+from ctbk.cli.base import ctbk, dask
 from ctbk.csvs import TripdataCsv, TripdataCsvs
-from ctbk.month_data import MonthData
-from ctbk.months_data import MonthsData
+from ctbk.month_data import MonthDataDF
+from ctbk.months_data import MonthsDataDF
 from ctbk.util import cached_property, stderr
 from ctbk.util.constants import BKT
-from ctbk.util.df import DataFrame, value_counts
+from ctbk.util.df import DataFrame
 from ctbk.util.region import REGIONS, Region
+from ctbk.util.ym import dates
 
 DIR = f'{BKT}/normalized'
 
@@ -124,9 +124,9 @@ def normalize_fields(df: DataFrame, src, region: Region) -> DataFrame:
 
 
 def add_region(df: DataFrame, region: Region) -> DataFrame:
-    meta = lambda k: (k, 'str') if isinstance(df, dd.DataFrame) else lambda k: None
-    df['Start Region'] = df['Start Station ID'].fillna(NONE).apply(get_region, file_region=region, meta=meta('Start Station ID'))
-    df['End Region'] = df['End Station ID'].fillna(NONE).apply(get_region, file_region=region, meta=meta('End Station ID'))
+    meta = lambda k: dict(meta=(k, 'str')) if isinstance(df, dd.DataFrame) else dict()
+    df['Start Region'] = df['Start Station ID'].fillna(NONE).apply(get_region, file_region=region, **meta('Start Station ID'))
+    df['End Region'] = df['End Station ID'].fillna(NONE).apply(get_region, file_region=region, **meta('End Station ID'))
 
     sys_none_start = df['Start Region'].isin({NONE, 'SYS'})
     sys_none_end = df['End Region'].isin({NONE, 'SYS'})
@@ -139,7 +139,7 @@ def add_region(df: DataFrame, region: Region) -> DataFrame:
 
     def fill_ends(r):
         return r['Start Region'] if r['End Region'] == NONE else r['End Region']
-    df['End Region'] = df[['Start Region', 'End Region']].apply(fill_ends, axis=1, meta=(None, str))
+    df['End Region'] = df[['Start Region', 'End Region']].apply(fill_ends, axis=1, **meta(None))
     # no_end = df['End Region'] == NONE
     # df.loc[no_end, 'End Region'] = df.loc[no_end, 'Start Region']  # assume incomplete rides ended in the region they started in
     # stderr(f'Dropping {sys_none_counts.sum()} SYS/NONE records')
@@ -150,7 +150,7 @@ def add_region(df: DataFrame, region: Region) -> DataFrame:
     return df
 
 
-class NormalizedMonth(MonthData):
+class NormalizedMonth(MonthDataDF):
     DIR = DIR
     WRITE_CONFIG_NAMES = [ 'normalized', 'norm', ]
 
@@ -171,7 +171,6 @@ class NormalizedMonth(MonthData):
         df = normalize_fields(df, csv.url, region=region)
         return df
 
-    @cached_property
     def _df(self) -> DataFrame:
         return self.concat([
             self.normalized_df(region)
@@ -179,7 +178,7 @@ class NormalizedMonth(MonthData):
         ])
 
 
-class NormalizedMonths(MonthsData):
+class NormalizedMonths(MonthsDataDF):
     DIR = DIR
 
     def __init__(self, start: Monthy = None, end: Monthy = None, **kwargs):
@@ -191,8 +190,11 @@ class NormalizedMonths(MonthsData):
 
 
 @ctbk.group()
-def normalized():
-    pass
+@pass_context
+@dates
+def normalized(ctx, start, end):
+    ctx.obj.start = start
+    ctx.obj.end = end
 
 
 @normalized.command()
@@ -207,7 +209,7 @@ def urls(ctx):
 
 @normalized.command()
 @pass_context
-@option('-d', '--dask', is_flag=True)
+@dask
 def create(ctx, dask):
     o = ctx.obj
     normalized = NormalizedMonths(dask=dask, **o)

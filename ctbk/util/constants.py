@@ -5,6 +5,4 @@ DEFAULT_ROOT = 's3'
 PARQUET_EXTENSION = '.parquet'
 SQLITE_EXTENSION = '.db'
 JSON_EXTENSION = '.json'
-GENESIS = YM(2013, 6)
-END = None
 BKT = 'ctbk'

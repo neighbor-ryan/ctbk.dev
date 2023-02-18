@@ -1,3 +1,5 @@
+from os.path import dirname, exists
+
 import dask.dataframe as dd
 import pandas as pd
 from abc import ABC
@@ -84,7 +86,21 @@ class MonthDataDF(MonthData, ABC):
         return dict()
 
     def checkpoint(self, read: Union[None, Read] = Unset) -> Union[None, Delayed, DataFrame]:
-        if self.dask:
-            return checkpoint_dd(self._df(), url=self.url, read=self.read if read is Unset else read, **self.checkpoint_kwargs)
-        else:
-            return checkpoint_df(self._df(), url=self.url, read=self.read if read is Unset else read, **self.checkpoint_kwargs)
+        url = self.url
+        parent = dirname(url)
+        read = self.read if read is Unset else read
+        rmdir = False
+        if not exists(parent):
+            self.fs.mkdirs(parent)
+            rmdir = True
+        try:
+            if self.dask:
+                df = checkpoint_dd(self._df(), url=url, read=read, **self.checkpoint_kwargs)
+            else:
+                df = checkpoint_df(self._df(), url=url, read=read, **self.checkpoint_kwargs)
+            rmdir = False
+            return df
+        finally:
+            if rmdir:
+                stderr(f"Removing directory {parent} after failed write")
+                self.fs.delete(parent)  # TODO: remove all directory levels that were created

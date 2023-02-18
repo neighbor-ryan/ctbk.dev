@@ -5,8 +5,7 @@ from utz import DefaultDict
 from ctbk import YM, Monthy
 from ctbk.cli.base import ctbk, region
 from ctbk.month_data import MonthURL, HasRoot
-from ctbk.util import cached_property
-from ctbk.util.constants import GENESIS, S3
+from ctbk.util import cached_property, GENESIS, S3
 from ctbk.util.region import REGIONS, Region
 
 DIR = 'tripdata'

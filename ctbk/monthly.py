@@ -16,7 +16,8 @@ from urllib.parse import urlparse
 from utz import sxs
 
 from ctbk import cached_property, YM, contexts, Monthy
-from ctbk.util.constants import PARQUET_EXTENSION, JSON_EXTENSION, GENESIS
+from ctbk.util import GENESIS
+from ctbk.util.constants import PARQUET_EXTENSION, JSON_EXTENSION
 from ctbk.util.context import copy_ctx
 from ctbk.util.convert import Result, run, BadKey, BAD_DST, OVERWROTE, FOUND, WROTE
 

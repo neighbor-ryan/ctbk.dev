@@ -1,6 +1,6 @@
+from click import option
 from pandas.core.tools.datetimes import DatetimeScalar
 from utz import *
-
 
 # Types that can be passed to the Month constructor
 Monthy = Union['Month', str, int, None]
@@ -112,8 +112,30 @@ class YM:
             cur = cur + step
 
 
-class MonthSet(dict):
-    def __getitem__(self, k):
-        if not isinstance(k, YM):
-            k = YM(k)
-        return super().__getitem__(k)
+GENESIS = YM(2013, 6)
+END = None
+
+
+def dates(fn):
+    @option('-d', '--dates')
+    def _fn(*args, dates=None, **kwargs):
+        if dates:
+            pcs = dates.split('-')
+            if len(pcs) == 2:
+                [ start, end ] = pcs
+                start = YM(start) if start else GENESIS
+                end = YM(end) if end else None
+            elif len(pcs) == 1:
+                [ym] = pcs
+                ym = YM(ym)
+                start = ym
+                end = ym + 1
+            else:
+                raise ValueError(f"Unrecognized -d/--dates: {dates}")
+        else:
+            start, end = GENESIS, None
+        fn(*args, start=start, end=end, **kwargs)
+
+    _fn.__name__ = fn.__name__
+    _fn.__doc__ = fn.__doc__
+    return _fn
