@@ -1,7 +1,6 @@
 from os.path import basename
 
 from click import pass_context, option, argument
-from dask import delayed
 from shutil import copyfileobj
 from typing import Optional, Union
 from utz import process, Unset
@@ -10,10 +9,10 @@ from zipfile import ZipFile, ZIP_LZMA
 from ctbk import Monthy, YM
 from ctbk.cli.base import ctbk, dask, region
 from ctbk.csvs import ReadsTripdataZip
-from ctbk.month_data import HasRoot
-from ctbk.util.read import Read
+from ctbk.months_data import Tasks
 from ctbk.util import cached_property, stderr
 from ctbk.util.constants import BKT
+from ctbk.util.read import Read
 from ctbk.zips import TripdataZips
 
 DIR = f'{BKT}/sampled/tripdata'
@@ -22,6 +21,7 @@ DEFAULT_NROWS = 1000
 
 class SampledZip(ReadsTripdataZip):
     DIR = DIR
+    DEFAULT_COMPRESSION = ZIP_LZMA
 
     def __init__(self, *args, nrows=DEFAULT_NROWS, **kwargs):
         self.nrows = nrows
@@ -33,13 +33,13 @@ class SampledZip(ReadsTripdataZip):
         zip_name = basename(src.url)
         return f'{self.dir}/{zip_name}'
 
-    def create_fn(self):
+    def _create(self, read: Union[None, Read] = Unset) -> None:
         src = self.src
         with src.fd('rb') as zin:
             z_in = ZipFile(zin)
             rm_dir = self.mkdirs()
             try:
-                z_out = ZipFile(self.url, 'w', compression=ZIP_LZMA)
+                z_out = ZipFile(self.url, 'w', compression=self.DEFAULT_COMPRESSION)
                 names = z_in.namelist()
                 print(f'{src.url}: zip names: {names}')
 
@@ -58,7 +58,7 @@ class SampledZip(ReadsTripdataZip):
                     self.fs.delete(rm_dir)
 
 
-class SampledZips(HasRoot):
+class SampledZips(Tasks):
     DIR = DIR
     NAMES = ['sampled_zip', 'szip', 'sz']
 
@@ -66,6 +66,7 @@ class SampledZips(HasRoot):
         src = self.src = TripdataZips(start=start, end=end, regions=regions, roots=kwargs.get('roots'))
         self.start: YM = src.start
         self.end: YM = src.end
+        self.regions = src.regions
         self.nrows = nrows
         super().__init__(**kwargs)
 
@@ -73,18 +74,11 @@ class SampledZips(HasRoot):
         return SampledZip(ym=ym, region=region, nrows=self.nrows, **self.kwargs)
 
     @cached_property
-    def zips(self) -> list[SampledZip]:
+    def children(self) -> list[SampledZip]:
         return [
             self.zip(ym=zip.ym, region=zip.region)
-            for zip in self.src.zips
+            for zip in self.src.children
         ]
-
-    def create(self, read: Union[None, Read] = Unset):
-        creates = [ zip.create(read=read) for zip in self.zips ]
-        if self.dask:
-            def all(x):
-                return x
-            return delayed(all)(creates)
 
 
 @ctbk.group()
@@ -98,7 +92,7 @@ def sampled_zips():
 def urls(ctx, region):
     o = ctx.obj
     zips = SampledZips(start=o.start, end=o.end, root=o.root, write_config=o.write_config)
-    for zip in zips.zips:
+    for zip in zips.children:
         if region and zip.region != region:
             continue
         print(zip.url)
@@ -136,10 +130,6 @@ def dag(ctx, region, no_open, filename):
     )
     result = zips.create()
     filename = filename or 'sampled_zip_dag.png'
-    # ctx = nullcontext() if filename else TemporaryDirectory()
-    # with ctx as tmpdir:
-    #     if not filename:
-    #         filename = f'{tmpdir}/result.png'
     stderr(f"Writing to {filename}")
     result.visualize(filename)
     if not no_open:

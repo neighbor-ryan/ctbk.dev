@@ -2,16 +2,17 @@ import dask.dataframe as dd
 import pandas as pd
 from click import option, pass_context, argument
 from dataclasses import dataclass
+from inspect import getfullargspec
 from pandas import Series
 from utz import process
 
 from ctbk import Monthy
-from ctbk.cli.base import ctbk
-from ctbk.month_data import MonthData, MonthDataDF
-from ctbk.months_data import MonthsDataDF
+from ctbk.cli.base import ctbk, dask
+from ctbk.months_data import MonthTables
 from ctbk.normalized import NormalizedMonth, NormalizedMonths
+from ctbk.table import Table
 from ctbk.util.constants import BKT
-from ctbk.util.convert import args, decos
+from ctbk.util.convert import spec_args, decos
 from ctbk.util.df import DataFrame
 from ctbk.util.ym import dates
 
@@ -70,20 +71,21 @@ class SumKeys(Keys):
     }
 
 
-class AggregatedMonth(MonthDataDF):
+class AggregatedMonth(Table):
     DIR = DIR
     NAMES = [ 'aggregated', 'agg', ]
 
     def __init__(
             self,
-            *args,
+            ym: Monthy,
             agg_keys: AggKeys,
             sum_keys: SumKeys,
             **kwargs
     ):
+        self.ym = ym
         self.agg_keys = agg_keys
         self.sum_keys = sum_keys
-        super().__init__(*args, **kwargs)
+        super().__init__(**kwargs)
 
     @property
     def url(self):
@@ -158,7 +160,7 @@ class AggregatedMonth(MonthDataDF):
         return counts
 
 
-class AggregatedMonths(MonthsDataDF):
+class AggregatedMonths(MonthTables):
     DIR = DIR
 
     def __init__(
@@ -176,7 +178,7 @@ class AggregatedMonths(MonthsDataDF):
         self.sort_agg_keys = sort_agg_keys
         super().__init__(start=src.start, end=src.end, **kwargs)
 
-    def month(self, ym: Monthy) -> MonthData:
+    def month(self, ym: Monthy) -> AggregatedMonth:
         return AggregatedMonth(ym, agg_keys=self.agg_keys, sum_keys=self.sum_keys, **self.kwargs)
 
 
@@ -198,6 +200,18 @@ GROUP_KEY_ARGS = [
 ]
 
 
+def agg_sum_cmd(fn):
+    @aggregated.command(fn.__name__)
+    @pass_context
+    @decos(GROUP_KEY_ARGS)
+    def _fn(ctx, *args, **kwargs):
+        o = ctx.obj
+        agg_keys = AggKeys(**spec_args(AggKeys, kwargs))
+        sum_keys = SumKeys(**spec_args(SumKeys, kwargs))
+        fn(*args, o=o, agg_keys=agg_keys, sum_keys=sum_keys, **spec_args(fn, kwargs))
+    return _fn
+
+
 @ctbk.group()
 @pass_context
 @dates
@@ -206,31 +220,21 @@ def aggregated(ctx, start, end):
     ctx.obj.end = end
 
 
-@aggregated.command()
-@pass_context
-@decos(GROUP_KEY_ARGS)
-def urls(ctx, **kwargs):
-    o = ctx.obj
-    agg_keys = AggKeys(**args(AggKeys, kwargs))
-    sum_keys = SumKeys(**args(SumKeys, kwargs))
+@agg_sum_cmd
+def urls(o, agg_keys, sum_keys):
     aggregated = AggregatedMonths(
         agg_keys=agg_keys,
         sum_keys=sum_keys,
         **o,
     )
-    months = aggregated.months
+    months = aggregated.children
     for month in months:
         print(month.url)
 
 
-@aggregated.command()
-@pass_context
-@decos(GROUP_KEY_ARGS)
-@option('--dask', is_flag=True)
-def create(ctx, dask, **kwargs):
-    o = ctx.obj
-    agg_keys = AggKeys(**args(AggKeys, kwargs))
-    sum_keys = SumKeys(**args(SumKeys, kwargs))
+@dask
+@agg_sum_cmd
+def create(o, agg_keys, sum_keys, dask=True):
     aggregated = AggregatedMonths(
         agg_keys=agg_keys,
         sum_keys=sum_keys,
@@ -242,15 +246,10 @@ def create(ctx, dask, **kwargs):
         created.compute()
 
 
-@aggregated.command()
-@pass_context
-@decos(GROUP_KEY_ARGS)
+@agg_sum_cmd
 @option('-O', '--no-open', is_flag=True)
 @argument('filename')
-def dag(ctx, no_open, filename, **kwargs):
-    o = ctx.obj
-    agg_keys = AggKeys(**args(AggKeys, kwargs))
-    sum_keys = SumKeys(**args(SumKeys, kwargs))
+def dag(o, agg_keys, sum_keys, no_open, filename):
     aggregated = AggregatedMonths(
         agg_keys=agg_keys,
         sum_keys=sum_keys,

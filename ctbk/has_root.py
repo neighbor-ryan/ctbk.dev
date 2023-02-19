@@ -12,7 +12,7 @@ class HasRoot:
     NAMES = None
 
     def __init__(
-            self, *args,
+            self,
             roots: Optional[DefaultDict[str]] = None,
             reads: Optional[DefaultDict[Read]] = None,
             writes: Optional[DefaultDict[Write]] = None,
@@ -41,7 +41,7 @@ class HasRoot:
             raise RuntimeError(f"{self}.DIR not defined")
         self.dir = f'{root}/{self.DIR}' if root else self.DIR
         self.dask = dask
-        super().__init__(*args)
+        super().__init__()
 
     @property
     def kwargs(self):

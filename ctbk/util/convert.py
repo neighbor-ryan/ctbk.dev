@@ -41,7 +41,7 @@ def decos(decs):
     return _fn
 
 
-def args(fn, kwargs):
+def spec_args(fn, kwargs):
     spec = getfullargspec(fn)
     args = spec.args
     return { k: v for k, v in kwargs.items() if k in args }

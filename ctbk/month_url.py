@@ -8,10 +8,7 @@ from urllib.parse import urlparse
 from ctbk.util import cached_property, YM, stderr
 
 
-class MonthURL(ABC):
-    def __init__(self, ym):
-        self.ym = YM(ym)
-
+class HasURL(ABC):
     @property
     @abstractmethod
     def url(self):

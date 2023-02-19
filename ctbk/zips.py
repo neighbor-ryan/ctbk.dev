@@ -4,24 +4,25 @@ from utz import DefaultDict
 
 from ctbk import YM, Monthy
 from ctbk.cli.base import ctbk, region
-from ctbk.month_data import MonthURL, HasRoot
+from ctbk.months_data import Tasks
+from ctbk.task import Task
 from ctbk.util import cached_property, GENESIS, S3
 from ctbk.util.region import REGIONS, Region
 
 DIR = 'tripdata'
 
 
-class TripdataZip(MonthURL, HasRoot):
+class TripdataZip(Task):
     DIR = DIR
     NAMES = ['zip']
 
     def __init__(self, ym, region, roots: Optional[DefaultDict[str]] = None):
         if region not in REGIONS:
             raise ValueError(f"Unrecognized region: {region}")
+        self.ym = YM(ym)
         self.region = region
-        ym = YM(ym)
-        MonthURL.__init__(self, ym)
-        HasRoot.__init__(self, roots=roots if roots else DefaultDict(configs={ self.NAMES[0]: S3 }))
+        roots = roots or DefaultDict(configs={ self.NAMES[0]: S3 })
+        Task.__init__(self, roots=roots)
 
     @cached_property
     def url(self):
@@ -42,7 +43,7 @@ class TripdataZip(MonthURL, HasRoot):
         return url
 
 
-class TripdataZips:
+class TripdataZips(Tasks):
     DIR = DIR
 
     def __init__(
@@ -85,8 +86,10 @@ class TripdataZips:
         self.m2r2u: dict[YM, dict[Region, TripdataZip]] = m2r2u
         self.end: YM = end
 
-    @property
-    def zips(self) -> list[TripdataZip]:
+        Tasks.__init__(self, roots=roots)
+
+    @cached_property
+    def children(self) -> list[TripdataZip]:
         return [
             u
             for r2u in self.m2r2u.values()

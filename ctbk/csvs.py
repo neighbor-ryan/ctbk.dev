@@ -13,8 +13,9 @@ from zipfile import ZipFile
 
 from ctbk import YM, Monthy
 from ctbk.cli.base import ctbk, dask, region
-from ctbk.month_data import MonthData, HasRoot, MonthDataDF
-from ctbk.months_data import MonthsDataDF
+from ctbk.months_data import Tasks
+from ctbk.table import Table
+from ctbk.task import Task
 from ctbk.util import cached_property, stderr
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
@@ -26,20 +27,20 @@ from ctbk.zips import TripdataZips, TripdataZip
 DIR = f'{BKT}/csvs'
 
 
-class ReadsTripdataZip(MonthData, ABC):
+class ReadsTripdataZip(Task, ABC):
     def __init__(self, ym, region, **kwargs):
         if region not in REGIONS:
             raise ValueError(f"Unrecognized region: {region}")
+        self.ym = YM(ym)
         self.region = region
-        ym = YM(ym)
-        super().__init__(ym, **kwargs)
+        super().__init__(**kwargs)
 
     @cached_property
     def src(self) -> TripdataZip:
         return TripdataZip(ym=self.ym, region=self.region, roots=self.roots)
 
 
-class TripdataCsv(ReadsTripdataZip, MonthDataDF):
+class TripdataCsv(ReadsTripdataZip, Table):
     DIR = DIR
     NAMES = ['csv']
     COMPRESSION_LEVEL = 7
@@ -108,23 +109,21 @@ class TripdataCsv(ReadsTripdataZip, MonthDataDF):
             return pd.read_csv(self.url, dtype=str)
 
 
-class TripdataCsvs(MonthsDataDF):
+class TripdataCsvs(Tasks):
     DIR = DIR
 
     def __init__(self, start: Monthy = None, end: Monthy = None, regions: Optional[list[str]] = None, **kwargs):
         src = self.src = TripdataZips(start=start, end=end, regions=regions, roots=kwargs.get('roots'))
         self.start: YM = src.start
         self.end: YM = src.end
+        self.regions = regions or REGIONS
         super().__init__(**kwargs)
 
-    def month(self, ym: Monthy) -> TripdataCsv:
-        return TripdataCsv(ym=ym, region=u.region, **self.kwargs)  # super().month(ym)
-
     @cached_property
-    def months(self) -> list[TripdataCsv]:
+    def children(self) -> list[TripdataCsv]:
         return [
             TripdataCsv(ym=u.ym, region=u.region, **self.kwargs)
-            for u in self.src.zips
+            for u in self.src.children
         ]
 
     @property
@@ -150,7 +149,7 @@ class TripdataCsvs(MonthsDataDF):
     @cached_property
     def df(self):
         if self.dask:
-            return self.concat([ month.df for month in self.months ])
+            return self.concat([ child.df for child in self.children ])
         else:
             raise NotImplementedError("Unified DataFrame is large, you probably want .dd instead (.dd.compute() if you must)")
 
@@ -170,7 +169,7 @@ def csvs(ctx, start, end, region=None):
 @dask
 def urls(ctx, dask):
     csvs = TripdataCsvs(dask=dask, **ctx.obj)
-    for csv in csvs.csvs:
+    for csv in csvs.children:
         print(csv.url)
 
 

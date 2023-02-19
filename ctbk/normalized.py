@@ -6,8 +6,8 @@ from re import match, sub
 from ctbk import Monthy
 from ctbk.cli.base import ctbk, dask
 from ctbk.csvs import TripdataCsv, TripdataCsvs
-from ctbk.month_data import MonthDataDF
-from ctbk.months_data import MonthsDataDF
+from ctbk.months_data import MonthTables
+from ctbk.table import Table
 from ctbk.util import cached_property, stderr
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
@@ -150,9 +150,13 @@ def add_region(df: DataFrame, region: Region) -> DataFrame:
     return df
 
 
-class NormalizedMonth(MonthDataDF):
+class NormalizedMonth(Table):
     DIR = DIR
     WRITE_CONFIG_NAMES = [ 'normalized', 'norm', ]
+
+    def __init__(self, ym: Monthy, **kwargs):
+        self.ym = ym
+        super().__init__(**kwargs)
 
     @property
     def url(self):
@@ -178,7 +182,7 @@ class NormalizedMonth(MonthDataDF):
         ])
 
 
-class NormalizedMonths(MonthsDataDF):
+class NormalizedMonths(MonthTables):
     DIR = DIR
 
     def __init__(self, start: Monthy = None, end: Monthy = None, **kwargs):
@@ -202,7 +206,7 @@ def normalized(ctx, start, end):
 def urls(ctx):
     o = ctx.obj
     normalized = NormalizedMonths(**o)
-    months = normalized.months
+    months = normalized.children
     for month in months:
         print(month.url)
 
