@@ -33,7 +33,7 @@ class HasRoot:
 
         self.writes = writes
         if writes:
-            self.write = roots.get_first(names, IfAbsent)
+            self.write = writes.get_first(names, IfAbsent)
         else:
             self.write = IfAbsent
 

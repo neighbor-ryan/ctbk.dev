@@ -8,7 +8,7 @@ from ctbk.cli.base import ctbk, dask
 from ctbk.csvs import TripdataCsv, TripdataCsvs
 from ctbk.months_data import MonthTables
 from ctbk.table import Table
-from ctbk.util import cached_property, stderr
+from ctbk.util import stderr
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
 from ctbk.util.region import REGIONS, Region
@@ -152,7 +152,7 @@ def add_region(df: DataFrame, region: Region) -> DataFrame:
 
 class NormalizedMonth(Table):
     DIR = DIR
-    WRITE_CONFIG_NAMES = [ 'normalized', 'norm', ]
+    NAMES = [ 'normalized', 'norm', ]
 
     def __init__(self, ym: Monthy, **kwargs):
         self.ym = ym
@@ -162,22 +162,15 @@ class NormalizedMonth(Table):
     def url(self):
         return f'{self.dir}/{self.ym}.pqt'
 
-    def csv(self, region):
-        return TripdataCsv(ym=self.ym, region=region, **self.kwargs)
-
-    @cached_property
-    def csvs(self):
-        return [ self.csv(region) for region in REGIONS ]
-
-    def normalized_df(self, region) -> DataFrame:
-        csv = self.csv(region)
+    def normalized_region(self, region) -> DataFrame:
+        csv = TripdataCsv(ym=self.ym, region=region, **self.kwargs)
         df = csv.df
         df = normalize_fields(df, csv.url, region=region)
         return df
 
     def _df(self) -> DataFrame:
         return self.concat([
-            self.normalized_df(region)
+            self.normalized_region(region)
             for region in REGIONS
         ])
 
