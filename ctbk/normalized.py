@@ -213,7 +213,6 @@ def urls(ctx):
 def create(ctx, dask):
     o = ctx.obj
     normalized = NormalizedMonths(dask=dask, **o)
-    normalized.create()
-    months = normalized.months
-    for month in months:
-        print(month.url)
+    created = normalized.create(read=None)
+    if dask:
+        created.compute()

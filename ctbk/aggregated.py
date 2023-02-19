@@ -1,19 +1,19 @@
-from dataclasses import dataclass
-
 import dask.dataframe as dd
 import pandas as pd
 from click import option, pass_context, argument
+from dataclasses import dataclass
 from pandas import Series
 from utz import process
 
 from ctbk import Monthy
 from ctbk.cli.base import ctbk
-from ctbk.month_data import MonthData
-from ctbk.months_data import MonthsData
+from ctbk.month_data import MonthData, MonthDataDF
+from ctbk.months_data import MonthsDataDF
 from ctbk.normalized import NormalizedMonth, NormalizedMonths
 from ctbk.util.constants import BKT
-from ctbk.util.convert import run, args, decos
+from ctbk.util.convert import args, decos
 from ctbk.util.df import DataFrame
+from ctbk.util.ym import dates
 
 DIR = f'{BKT}/aggregated'
 
@@ -70,7 +70,7 @@ class SumKeys(Keys):
     }
 
 
-class AggregatedMonth(MonthData):
+class AggregatedMonth(MonthDataDF):
     DIR = DIR
     NAMES = [ 'aggregated', 'agg', ]
 
@@ -158,7 +158,7 @@ class AggregatedMonth(MonthData):
         return counts
 
 
-class AggregatedMonths(MonthsData):
+class AggregatedMonths(MonthsDataDF):
     DIR = DIR
 
     def __init__(
@@ -199,8 +199,11 @@ GROUP_KEY_ARGS = [
 
 
 @ctbk.group()
-def aggregated():
-    pass
+@pass_context
+@dates
+def aggregated(ctx, start, end):
+    ctx.obj.start = start
+    ctx.obj.end = end
 
 
 @aggregated.command()
@@ -234,10 +237,9 @@ def create(ctx, dask, **kwargs):
         **o,
         dask=dask,
     )
-    aggregated.create()
-    months = aggregated.months
-    for month in months:
-        print(month.url)
+    created = aggregated.create(read=None)
+    if dask:
+        created.compute()
 
 
 @aggregated.command()

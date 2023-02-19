@@ -34,6 +34,12 @@ class MonthsDataDF(MonthsData):
     def month(self, ym: Monthy) -> MonthDataDF:
         return MonthDataDF(ym, **self.kwargs)
 
+    def months(self) -> list[MonthDataDF]:
+        return [
+            self.month(ym)
+            for ym in self.start.until(self.end)
+        ]
+
     def ym_df(self, ym: Monthy, add=False) -> DataFrame:
         month = self.month(ym)
         df = month.df
@@ -51,3 +57,9 @@ class MonthsDataDF(MonthsData):
     @cached_property
     def df(self):
         return self.concat(self.dfs)
+
+    def create(self, read: Union[None, Read] = Unset):
+        months = self.months
+        creates = [ month.create(read=read) for month in months ]
+        if self.dask:
+            return delayed(lambda x: x)(creates)

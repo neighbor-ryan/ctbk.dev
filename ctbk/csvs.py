@@ -14,6 +14,7 @@ from zipfile import ZipFile
 from ctbk import YM, Monthy
 from ctbk.cli.base import ctbk, dask, region
 from ctbk.month_data import MonthData, HasRoot, MonthDataDF
+from ctbk.months_data import MonthsDataDF
 from ctbk.util import cached_property, stderr
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
@@ -107,7 +108,7 @@ class TripdataCsv(ReadsTripdataZip, MonthDataDF):
             return pd.read_csv(self.url, dtype=str)
 
 
-class TripdataCsvs(HasRoot):
+class TripdataCsvs(MonthsDataDF):
     DIR = DIR
 
     def __init__(self, start: Monthy = None, end: Monthy = None, regions: Optional[list[str]] = None, **kwargs):
@@ -116,8 +117,11 @@ class TripdataCsvs(HasRoot):
         self.end: YM = src.end
         super().__init__(**kwargs)
 
+    def month(self, ym: Monthy) -> TripdataCsv:
+        return TripdataCsv(ym=ym, region=u.region, **self.kwargs)  # super().month(ym)
+
     @cached_property
-    def csvs(self) -> list[TripdataCsv]:
+    def months(self) -> list[TripdataCsv]:
         return [
             TripdataCsv(ym=u.ym, region=u.region, **self.kwargs)
             for u in self.src.zips
@@ -146,15 +150,9 @@ class TripdataCsvs(HasRoot):
     @cached_property
     def df(self):
         if self.dask:
-            return self.concat([ csv.df for csv in self.csvs ])
+            return self.concat([ month.df for month in self.months ])
         else:
             raise NotImplementedError("Unified DataFrame is large, you probably want .dd instead (.dd.compute() if you must)")
-
-    def create(self, read: Union[None, Read] = Unset):
-        csvs = self.csvs
-        creates = [ csv.create(read=read) for csv in csvs ]
-        if self.dask:
-            return delayed(lambda x: x)(creates)
 
 
 @ctbk.group('csvs')
