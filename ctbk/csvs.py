@@ -13,9 +13,9 @@ from zipfile import ZipFile
 
 from ctbk import YM, Monthy
 from ctbk.cli.base import ctbk, dask, region
-from ctbk.months_data import Tasks
 from ctbk.table import Table
 from ctbk.task import Task
+from ctbk.tasks import Tasks
 from ctbk.util import cached_property, stderr
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame

@@ -4,8 +4,8 @@ from utz import DefaultDict
 
 from ctbk import YM, Monthy
 from ctbk.cli.base import ctbk, region
-from ctbk.months_data import Tasks
 from ctbk.task import Task
+from ctbk.tasks import Tasks
 from ctbk.util import cached_property, GENESIS, S3
 from ctbk.util.region import REGIONS, Region
 

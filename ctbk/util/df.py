@@ -3,13 +3,24 @@ from os.path import dirname
 import dask.dataframe as dd
 import pandas as pd
 from dask.delayed import Delayed, delayed
-from typing import Optional, Literal
+from typing import Optional, Literal, Tuple
 from typing import Union
 
 from ctbk.util.read import Read, Disk, Memory
 
 DataFrame = Union[pd.DataFrame, dd.DataFrame]
 
+
+def meta(arg: Union[DataFrame, str], dask: bool = True) -> dict:
+    if dask:
+        if isinstance(arg, str):
+            return dict(meta=(arg, str))
+        elif isinstance(arg, Tuple):
+            return dict(meta=arg)
+        else:
+            raise ValueError(f"Unrecognized arg: {arg}")
+    else:
+        return dict()
 
 def value_counts(df: DataFrame) -> pd.Series:
     if isinstance(df, dd.DataFrame):

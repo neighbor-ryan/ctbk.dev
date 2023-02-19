@@ -6,7 +6,7 @@ from typing import Union
 from utz import Unset
 
 from ctbk.has_root import HasRoot
-from ctbk.month_url import HasURL
+from ctbk.has_url import HasURL
 from ctbk.util import stderr
 from ctbk.util.read import Read
 from ctbk.util.write import Always, Never

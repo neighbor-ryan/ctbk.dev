@@ -9,7 +9,7 @@ from zipfile import ZipFile, ZIP_LZMA
 from ctbk import Monthy, YM
 from ctbk.cli.base import ctbk, dask, region
 from ctbk.csvs import ReadsTripdataZip
-from ctbk.months_data import Tasks
+from ctbk.tasks import Tasks
 from ctbk.util import cached_property, stderr
 from ctbk.util.constants import BKT
 from ctbk.util.read import Read

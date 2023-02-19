@@ -2,15 +2,14 @@ import dask.dataframe as dd
 import pandas as pd
 from click import option, pass_context, argument
 from dataclasses import dataclass
-from inspect import getfullargspec
 from pandas import Series
 from utz import process
 
 from ctbk import Monthy
 from ctbk.cli.base import ctbk, dask
-from ctbk.months_data import MonthTables
 from ctbk.normalized import NormalizedMonth, NormalizedMonths
 from ctbk.table import Table
+from ctbk.tasks import MonthTables
 from ctbk.util.constants import BKT
 from ctbk.util.convert import spec_args, decos
 from ctbk.util.df import DataFrame
@@ -89,7 +88,7 @@ class AggregatedMonth(Table):
 
     @property
     def url(self):
-        return f'{self.dir}/{self.agg_keys.label}_{self.sum_keys.label}_{self.ym}.pqt'
+        return f'{self.dir}/{self.agg_keys.label}_{self.sum_keys.label}_{self.ym}.parquet'
 
     def _df(self) -> DataFrame:
         src = NormalizedMonth(self.ym, **self.kwargs)
@@ -195,8 +194,8 @@ GROUP_KEY_ARGS = [
     option('-s/-S', '--start-station/--no-start-station'),
     option('-e/-E', '--end-station/--no-end-station'),
     # Features to aggregate
-    option('-c/-C', '--counts/--no-counts', default=True),
-    option('-d/-D', '--durations/--no-durations'),
+    option('-c/-C', '--count/--no-count', default=True),
+    option('-d/-D', '--duration/--no-duration'),
 ]
 
 

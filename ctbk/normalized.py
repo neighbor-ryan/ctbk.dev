@@ -6,8 +6,8 @@ from re import match, sub
 from ctbk import Monthy
 from ctbk.cli.base import ctbk, dask
 from ctbk.csvs import TripdataCsv, TripdataCsvs
-from ctbk.months_data import MonthTables
 from ctbk.table import Table
+from ctbk.tasks import MonthTables
 from ctbk.util import stderr
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
@@ -160,7 +160,7 @@ class NormalizedMonth(Table):
 
     @property
     def url(self):
-        return f'{self.dir}/{self.ym}.pqt'
+        return f'{self.dir}/{self.ym}.parquet'
 
     def normalized_region(self, region) -> DataFrame:
         csv = TripdataCsv(ym=self.ym, region=region, **self.kwargs)

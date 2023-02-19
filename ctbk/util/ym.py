@@ -11,14 +11,14 @@ class YM:
     y: int
     m: int
 
-    rgx = r'(?P<year>\d{4})-?(?P<month>\d\d)'
+    RGX = re.compile(r'(?P<year>\d{4})(?:-?(?P<month>\d\d))?')
 
     def _init_from_str(self, arg):
-        m = fullmatch(self.rgx, arg)
+        m = self.RGX.fullmatch(arg)
         if not m:
             raise ValueError('Invalid month string: %s' % arg)
         year = int(m['year'])
-        month = int(m['month'])
+        month = int(m['month']) if m['month'] else 1
         self.__init__(year, month)
 
     def _verify(self):
