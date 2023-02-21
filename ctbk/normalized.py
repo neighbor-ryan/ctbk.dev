@@ -1,8 +1,10 @@
 import dask.dataframe as dd
 import pandas as pd
+import re
 from click import pass_context
 from numpy import nan
-from re import match, sub
+from re import sub
+from typing import Pattern
 
 from ctbk import Monthy
 from ctbk.cli.base import ctbk, dask
@@ -12,7 +14,7 @@ from ctbk.tasks import MonthTables
 from ctbk.util import stderr
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
-from ctbk.util.region import REGIONS, Region
+from ctbk.util.region import REGIONS, Region, get_regions
 from ctbk.util.ym import dates
 
 DIR = f'{BKT}/normalized'
@@ -64,31 +66,41 @@ normalize_fields_map['ended_at'] = 'Stop Time'
 normalize_fields_map['member_casual'] = 'Member/Casual'
 
 
-nyc_rgx = r'(?:\d{1,3}|\d{4}\.\d\d)'
-jc_rgx = r'JC\d{3}'
-hb_rgx = r'HB\d{3}'
-sys_rgx = r'(?:SYS\d{3}|Lab - NYC)'
 NONE = 'None'
-rgxs = {
-    'NYC': nyc_rgx,
-    'JC': jc_rgx,
-    'HB': hb_rgx,
-    'SYS': sys_rgx,
-    NONE: NONE,
+RGXS: dict[str, list[Pattern]] = {
+    region: [ re.compile(rgx) for rgx in rgxs ]
+    for region, rgxs in {
+        'NYC': [
+            r'(?:\d{1,3}|\d{4}\.\d\d)',
+            r'S 5th St & Kent Ave',  # 2021
+            r'MTL-ECO51-1',          # 2021
+            r'MTL-ECO5-LAB',         # 202209
+            r'Shop Morgan',          # 202209
+        ],
+        'JC': [r'JC\d{3}'],
+        'HB': [r'HB\d{3}'],
+        'SYS': [
+            r'(?:SYS\d{3}|Lab - NYC)',
+            r'JCSYS',
+        ],
+        NONE: NONE,
+    }.items()
 }
 
-
-def get_region(station_id, file_region=None):
+def get_region(station_id, src: str, file_region: str):
     regions = [
         region
-        for region, rgx in rgxs.items()
-        if match(rgx, station_id)
+        for region, rgxs in RGXS.items()
+        if any(
+            rgx.match(station_id)
+            for rgx in rgxs
+        )
     ]
     if not regions:
-        stderr(f'Unrecognized station: {station_id}')
+        stderr(f'{src}: unrecognized station: {station_id}')
         return nan
     if len(regions) > 1:
-        raise ValueError(f'Station ID {station_id} matches regions {",".join(regions)}')
+        raise ValueError(f'{src}: station ID {station_id} matches regions {",".join(regions)}')
 
     region = regions[0]
     if region == 'NYC' and file_region == 'JC':
@@ -118,16 +130,16 @@ def normalize_fields(df: DataFrame, src, region: Region) -> DataFrame:
         df['User Type'] = df['Member/Casual'].map({'member':'Subscriber','casual':'Customer'})
         del df['Member/Casual']
 
-    df = add_region(df, region=region)
+    df = add_region(df, src=src, region=region)
     df = df.astype({ k: v for k, v in dtypes.items() if k in df })
 
     return df
 
 
-def add_region(df: DataFrame, region: Region) -> DataFrame:
+def add_region(df: DataFrame, src: str, region: Region) -> DataFrame:
     meta = lambda k: dict(meta=(k, 'str')) if isinstance(df, dd.DataFrame) else dict()
-    df['Start Region'] = df['Start Station ID'].fillna(NONE).apply(get_region, file_region=region, **meta('Start Station ID'))
-    df['End Region'] = df['End Station ID'].fillna(NONE).apply(get_region, file_region=region, **meta('End Station ID'))
+    df['Start Region'] = df['Start Station ID'].fillna(NONE).apply(get_region, src=src, file_region=region, **meta('Start Station ID'))
+    df['End Region'] = df['End Station ID'].fillna(NONE).apply(get_region, src=src, file_region=region, **meta('End Station ID'))
 
     sys_none_start = df['Start Region'].isin({NONE, 'SYS'})
     sys_none_end = df['End Region'].isin({NONE, 'SYS'})
@@ -192,7 +204,7 @@ class NormalizedMonth(Table):
     def _df(self) -> DataFrame:
         return self.concat([
             self.normalized_region(region)
-            for region in REGIONS
+            for region in get_regions(self.ym)
         ])
 
 

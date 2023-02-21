@@ -7,7 +7,7 @@ from ctbk.cli.base import ctbk, region
 from ctbk.task import Task
 from ctbk.tasks import Tasks
 from ctbk.util import cached_property, GENESIS, S3
-from ctbk.util.region import REGIONS, Region
+from ctbk.util.region import REGIONS, Region, get_regions
 
 DIR = 'tripdata'
 
@@ -39,7 +39,8 @@ class TripdataZip(Task):
                 extension = 'zip'
             url = f'{self.dir}/{ym}-{citibike}-tripdata.{extension}'
         else:
-            url = f'{self.dir}/{region}-{ym}-{citibike}-tripdata.{extension}'
+            sep = ' ' if int(self.ym) == 201708 else '-'
+            url = f'{self.dir}/{region}-{ym}{sep}{citibike}-tripdata.{extension}'
         return url
 
 
@@ -64,7 +65,7 @@ class TripdataZips(Tasks):
                 {
                     region: TripdataZip(ym=ym, region=region, roots=roots)
                     for region in self.regions
-                    if region == 'NYC' or ym >= YM(201509)
+                    if region in get_regions(ym)
                 }
             )
             for ym in self.start.until(end)

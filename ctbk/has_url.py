@@ -36,6 +36,7 @@ class HasURL(ABC):
         return self.fs.exists(self.url)
 
     def mkdirs(self):
+        # TODO: make this a contextmanager that can clean up all created dirs on failure
         fs = self.fs
         url = self.url
         dir = dirname(url)
