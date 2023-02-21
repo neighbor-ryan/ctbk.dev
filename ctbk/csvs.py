@@ -95,12 +95,11 @@ class TripdataCsv(ReadsTripdataZip, Table):
         else:
             self._create(read=None)
             df = pd.read_csv(self.url, dtype=str)
-        df['region'] = self.region
         return df
 
     @property
     def checkpoint_kwargs(self):
-        return dict(fmt='csv', write_kwargs=dict(index=False))
+        return dict(fmt='csv', read_kwargs=dict(dtype=str), write_kwargs=dict(index=False))
 
     def _read(self) -> DataFrame:
         if self.dask:
@@ -156,12 +155,12 @@ class TripdataCsvs(Tasks):
 
 @ctbk.group('csvs')
 @pass_context
-@dates
 @region
+@dates
 def csvs(ctx, start, end, region=None):
     ctx.obj.start = start
     ctx.obj.end = end
-    ctx.obj.regions = [region] if region else None
+    ctx.obj.regions = [region] if region else REGIONS
 
 
 @csvs.command()

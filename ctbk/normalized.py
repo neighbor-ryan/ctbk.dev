@@ -1,4 +1,5 @@
 import dask.dataframe as dd
+import pandas as pd
 from click import pass_context
 from numpy import nan
 from re import match, sub
@@ -163,9 +164,29 @@ class NormalizedMonth(Table):
         return f'{self.dir}/{self.ym}.parquet'
 
     def normalized_region(self, region) -> DataFrame:
-        csv = TripdataCsv(ym=self.ym, region=region, **self.kwargs)
+        ym = self.ym
+        csv = TripdataCsv(ym=ym, region=region, **self.kwargs)
         df = csv.df
         df = normalize_fields(df, csv.url, region=region)
+        def fsck_ym(df: pd.DataFrame):
+            start, end = ym.dates
+            date: pd.Series = df['Start Time'].dt.date
+            wrong_yms = (date < start) | (date >= end)
+            num_wrong_yms = wrong_yms.sum()
+            if num_wrong_yms:
+                wrong_dates_hist = (
+                    date
+                    [wrong_yms]
+                    .value_counts()
+                    .sort_index()
+                )
+                stderr(f'{num_wrong_yms} rides not in {ym}:\n{wrong_dates_hist}')
+            return df[~wrong_yms]
+
+        if self.dask:
+            df = df.map_partitions(fsck_ym, meta=df._meta)
+        else:
+            df = fsck_ym(df)
         return df
 
     def _df(self) -> DataFrame:

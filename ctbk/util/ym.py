@@ -1,3 +1,5 @@
+from typing import Tuple
+
 from click import option
 from pandas.core.tools.datetimes import DatetimeScalar
 from utz import *
@@ -82,6 +84,16 @@ class YM:
     @property
     def dt(self) -> DatetimeScalar:
         return pd.to_datetime('%d-%02d' % (self.y, self.m))
+
+    @property
+    def date(self) -> date:
+        return self.dt.date()
+
+    @property
+    def dates(self) -> Tuple['date', 'date']:
+        start = self.date
+        end = (self + 1).date
+        return start, end
 
     def __add__(self, n: int) -> 'YM':
         if not isinstance(n, int):

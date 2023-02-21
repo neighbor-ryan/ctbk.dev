@@ -13,6 +13,8 @@ from ctbk.tasks import Tasks
 from ctbk.util import cached_property, stderr
 from ctbk.util.constants import BKT
 from ctbk.util.read import Read
+from ctbk.util.region import REGIONS
+from ctbk.util.ym import dates
 from ctbk.zips import TripdataZips
 
 DIR = f'{BKT}/sampled/tripdata'
@@ -82,52 +84,40 @@ class SampledZips(Tasks):
 
 
 @ctbk.group()
-def sampled_zips():
-    pass
+@pass_context
+@region
+@dates
+def sampled_zips(ctx, start, end, region=None):
+    ctx.obj.start = start
+    ctx.obj.end = end
+    ctx.obj.regions = [region] if region else REGIONS
 
 
 @sampled_zips.command()
 @pass_context
-@region
-def urls(ctx, region):
-    o = ctx.obj
-    zips = SampledZips(start=o.start, end=o.end, root=o.root, write_config=o.write_config)
+@dask
+def urls(ctx, dask):
+    zips = SampledZips(**ctx.obj, dask=dask)
     for zip in zips.children:
-        if region and zip.region != region:
-            continue
         print(zip.url)
 
 
 @sampled_zips.command()
 @pass_context
 @dask
-@region
-def create(ctx, dask, region):
-    o = ctx.obj
-    zips = SampledZips(
-        start=o.start, end=o.end,
-        regions=[region] if region else None,
-        dask=dask,
-        root=o.root,
-        write_config=o.write_config,
-    )
-    print(zips.create(read=None).compute())
+def create(ctx, dask):
+    zips = SampledZips(**ctx.obj)
+    created = zips.create(read=None)
+    if dask:
+        created.compute()
 
 
 @sampled_zips.command()
 @pass_context
-@region
 @option('-O', '--no-open', is_flag=True)
 @argument('filename', required=False)
-def dag(ctx, region, no_open, filename):
-    o = ctx.obj
-    zips = SampledZips(
-        start=o.start, end=o.end,
-        regions=[region] if region else None,
-        dask=True,
-        root=o.root,
-        write_config=o.write_config,
-    )
+def dag(ctx, no_open, filename):
+    zips = SampledZips(**ctx.obj, dask=True)
     result = zips.create()
     filename = filename or 'sampled_zip_dag.png'
     stderr(f"Writing to {filename}")
