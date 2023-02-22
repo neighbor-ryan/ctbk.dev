@@ -13,20 +13,37 @@ from ctbk.util.ym import dates, YM, Monthy
 
 
 class MonthAggTable(ABC):
-    ROOT = None
+    ROOT = 's3:/'
+    SRC = None
     OUT = None
-
-    def load(self, ym: Monthy) -> DataFrame:
-        raise NotImplementedError
 
     def __init__(self, start, end, root=None, overwrite=False, dask=False, out=None):
         self.start = start
         self.end = end or YM()
         self.root = root or self.ROOT
+        if not self.SRC:
+            raise RuntimeError(f"Set {self.__class__.__name__}.SRC")
+        self.src = self.SRC
+        self.dir = f'{self.root}/{self.src}'
         self.overwrite = overwrite
         self.dask = dask
         self.out = out or self.OUT
         self.dpd = dd if dask else pd
+
+    def url(self, ym: Monthy) -> str:
+        return f'{self.dir}/{ym}.parquet'
+
+    def read(self, url):
+        return self.dpd.read_parquet(url)
+
+    def load(self, ym: Monthy) -> DataFrame:
+        url = self.url(ym)
+        try:
+            df = self.dpd.read_parquet(url)
+        except FileNotFoundError as e:
+            stderr(f'FileNotFoundError: {url}')
+            raise
+        return df
 
     @property
     def months(self) -> Generator['YM', None, None]:
@@ -47,6 +64,9 @@ class MonthAggTable(ABC):
         if isinstance(df, dd.DataFrame):
             df = df.compute()
 
+        self.write_df(df)
+
+    def write_df(self, df: pd.DataFrame):
         df.to_json(self.out, 'records')
 
     def run(self):
