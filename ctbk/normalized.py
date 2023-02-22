@@ -9,6 +9,7 @@ from typing import Pattern
 from ctbk import Monthy
 from ctbk.cli.base import ctbk, dask
 from ctbk.csvs import TripdataCsv, TripdataCsvs
+from ctbk.month_table import MonthTable
 from ctbk.table import Table
 from ctbk.tasks import MonthTables
 from ctbk.util import stderr
@@ -163,17 +164,9 @@ def add_region(df: DataFrame, src: str, region: Region) -> DataFrame:
     return df
 
 
-class NormalizedMonth(Table):
+class NormalizedMonth(MonthTable):
     DIR = DIR
     NAMES = [ 'normalized', 'norm', ]
-
-    def __init__(self, ym: Monthy, **kwargs):
-        self.ym = ym
-        super().__init__(**kwargs)
-
-    @property
-    def url(self):
-        return f'{self.dir}/{self.ym}.parquet'
 
     def normalized_region(self, region) -> DataFrame:
         ym = self.ym

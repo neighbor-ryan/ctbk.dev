@@ -13,9 +13,6 @@ from ctbk.util.write import Always, Never
 
 
 class Task(HasRoot, HasURL, ABC):
-    DIR = None
-    NAMES = []
-
     def __init__(self, **kwargs):
         HasRoot.__init__(self, **kwargs)
         HasURL.__init__(self)
