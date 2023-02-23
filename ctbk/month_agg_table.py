@@ -53,12 +53,14 @@ class MonthAggTable(ABC):
     def dfs(self) -> list[DataFrame]:
         return [ self.load(ym) for ym in self.months ]
 
-    @property
-    def df(self) -> DataFrame:
-        return self.dpd.concat(self.dfs)
+    def mapped_dfs(self) -> list[DataFrame]:
+        return [ self.map(df) for df in self.dfs ]
 
-    def transform(self, df: DataFrame) -> DataFrame:
-        raise NotImplementedError
+    def map(self, df):
+        return df
+
+    def reduce(self, mapped_dfs) -> DataFrame:
+        return self.dpd.concat(mapped_dfs)
 
     def write(self, df: DataFrame):
         if isinstance(df, dd.DataFrame):
@@ -80,10 +82,9 @@ class MonthAggTable(ABC):
         else:
             stderr(f'Writing {out}')
 
-        df = self.df
-        out_df = self.transform(df)
-
-        self.write(out_df)
+        mapped_dfs = self.mapped_dfs()
+        df = self.reduce(mapped_dfs)
+        self.write(df)
 
     @classmethod
     def main(cls):

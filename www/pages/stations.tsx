@@ -40,6 +40,7 @@ type YmProps = {
     ym: string
     stationCounts: StationCounts
     idx2id: Idx2Id
+    stations: Stations
 }
 
 type YmState = {
@@ -54,15 +55,14 @@ export async function getStaticProps(context: any) {
 
     const idx2idUrl = `https://ctbk.s3.amazonaws.com/aggregated/${ym}/idx2id.json`
     const stationCountsUrl = `https://ctbk.s3.amazonaws.com/aggregated/${ym}/s_c.json`
-    const stationsUrl = `https://ctbk.s3.amazonaws.com/stations/ids.json`
+    const stationsUrl = `https://ctbk.s3.amazonaws.com/aggregated/${ym}/stations.json`
 
     const idx2id = await getSync<Idx2Id>(idx2idUrl)
     const stationCounts: StationCounts = _.mapKeys(await getSync<StationCounts>(stationCountsUrl), (v, k) => idx2id[k])
-    const defaults: YmProps = { ym, idx2id, stationCounts }
-
     const stations = await getSync<Stations>(stationsUrl)
-    // const stations = load<Stations>(STATIONS_PATH)
-    return { props: { defaults, stations, } }
+
+    const defaults: YmProps = { ym, idx2id, stationCounts, stations }
+    return { props: { defaults } }
 }
 
 export const MAPS = {
@@ -169,6 +169,10 @@ function MapBody(
     const selectedCount: [ ID, number ] | undefined = selectedStation ? Array.from(entries(stationCounts).filter(([ id, count, ]) => id == selectedStation))[0] : undefined
 
     function StationCircle({ id, count, selected }: CountRow & { selected?: boolean }) {
+        if (!(id in stations)) {
+            console.log(`id ${id} not in stations`)
+            return null
+        }
         const { name, lat, lng } = stations[id]
         return <Circle key={id} center={{ lat, lng }} color={selected ? "yellow" : "orange"} radius={sqrt(count)}
                        eventHandlers={{
@@ -239,7 +243,7 @@ type StationPairCounts = {
     [k1: string]: { [k2: string]: number }
 }
 
-export default function Home({ defaults, stations }: { defaults: YmProps, stations: Stations, }) {
+export default function Home({ defaults }: { defaults: YmProps, }) {
     const params: Params = {
         ll: llParam({ init: DEFAULT_CENTER, places: 3, }),
         z: floatParam(DEFAULT_ZOOM, false),
@@ -253,6 +257,7 @@ export default function Home({ defaults, stations }: { defaults: YmProps, statio
         ym: [ ym, setYM ],
     }: ParsedParams = parseQueryParams({ params })
 
+    const [ stations, setStations ] = useState(defaults.stations)
     const [ stationCounts, setStationCounts ] = useState(defaults.stationCounts)
     const [ stationPairCounts, setStationPairCounts ] = useState<StationPairCounts | null>(null)
 
@@ -264,10 +269,12 @@ export default function Home({ defaults, stations }: { defaults: YmProps, statio
         const idx2idUrl = `${dir}/idx2id.json`
         const stationCountsUrl = `${dir}/s_c.json`
         const stationPairsUrl = `${dir}/se_c.json`
+        const stationsUrl = `${dir}/stations.json`
 
         let idx2id: Promise<Idx2Id>
         if (ym == defaults.ym) {
             setStationCounts(defaults.stationCounts)
+            setStations(defaults.stations)
             idx2id = Promise.resolve(defaults.idx2id)
             console.log("Setting stationCounts to default")
         } else {
@@ -276,15 +283,18 @@ export default function Home({ defaults, stations }: { defaults: YmProps, statio
                 .then<Idx2Id>(data => data.json())
                 .then(data => { console.log("got idx2id"); return data })
 
-            fetch(stationCountsUrl)
-                .then<StationCounts>(data => data.json())
-                .then(stationCounts =>
-                    idx2id.then(
-                        idx2id => {
-                            console.log("got stationCounts")
-                            setStationCounts(_.mapKeys(stationCounts, (v, k) => idx2id[k]))
-                        }
-                    )
+            Promise.all([
+                fetch(stationCountsUrl).then<StationCounts>(data => data.json()),
+                fetch(stationsUrl).then<Stations>(data => data.json())
+            ])
+                .then(([ stationCounts, stations, ]) =>
+                        idx2id.then(
+                            idx2id => {
+                                console.log("got stationCounts & stations")
+                                setStationCounts(_.mapKeys(stationCounts, (v, k) => idx2id[k]))
+                                setStations(stations)
+                            }
+                        )
                 )
         }
         console.log(`fetching ${stationPairsUrl}`)

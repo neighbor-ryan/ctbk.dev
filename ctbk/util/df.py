@@ -1,9 +1,8 @@
-from os.path import dirname
-
 import dask.dataframe as dd
 import pandas as pd
 from dask.delayed import Delayed, delayed
-from typing import Optional, Literal, Tuple
+from functools import wraps
+from typing import Optional, Literal, Tuple, Callable
 from typing import Union
 
 from ctbk.util.read import Read, Disk, Memory
@@ -11,16 +10,35 @@ from ctbk.util.read import Read, Disk, Memory
 DataFrame = Union[pd.DataFrame, dd.DataFrame]
 
 
-def meta(arg: Union[DataFrame, str], dask: bool = True) -> dict:
+def sxs(*dfs) -> DataFrame:
+    concat = dd.concat if isinstance(dfs[0], (dd.DataFrame, dd.Series)) else pd.concat
+    return concat(list(dfs), axis=1)
+
+
+def apply(fn: Callable[[pd.DataFrame], pd.DataFrame], meta=None) -> Callable[[DataFrame], DataFrame]:
+    @wraps(fn)
+    def _fn(df: DataFrame):
+        if isinstance(df, dd.DataFrame):
+            return df.map_partitions(fn, meta=meta)
+        else:
+            return fn(df)
+    return _fn
+
+
+def meta(arg: Union[DataFrame, str, dict, Tuple], dask: Union[DataFrame, bool] = True) -> dict:
+    dask = dask is True or isinstance(dask, dd.DataFrame)
     if dask:
         if isinstance(arg, str):
             return dict(meta=(arg, str))
         elif isinstance(arg, Tuple):
             return dict(meta=arg)
+        elif isinstance(arg, dict):
+            return dict(meta=arg)
         else:
             raise ValueError(f"Unrecognized arg: {arg}")
     else:
         return dict()
+
 
 def value_counts(df: DataFrame) -> pd.Series:
     if isinstance(df, dd.DataFrame):

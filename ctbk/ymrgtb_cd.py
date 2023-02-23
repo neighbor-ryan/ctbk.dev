@@ -8,7 +8,8 @@ class YmrgtbCdJson(MonthAggTable):
     SRC = 'ctbk/aggregated'
     OUT = 'www/public/assets/ymrgtb_cd.json'
 
-    def transform(self, df: DataFrame) -> DataFrame:
+    def reduce(self, mapped_dfs: list[DataFrame]) -> DataFrame:
+        df = self.dpd.concat(mapped_dfs)
         ymr_json = (
             df
             .assign(**{

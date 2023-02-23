@@ -2,7 +2,7 @@ from os.path import dirname
 
 import fsspec
 from abc import ABC, abstractmethod
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from urllib.parse import urlparse
 
 from ctbk.util import cached_property, YM, stderr
@@ -35,31 +35,49 @@ class HasURL(ABC):
     def exists(self):
         return self.fs.exists(self.url)
 
+    @property
+    def dirname(self):
+        return dirname(self.url)
+
+    @contextmanager
     def mkdirs(self):
         # TODO: make this a contextmanager that can clean up all created dirs on failure
         fs = self.fs
-        url = self.url
-        dir = dirname(url)
+        dir = self.dirname
         if fs.exists(dir):
-            return None
-        else:
-            fs.mkdirs(dir, exist_ok=True)
-            return dir
+            yield
+            return
+        rm_dir = True
+        made_dirs = [dir]
+        cur_dir = dir
+        while True:
+            parent = dirname(cur_dir)
+            if fs.exists(parent):
+                break
+            made_dirs.append(parent)
+            cur_dir = parent
+        made_dirs = list(reversed(made_dirs))
+        top_made_dir = made_dirs[0]
+        fs.mkdirs(dir, exist_ok=True)
+        try:
+            yield
+            rm_dir = False
+        finally:
+            if rm_dir:
+                stderr(f"Removing dir after failed write: {top_made_dir}")
+                fs.delete(top_made_dir)
+
 
     @contextmanager
     def fd(self, mode):
-        made_dir = self.mkdirs()
-        fs = self.fs
-        url = self.url
-        succeeded = False
-        try:
-            yield fs.open(url, mode)
-            succeeded = True
-        finally:
-            if not succeeded:
-                if fs.exists(url):
-                    stderr(f"Removing failed write: {url}")
-                    fs.delete(url)
-                if made_dir:
-                    stderr(f"Removing dir after failed write: {made_dir}")
-                    fs.delete(made_dir)
+        with self.mkdirs():
+            succeeded = False
+            try:
+                yield fs.open(url, mode)
+                succeeded = True
+            finally:
+                if not succeeded:
+                    url = self.url
+                    if fs.exists(url):
+                        stderr(f"Removing failed write: {url}")
+                        fs.delete(url)

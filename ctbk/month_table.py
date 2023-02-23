@@ -1,8 +1,11 @@
+from abc import ABC
+
 from ctbk import Monthy
 from ctbk.table import Table
+from ctbk.task import Task
 
 
-class MonthTable(Table):
+class MonthTask(Task, ABC):
     def __init__(self, ym: Monthy, **kwargs):
         self.ym = ym
         super().__init__(**kwargs)
@@ -10,3 +13,7 @@ class MonthTable(Table):
     @property
     def url(self):
         return f'{self.dir}/{self.ym}.parquet'
+
+
+class MonthTable(MonthTask, Table, ABC):
+    pass

@@ -26,7 +26,7 @@ class Task(HasRoot, HasURL, ABC):
         if self.exists():
             if self.write is Always:
                 stderr(f'Overwriting {url}')
-                return self._create()
+                return self._create(read=read)
             elif read is None:
                 stderr(f'{url} already exists')
                 if self.dask:
@@ -42,7 +42,7 @@ class Task(HasRoot, HasURL, ABC):
             raise RuntimeError(f"{url} doesn't exist, but `write` is `Never`")
         else:
             stderr(f'Writing {url}')
-            return self._create()
+            return self._create(read=read)
 
     def _read(self) -> Union[None, Delayed]:
         if self.dask:

@@ -7,6 +7,9 @@ from ctbk.util.read import Read, Disk
 from ctbk.util.write import IfAbsent, Write
 
 
+DEFAULT_ROOTS = dr = DefaultDict({'zip': 's3:/'}, 's3')
+
+
 class HasRoot:
     DIR = None
     NAMES = None
@@ -20,6 +23,7 @@ class HasRoot:
     ):
         names = self.NAMES or []
 
+        roots = roots or DEFAULT_ROOTS
         self.roots = roots
         root = self.root = None
         if roots:
@@ -47,6 +51,9 @@ class HasRoot:
     def kwargs(self):
         return dict(roots=self.roots, reads=self.reads, writes=self.writes, dask=self.dask)
 
+    @property
+    def dpd(self):
+        return dd if self.dask else pd
+
     def concat(self, *args, **kwargs):
-        concat_fn = dd.concat if self.dask else pd.concat
-        return concat_fn(*args, **kwargs)
+        return self.dpd.concat(*args, **kwargs)

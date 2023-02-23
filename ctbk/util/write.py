@@ -9,7 +9,7 @@ WRITES = [ Never, IfAbsent, Always, ]
 
 
 ALIASES = {
-    Never: [ '0', 'never', 'n', 'ro', '', ],
+    Never: [ '0', 'never', 'n', 'no', 'ro', '', ],
     IfAbsent: [ '1', 'ifabsent', 'ifabs', 'ia', 'w', ],
     Always: [ '2', 'overwrite', 'write', 'ow', 'ww', 'always', ],
 }

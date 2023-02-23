@@ -1,3 +1,5 @@
+from typing import Union
+
 import dask.dataframe as dd
 import pandas as pd
 from click import option, pass_context, argument
@@ -7,29 +9,16 @@ from utz import process
 
 from ctbk import Monthy
 from ctbk.cli.base import ctbk, dask
+from ctbk.month_table import MonthTable
 from ctbk.normalized import NormalizedMonth, NormalizedMonths
-from ctbk.table import Table
 from ctbk.tasks import MonthTables
 from ctbk.util.constants import BKT
 from ctbk.util.convert import spec_args, decos
 from ctbk.util.df import DataFrame
+from ctbk.util.keys import Keys
 from ctbk.util.ym import dates
 
 DIR = f'{BKT}/aggregated'
-
-
-class Keys:
-    KEYS = None
-
-    def __iter__(self):
-        for name, ch in self.KEYS.items():
-            v = getattr(self, name)
-            if v:
-                yield ch, v
-
-    @property
-    def label(self):
-        return ''.join(dict(self).keys())
 
 
 @dataclass
@@ -70,21 +59,20 @@ class SumKeys(Keys):
     }
 
 
-class AggregatedMonth(Table):
+class AggregatedMonth(MonthTable):
     DIR = DIR
     NAMES = [ 'aggregated', 'agg', ]
 
     def __init__(
             self,
             ym: Monthy,
-            agg_keys: AggKeys,
-            sum_keys: SumKeys,
+            agg_keys: Union[str, AggKeys, dict],
+            sum_keys: Union[str, SumKeys, dict],
             **kwargs
     ):
-        self.ym = ym
-        self.agg_keys = agg_keys
-        self.sum_keys = sum_keys
-        super().__init__(**kwargs)
+        self.agg_keys = AggKeys.load(agg_keys)
+        self.sum_keys = SumKeys.load(sum_keys)
+        super().__init__(ym, **kwargs)
 
     @property
     def url(self):
@@ -129,6 +117,14 @@ class AggregatedMonth(Table):
             group_keys.append('Start Station ID')
         if agg_keys.get('e'):
             group_keys.append('End Station ID')
+        if agg_keys.get('n'):
+            group_keys.append('Start Station Name')
+        if agg_keys.get('N'):
+            group_keys.append('End Station Name')
+        if agg_keys.get('l'):
+            group_keys += ['Start Station Latitude', 'Start Station Longitude']
+        if agg_keys.get('L'):
+            group_keys += ['End Station Latitude', 'End Station Longitude']
 
         select_keys = []
         if sum_keys.get('c'):

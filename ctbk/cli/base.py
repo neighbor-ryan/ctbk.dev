@@ -1,6 +1,7 @@
 from click import pass_context, option, group, Choice
 from utz import o, DefaultDict
 
+from ctbk.has_root import DEFAULT_ROOTS
 from ctbk.util import write, read
 from ctbk.util.read import Disk
 from ctbk.util.constants import S3, DEFAULT_ROOT
@@ -20,7 +21,8 @@ region = option('-r', '--region', type=Choice(REGIONS))
 def ctbk(ctx, reads, roots, writes, s3):
     if s3:
         roots = [S3] + (roots or [])
-    roots = DefaultDict.load(roots, fallback=DEFAULT_ROOT)
+
+    roots = DefaultDict.load(roots, fallback=DEFAULT_ROOT) if roots else DEFAULT_ROOTS
     reads = DefaultDict.load(reads, name2value=read.parse, fallback=Disk)
     writes = DefaultDict.load(writes, name2value=write.parse, fallback=IfAbsent)
     ctx.obj = o(roots=roots, reads=reads, writes=writes)

@@ -39,8 +39,7 @@ class SampledZip(ReadsTripdataZip):
         src = self.src
         with src.fd('rb') as zin:
             z_in = ZipFile(zin)
-            rm_dir = self.mkdirs()
-            try:
+            with self.mkdirs():
                 z_out = ZipFile(self.url, 'w', compression=self.DEFAULT_COMPRESSION)
                 names = z_in.namelist()
                 print(f'{src.url}: zip names: {names}')
@@ -54,10 +53,6 @@ class SampledZip(ReadsTripdataZip):
                                     break
                         else:
                             copyfileobj(i, o)
-                rm_dir = None
-            finally:
-                if rm_dir:
-                    self.fs.delete(rm_dir)
 
 
 class SampledZips(Tasks):
