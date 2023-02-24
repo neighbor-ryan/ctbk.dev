@@ -604,7 +604,7 @@ export default function App({ data, }: { data: Row[] }) {
                         <p><a href={"https://github.com/neighbor-ryan/ctbk.dev"}>The GitHub repo</a> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"}>planned enhancements</a>.</p>
                         <hr/>
                         <h3 id={"map"}>Map: Stations + Common Destinations</h3>
-                        <p>Check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in November 2022</Link>.</p>
+                        <p>Check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in January 2023</Link>.</p>
                         <a href={"./stations"}><img className={css.map} src={"screenshots/ctbk-stations.png"} /></a>
                         <hr />
                         <h3 id="qc">🚧 Data-quality issues 🚧</h3>
