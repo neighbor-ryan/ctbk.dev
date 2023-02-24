@@ -7,13 +7,13 @@ from click import command, argument, option
 from typing import Generator
 
 from ctbk.cli.base import dask
-from ctbk.util import stderr
+from ctbk.util import stderr, S3
 from ctbk.util.df import DataFrame
 from ctbk.util.ym import dates, YM, Monthy
 
 
 class MonthAggTable(ABC):
-    ROOT = 's3:/'
+    ROOT = S3
     SRC = None
     OUT = None
 

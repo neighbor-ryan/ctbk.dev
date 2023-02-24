@@ -1,12 +1,6 @@
 import shutil
 
-from contextlib import ExitStack, contextmanager
-
-
-# @contextmanager
-# def contexts(ctxs):
-#     with ExitStack() as stack:
-#         yield [stack.enter_context(ctx) for ctx in ctxs]
+from contextlib import contextmanager
 
 
 def contexts(ctxs):
