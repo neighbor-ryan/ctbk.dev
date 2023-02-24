@@ -52,7 +52,7 @@ jobs:
     uses: ./.github/workflows/step.yml
     with:
       name: Aggregate counts by (month, region, gender, user type, rideable type)
-      run: ctbk --s3 aggregated create --dask -ymrgtb -cd --do-email
+      run: ctbk --s3 aggregated create --dask -ymrgtb -cd
     secrets: inherit
   modes:
     needs: [meta_hist-names, meta_hist-latlngs, group_counts-start]
