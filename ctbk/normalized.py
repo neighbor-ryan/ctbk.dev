@@ -88,6 +88,7 @@ RGXS: dict[str, list[Pattern]] = {
     }.items()
 }
 
+
 def get_region(station_id, src: str, file_region: str):
     regions = [
         region
@@ -193,6 +194,10 @@ class NormalizedMonth(MonthTable):
         else:
             df = fsck_ym(df)
         return df
+
+    @property
+    def checkpoint_kwargs(self):
+        return dict(write_kwargs=dict(index=False))
 
     def _df(self) -> DataFrame:
         return self.concat([

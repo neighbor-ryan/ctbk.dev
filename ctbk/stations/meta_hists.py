@@ -1,3 +1,5 @@
+from functools import wraps
+
 from click import pass_context, option
 from dataclasses import dataclass
 from typing import Union
@@ -157,6 +159,7 @@ GROUP_KEY_ARGS = [
 ]
 
 
+# TODO: factor common CLI subcommands
 @ctbk.group()
 @pass_context
 @dates
@@ -169,25 +172,24 @@ def agg_cmd(fn):
     @station_meta_hists.command(fn.__name__)
     @pass_context
     @decos(GROUP_KEY_ARGS)
+    @wraps(fn)
     def _fn(ctx, *args, **kwargs):
         o = ctx.obj
-        agg_keys = AggKeys.load(kwargs)
+        agg_keys = AggKeys.load(spec_args(AggKeys, kwargs))
         fn(*args, o=o, agg_keys=agg_keys, **spec_args(fn, kwargs))
     return _fn
 
 
 @agg_cmd
 def urls(o, agg_keys):
-    smh = StationMetaHist(202212, 'in')
-    df = smh.df
     station_meta_hists = StationMetaHists(agg_keys=agg_keys, **o)
     months = station_meta_hists.children
     for month in months:
         print(month.url)
 
 
-@dask
 @agg_cmd
+@dask
 def create(o, agg_keys, dask):
     station_meta_hists = StationMetaHists(agg_keys=agg_keys, dask=dask, **o)
     created = station_meta_hists.create(read=None)

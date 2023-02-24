@@ -43,7 +43,7 @@ class ReadsTripdataZip(Task, ABC):
 class TripdataCsv(ReadsTripdataZip, Table):
     DIR = DIR
     NAMES = ['csv']
-    COMPRESSION_LEVEL = 7
+    COMPRESSION_LEVEL = 9
 
     @cached_property
     def url(self):
