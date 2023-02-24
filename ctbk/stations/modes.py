@@ -245,19 +245,3 @@ def create(ctx, dask):
     created = modes_month_jsons.create(read=None)
     if dask:
         created.compute()
-
-
-class StationModes(MonthAggTable):
-    # Used by [`index.tsx`](www/pages/index.tsx) plot
-    SRC = 'ctbk/stations/llname_hists'
-    OUT = 'www/public/assets/ids.json'
-
-    def map(self, df: DataFrame) -> DataFrame:
-        return transform(df)
-
-    def write_df(self, df: pd.DataFrame):
-        df.to_json(self.out, 'index')
-
-
-if __name__ == '__main__':
-    StationModes.main()

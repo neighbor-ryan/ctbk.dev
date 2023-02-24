@@ -7,64 +7,64 @@ on:
     - cron: "0 17 3-11 * *"
 jobs:
   csvs:
-    uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
+    uses: ./.github/workflows/step.yml@main
     with:
       name: Unzip+Cache CSVs
-      run: python ctbk/csvs.py --s3
+      run: ctbk --s3 csvs create --dask
     secrets: inherit
   normalized:
     needs: csvs
-    uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
+    uses: ./.github/workflows/step.yml@main
     with:
       name: Join regions, convert to Parquet
-      run: python ctbk/normalized.py --s3
+      run: ctbk --s3 normalized create --dask
     secrets: inherit
-  meta_hist:
+  meta_hist-names:
     needs: normalized
-    uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
+    uses: ./.github/workflows/step.yml@main
     with:
-      name: Compute station name / latlng histograms
-      run: python ctbk/stations/meta_hist.py --s3
+      name: Compute station name histograms
+      run: ctbk --s3 station-meta-hists create --dask -in
     secrets: inherit
-  modes:
-    needs: meta_hist
-    uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
+  meta_hist-latlngs:
+    needs: normalized
+    uses: ./.github/workflows/step.yml@main
     with:
-      name: Compute canonical station names, latlngs
-      run: python ctbk/stations/modes.py --s3 --json
+      name: Compute station lat/lng histograms
+      run: ctbk --s3 station-meta-hists create --dask -il
     secrets: inherit
   group_counts-start:
     needs: normalized
-    uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
+    uses: ./.github/workflows/step.yml@main
     with:
       name: Aggregate counts by start station
-      run: python ctbk/group_counts.py --s3 -s -c
+      run: ctbk --s3 aggregated create --dask -s -c
     secrets: inherit
   group_counts-start-end:
     needs: normalized
-    uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
+    uses: ./.github/workflows/step.yml@main
     with:
       name: Aggregate counts by station-pair
-      run: python ctbk/group_counts.py --s3 -se -c
-    secrets: inherit
-  station_pair_jsons:
-    needs: group_counts-start-end
-    uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
-    with:
-      name: Build station-pair count JSONs
-      run: python ctbk/station_pair_jsons.py --s3
-    secrets: inherit
-  group_counts-year-month-start-end:
-    needs: normalized
-    uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
-    with:
-      name: Aggregate counts by (month, station-pair)
-      run: python ctbk/group_counts.py --s3 -ymse -c
+      run: ctbk --s3 aggregated create --dask -se -c
     secrets: inherit
   group_counts-year-month-region-gender-type-bike-counts-durations:
     needs: normalized
-    uses: neighbor-ryan/ctbk.dev/.github/workflows/step.yml@main
+    uses: ./.github/workflows/step.yml@main
     with:
       name: Aggregate counts by (month, region, gender, user type, rideable type)
-      run: python ctbk/group_counts.py --s3 -ymrgtb -cd --do-email
+      run: ctbk --s3 aggregated create --dask -ymrgtb -cd --do-email
+    secrets: inherit
+  modes:
+    needs: [meta_hist-names, meta_hist-latlngs, group_counts-start]
+    uses: ./.github/workflows/step.yml@main
+    with:
+      name: Compute canonical station names, latlngs
+      run: ctbk --s3 station-modes create --dask
+    secrets: inherit
+  station_pair_jsons:
+    needs: [modes, group_counts-start-end]
+    uses: ./.github/workflows/step.yml@main
+    with:
+      name: Build station-pair count JSONs
+      run: ctbk --s3 station-pair-jsons create --dask
     secrets: inherit
