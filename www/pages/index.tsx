@@ -79,6 +79,9 @@ type AnnualizedPercent = {
 }
 
 function annualizedPercents(series: Series): AnnualizedPercent[] {
+    if (!series.size) {
+        return []
+    }
     const filtered = series.dropNa()
     const numMos = filtered.size
     const maxRange = numMos - 1
