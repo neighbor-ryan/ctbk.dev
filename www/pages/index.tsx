@@ -30,9 +30,12 @@ import Link from "next/link";
 import 'react-tooltip/dist/react-tooltip.css'
 
 import {darken} from "../src/colors";
+import {ArrayType1D} from "danfojs/dist/danfojs-base/shared/types";
 
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false, })
 const Tooltip = dynamic(() => import("react-tooltip").then(m => m.Tooltip), { ssr: false, })
+
+const {pow} = Math
 
 const JSON_PATH = 'public/assets/ymrgtb_cd.json'
 
@@ -63,6 +66,54 @@ type ParsedParams = {
     rt: ParsedParam<RideableType[]>
     d: ParsedParam<DateRange>
     avg: ParsedParam<number[]>
+}
+
+type MonthVal = { m: string, v: number }
+type AnnualizedPercent = {
+    numYrs: number
+    numMos: number
+    first: { m: string, v: number }
+    last: { m: string, v: number }
+    ratio: number
+    percent: number
+}
+
+function annualizedPercents(series: Series): AnnualizedPercent[] {
+    const filtered = series.dropNa()
+    const numMos = filtered.size
+    const maxRange = numMos - 1
+    let delta = 12
+    const percents = []
+    while (true) {
+        if (delta > maxRange) {
+            delta = maxRange
+        }
+        const end = filtered.iloc([maxRange])
+        const start = filtered.iloc([maxRange - delta])
+        const first: MonthVal = { m: start.index[0] as string, v: start.values[0] as number }
+        const last: MonthVal = { m: end.index[0] as string, v: end.values[0] as number }
+        const ratio = last.v / first.v
+        const numYrs = delta / 12
+        const rate = pow(ratio, 1/ numYrs) - 1
+        const percent = rate * 100
+        percents.push({ numYrs, numMos: delta, first, last, ratio, percent })
+        if (delta == maxRange) break
+        delta += 12
+    }
+    return percents
+}
+
+function annualPercentStr({ numYrs, numMos, first, last, ratio, percent }: AnnualizedPercent) {
+    function ymStr(m: string): string {
+        return `${parseInt(m.substring(5))}/${m.substring(2, 4)}`
+    }
+    const datesStr = `${ymStr(first.m)}-${ymStr(last.m)}`
+    const yrsMsg =
+        (numMos % 12 == 0)
+            ? `${numYrs.toFixed(0)} year${numMos == 12 ? "" : "s"} (${datesStr})`
+            : `${numYrs.toFixed(1)} years (${numMos} mos, ${datesStr})`
+    const [ percentStr, typeStr ] = percent >= 0 ? [ percent.toFixed(1), "increase" ] : [ (-percent).toFixed(1), "decrease" ]
+    return `${yrsMsg}: ${first.v.toFixed(0)} → ${last.v.toFixed(0)} (${ratio.toFixed(1)}x), ${percentStr}% avg annual ${typeStr}`
 }
 
 const WarningLabel = ({ label, id, children }: { label: string, id: string, children: ReactNode, }) => {
@@ -271,7 +322,7 @@ export default function App({ data, }: { data: Row[] }) {
                     const rolls = danfo.rollingAvgs(series, n)
                     // print("rolls", rolls)
                     const clamped = clampIndex(rolls, {start, end})
-                    // print("clamped", clamped)
+                    annualizedPercents(clamped).forEach(percent => console.log(annualPercentStr(percent)))
                     return { stackVal: '', n, s: clamped }
                 })
             } else {
@@ -300,7 +351,7 @@ export default function App({ data, }: { data: Row[] }) {
                                 if (stackBy == 'Rideable Type' && stackVal == 'Unknown' && end > UnknownRideableCutoff) {
                                     s = clampIndex(s, { end: UnknownRideableCutoff })
                                 }
-                                // print(`rolling df ${stackVal}:`, s)
+                                annualizedPercents(s).forEach(percent => console.log(`${stackVal}: ${annualPercentStr(percent)}`))
                                 return {stackVal, n, s}
                             })
                         }
