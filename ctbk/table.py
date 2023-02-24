@@ -24,10 +24,7 @@ class Table(Task, ABC):
         return self.checkpoint(read=self.read if read is Unset else read)
 
     def _read(self) -> DataFrame:
-        if self.dask:
-            return dd.read_parquet(self.url)
-        else:
-            return pd.read_parquet(self.url)
+        return self.dpd.read_parquet(self.url)
 
     @cached_property
     def df(self) -> DataFrame:

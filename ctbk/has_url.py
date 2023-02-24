@@ -1,11 +1,11 @@
-from os.path import dirname
-
-import fsspec
 from abc import ABC, abstractmethod
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
+from os.path import dirname
 from urllib.parse import urlparse
 
-from ctbk.util import cached_property, YM, stderr
+import fsspec
+
+from ctbk.util import cached_property, stderr
 
 
 class HasURL(ABC):
@@ -67,17 +67,18 @@ class HasURL(ABC):
                 stderr(f"Removing dir after failed write: {top_made_dir}")
                 fs.delete(top_made_dir)
 
-
     @contextmanager
     def fd(self, mode):
+        # TODO: optionally write to tmp file then move atomically
         with self.mkdirs():
             succeeded = False
+            url = self.url
+            fs = self.fs
             try:
                 yield fs.open(url, mode)
                 succeeded = True
             finally:
                 if not succeeded:
-                    url = self.url
                     if fs.exists(url):
                         stderr(f"Removing failed write: {url}")
                         fs.delete(url)

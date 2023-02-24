@@ -15,7 +15,7 @@ import {LAST_MONTH_PATH} from "../src/paths";
 const DEFAULT_CENTER = { lat: 40.758, lng: -73.965, }
 const DEFAULT_ZOOM = 12
 
-const { entries, fromEntries } = Object
+const { entries, fromEntries, keys } = Object
 const { sqrt } = Math
 
 type CountRow = {
@@ -27,41 +27,23 @@ type StationValue = {
     name: string
     lat: number
     lng: number
+    starts: number
 }
-
-type Stations = { [id: string]: StationValue }
 
 type Idx = string
 type ID = string
-type Idx2Id = { [k: Idx]: ID }
-type StationCounts = { [k: ID]: number }
+type Stations = { [id: ID]: StationValue }
 
 type YmProps = {
     ym: string
-    stationCounts: StationCounts
-    idx2id: Idx2Id
     stations: Stations
-}
-
-type YmState = {
-    ym: string
-    stationCounts: Promise<StationCounts>
-    idx2id: Promise<Idx2Id>
-    stationPairCounts: Promise<StationPairCounts>
 }
 
 export async function getStaticProps(context: any) {
     const ym = loadSync<string>(LAST_MONTH_PATH)
-
-    const idx2idUrl = `https://ctbk.s3.amazonaws.com/aggregated/${ym}/idx2id.json`
-    const stationCountsUrl = `https://ctbk.s3.amazonaws.com/aggregated/${ym}/s_c.json`
     const stationsUrl = `https://ctbk.s3.amazonaws.com/aggregated/${ym}/stations.json`
-
-    const idx2id = await getSync<Idx2Id>(idx2idUrl)
-    const stationCounts: StationCounts = _.mapKeys(await getSync<StationCounts>(stationCountsUrl), (v, k) => idx2id[k])
     const stations = await getSync<Stations>(stationsUrl)
-
-    const defaults: YmProps = { ym, idx2id, stationCounts, stations }
+    const defaults: YmProps = { ym, stations }
     return { props: { defaults } }
 }
 
@@ -111,13 +93,12 @@ function getMetersPerPixel(map: L.Map) {
 
 function MapBody(
     {TileLayer, Marker, Circle, CircleMarker, Polyline, Pane, Tooltip, useMapEvents, useMap }: typeof ReactLeaflet,
-    { setLL, setZoom, stations, stationCounts, selectedStation, setSelectedStation, stationPairCounts, url, attribution }: {
+    { setLL, setZoom, stations, selectedStationId, setSelectedStationId, stationPairCounts, url, attribution }: {
         setLL: Dispatch<LL>
         setZoom: Dispatch<number>
         stations: Stations
-        stationCounts: StationCounts
-        selectedStation: string | undefined
-        setSelectedStation: Dispatch<string | undefined>
+        selectedStationId: string | undefined
+        setSelectedStationId: Dispatch<string | undefined>
         stationPairCounts: StationPairCounts | null
         url: string
         attribution: string
@@ -130,20 +111,27 @@ function MapBody(
     useMapEvents({
         moveend: () => setLL(map.getCenter()),
         zoom: () => setZoom(map.getZoom()),
-        click: () => { setSelectedStation(undefined) },
+        click: () => { setSelectedStationId(undefined) },
     })
+
+    const selectedStation = useMemo(
+        () => selectedStationId ? stations[selectedStationId] : undefined,
+        [ stations, selectedStationId ]
+    )
 
     const lines = useMemo(
         () => {
-            if (!selectedStation || !stationPairCounts) return null
-            const selectedPairCounts = stationPairCounts[selectedStation]
+            if (!selectedStation || !selectedStationId || !stationPairCounts) return null
+            if (!(selectedStationId in stationPairCounts)) {
+                console.log(`${selectedStationId} not found among ${keys(stationPairCounts).length} stations`)
+                return null
+            }
+            const selectedPairCounts = stationPairCounts[selectedStationId]
             // console.log("selectedPairCounts:", selectedPairCounts)
             const selectedPairValues = Array.from(Object.values(selectedPairCounts))
             // console.log("selectedPairValues:", selectedPairValues)
             const maxDst = Math.max(...selectedPairValues)
-            const sum = stationCounts[selectedStation]
-            const src = stations[selectedStation]
-            //console.log("computing lines:", selectedStation)
+            const src = selectedStation
             return <Pane name={"lines"} className={css.lines}>{
                 entries(selectedPairCounts).map(([ id, count ]) => {
                     // if (Count != maxDst) return
@@ -152,9 +140,9 @@ function MapBody(
                         return
                     }
                     const {name, lat, lng} = stations[id]
-                    return <Polyline key={`${selectedStation}-${id}-${zoom}`} color={"red"}
+                    return <Polyline key={`${selectedStationId}-${id}-${zoom}`} color={"red"}
                                      positions={[[src.lat, src.lng], [lat, lng],]}
-                                     weight={Math.max(0.7, count / maxDst * sqrt(sum) / mPerPx)} opacity={0.7}>
+                                     weight={Math.max(0.7, count / maxDst * sqrt(src.starts) / mPerPx)} opacity={0.7}>
                         <Tooltip sticky={true}>
                             {src.name} → {name}: {count}
                         </Tooltip>
@@ -163,10 +151,8 @@ function MapBody(
             }
             </Pane>
         },
-        [ stationPairCounts, selectedStation, stationCounts, mPerPx ]
+        [ stationPairCounts, selectedStationId, mPerPx ]
     )
-
-    const selectedCount: [ ID, number ] | undefined = selectedStation ? Array.from(entries(stationCounts).filter(([ id, count, ]) => id == selectedStation))[0] : undefined
 
     function StationCircle({ id, count, selected }: CountRow & { selected?: boolean }) {
         if (!(id in stations)) {
@@ -177,19 +163,19 @@ function MapBody(
         return <Circle key={id} center={{ lat, lng }} color={selected ? "yellow" : "orange"} radius={sqrt(count)}
                        eventHandlers={{
                            click: () => {
-                               if (id == selectedStation) return
+                               if (id == selectedStationId) return
                                console.log("click:", name)
-                               setSelectedStation(id)
+                               setSelectedStationId(id)
                            },
                            mouseover: () => {
-                               if (id == selectedStation) return
+                               if (id == selectedStationId) return
                                console.log("over:", name)
-                               setSelectedStation(id)
+                               setSelectedStationId(id)
                            },
                            mousedown: () => {
-                               if (id == selectedStation) return
+                               if (id == selectedStationId) return
                                console.log("down:", name)
-                               setSelectedStation(id)
+                               setSelectedStationId(id)
                            },
                        }}
         >
@@ -201,11 +187,12 @@ function MapBody(
 
     return <>
         <Pane name={"selected"} className={css.selected}>{
-            selectedCount && [selectedCount].map(([ id, count ]) => <StationCircle key={id} id={id} count={count} selected={true} />)
+            selectedStationId && selectedStation &&
+            <StationCircle key={selectedStationId} id={selectedStationId} count={selectedStation.starts} selected={true} />
         }</Pane>
         {lines}
         <Pane name={"circles"} className={css.circles}>{
-            entries(stationCounts).map(([ id, count ]) => <StationCircle key={id} id={id} count={count} />)
+            entries(stations).map(([ id, station ]) => <StationCircle key={id} id={id} count={station.starts} />)
         }</Pane>
         <TileLayer url={url} attribution={attribution}/>
     </>
@@ -253,72 +240,59 @@ export default function Home({ defaults }: { defaults: YmProps, }) {
     const {
         ll: [ { lat, lng }, setLL ],
         z: [ zoom, setZoom, ],
-        ss: [ selectedStation, setSelectedStation ],
+        ss: [ selectedStationId, setSelectedStationId ],
         ym: [ ym, setYM ],
     }: ParsedParams = parseQueryParams({ params })
 
     const [ stations, setStations ] = useState(defaults.stations)
-    const [ stationCounts, setStationCounts ] = useState(defaults.stationCounts)
     const [ stationPairCounts, setStationPairCounts ] = useState<StationPairCounts | null>(null)
 
-    const { ymString, } = useMemo(() => {
-        const year = parseInt(ym.substring(0, 4))
-        const month = parseInt(ym.substring(4))
-        const ymString = new Date(year, month - 1).toLocaleDateString('default', { month: 'short', year: 'numeric' })
-        const dir = `https://ctbk.s3.amazonaws.com/aggregated/${ym}`
-        const idx2idUrl = `${dir}/idx2id.json`
-        const stationCountsUrl = `${dir}/s_c.json`
-        const stationPairsUrl = `${dir}/se_c.json`
-        const stationsUrl = `${dir}/stations.json`
+    const { ymString } = useMemo(
+        () => {
+            const year = parseInt(ym.substring(0, 4))
+            const month = parseInt(ym.substring(4))
+            const ymString = new Date(year, month - 1).toLocaleDateString('default', { month: 'short', year: 'numeric' })
+            const dir = `https://ctbk.s3.amazonaws.com/aggregated/${ym}`
+            const stationPairsUrl = `${dir}/se_c.json`
+            const stationsUrl = `${dir}/stations.json`
 
-        let idx2id: Promise<Idx2Id>
-        if (ym == defaults.ym) {
-            setStationCounts(defaults.stationCounts)
-            setStations(defaults.stations)
-            idx2id = Promise.resolve(defaults.idx2id)
-            console.log("Setting stationCounts to default")
-        } else {
-            console.log(`fetching ${stationCountsUrl}`)
-            idx2id = fetch(idx2idUrl)
-                .then<Idx2Id>(data => data.json())
-                .then(data => { console.log("got idx2id"); return data })
-
+            let stationsPromise: Promise<Stations>
+            if (ym == defaults.ym) {
+                setStations(defaults.stations)
+                console.log("Setting stations to default")
+                stationsPromise = Promise.resolve(defaults.stations)
+            } else {
+                console.log(`fetching ${stationsUrl}`)
+                stationsPromise = fetch(stationsUrl)
+                    .then<Stations>(data => data.json())
+                    .then(stations => {
+                        console.log(`got ${entries(stations).length} stations`)
+                        setStations(stations)
+                        return stations
+                    })
+            }
+            console.log(`fetching ${stationPairsUrl}`)
             Promise.all([
-                fetch(stationCountsUrl).then<StationCounts>(data => data.json()),
-                fetch(stationsUrl).then<Stations>(data => data.json())
-            ])
-                .then(([ stationCounts, stations, ]) =>
-                        idx2id.then(
-                            idx2id => {
-                                console.log("got stationCounts & stations")
-                                setStationCounts(_.mapKeys(stationCounts, (v, k) => idx2id[k]))
-                                setStations(stations)
-                            }
-                        )
-                )
-        }
-        console.log(`fetching ${stationPairsUrl}`)
-        fetch(stationPairsUrl)
-            .then<StationPairCounts>(data => data.json())
-            .then(data =>
-                idx2id.then(
-                    idx2id => {
-                        console.log("got stationPairCounts")
-                        setStationPairCounts(
-                            fromEntries(
-                                entries(data)
-                                    .map(([k1, v1]) => [
-                                        idx2id[k1],
-                                        _.mapKeys(v1, (v2, k2) => idx2id[k2])
-                                    ])
-                            )
-                        )
-                    }
-                )
-            )
+                stationsPromise,
+                fetch(stationPairsUrl).then<StationPairCounts>(data => data.json())
+            ]).then(([ newStations, data]) => {
+                const idx2id: { [idx: Idx]: ID } = fromEntries(keys(newStations).map((id, idx) => [ idx, id ]))
+                const newStationPairCounts =
+                    fromEntries(
+                        entries(data)
+                            .map(([k1, v1]) => [
+                                idx2id[k1],
+                                _.mapKeys(v1, (v2, k2) => idx2id[k2])
+                            ])
+                    )
+                console.log(`got stationPairCounts (${entries(newStationPairCounts).length} stations)`)
+                setStationPairCounts(newStationPairCounts)
+            })
 
-        return { ymString, }
-    }, [ ym ])
+            return { ymString }
+        },
+        [ ym ]
+    )
 
     const title = `Citi Bike rides by station, ${ymString}`
 
@@ -336,7 +310,7 @@ export default function Home({ defaults }: { defaults: YmProps, }) {
             <main className={css.main}>
                 <Map className={css.homeMap} center={{ lat, lng, }} zoom={zoom} zoomControl={false} zoomSnap={0.5} zoomDelta={0.5}>{
                     (RL: typeof ReactLeaflet) => <div>{
-                        MapBody(RL, { setLL, setZoom, stations, stationCounts, selectedStation, setSelectedStation, stationPairCounts, url, attribution, })
+                        MapBody(RL, { setLL, setZoom, stations, selectedStationId, setSelectedStationId, stationPairCounts, url, attribution, })
                     }</div>
                 }</Map>
                 {title && <div className={css.title}>{title}</div>}

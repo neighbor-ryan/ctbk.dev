@@ -1,136 +1,87 @@
 import json
+from typing import Union
+
 import pandas as pd
 from click import pass_context
-from dask.delayed import Delayed, delayed
-from typing import Union
+from dask.delayed import Delayed
 from utz import Unset
 
 from ctbk import Monthy
+from ctbk.aggregated import AggregatedMonth, DIR
 from ctbk.cli.base import ctbk, dask
-from ctbk.aggregated import AggregatedMonth, SumKeys, AggKeys, DIR
-from ctbk.month_table import MonthTask
-from ctbk.stations.meta_hists import StationMetaHist
-from ctbk.stations.modes import transform
+from ctbk.month_table import MonthTable
+from ctbk.stations.modes import ModesMonthJson
 from ctbk.tasks import MonthTables
-from ctbk.util import stderr
+from ctbk.util.df import DataFrame
 from ctbk.util.read import Read
-from ctbk.util.write import Always, Never
 from ctbk.util.ym import dates
 
 
-class StationPairsJson(MonthTask):
+class StationPairsJson(MonthTable):
     DIR = DIR
     NAMES = ['station_pairs_json', 'spj']
 
     @property
-    def stations_url(self):
-        return f'{self.url}/stations.json'
-
-    @property
-    def idx2id_url(self):
-        return f'{self.url}/idx2id.json'
-
-    @property
-    def se_c_url(self):
-        return f'{self.url}/se_c.json'
-
-    @property
-    def s_c_url(self):
-        return f'{self.url}/s_c.json'
-
-    @property
-    def urls(self):
-        return [
-            self.idx2id_url,
-            self.stations_url,
-            self.se_c_url,
-            self.s_c_url,
-        ]
-
-    @property
-    def dirname(self):
-        return self.url
-
-    def _create(self, read: Union[None, Read] = Unset) -> Union[None, Delayed]:
-        read = self.read if read is Unset else read
-        if read is not None:
-            raise ValueError("Can only read=None")
-
-        ymse_c = AggregatedMonth(
-            ym=self.ym,
-            agg_keys=AggKeys(start_station=True, end_station=True),
-            sum_keys=SumKeys(count=True),
-            **self.kwargs,
-        )
-        src_df = ymse_c.df
-        smh = StationMetaHist(ym=self.ym, **self.kwargs)
-
-        def run(src_df: pd.DataFrame):
-            with self.mkdirs():
-                stations = transform(smh.df)
-                stations.to_json(self.stations_url, 'index')
-
-                idx2id = pd.Series(
-                    list(sorted(
-                        self.concat([
-                            src_df['Start Station ID'],
-                            src_df['End Station ID'],
-                        ])
-                        .unique()
-                    )),
-                    name='ID',
-                )
-                idx2id.index.name = 'idx'
-                id2idx = idx2id.reset_index().set_index('ID')
-                idx2id.to_json(self.idx2id_url)
-
-                counts = (
-                    src_df
-                    .merge(id2idx.idx.rename('Start Station Idx'), left_on='Start Station ID', right_index=True, how='left')
-                    .merge(id2idx.idx.rename('End Station Idx'), left_on='End Station ID', right_index=True, how='left')
-                    .set_index([ 'Start Station Idx', ])
-                    [['End Station Idx', 'Count']]
-                )
-                cj = counts.rename(columns={'End Station Idx': 'e', 'Count': 'c'})
-                cj.index.name = 's'
-                cj = cj.set_index('e', append=True)
-                stations = {
-                    s: cj.loc[s].c.to_dict()
-                    for s in cj.index.levels[0]
-                }
-                with self.fs.open(self.se_c_url, 'w') as f:
-                    json.dump(stations, f, separators=(',', ':'), )
-
-                s_c = {
-                    s: sum(vs.values())
-                    for s, vs in stations.items()
-                }
-                with self.fs.open(self.s_c_url, 'w') as f:
-                    json.dump(s_c, f, separators=(',', ':'), )
-
-        if self.dask:
-            [ddf] = src_df.to_delayed()
-            return delayed(run)(ddf)
-        else:
-            return run(src_df)
-
-    @property
     def url(self):
-        return f'{self.dir}/{self.ym}'
+        return f'{self.dir}/{self.ym}/se_c.json'
 
-    def exists(self):
-        exists_obj = { url: self.fs.exists(url) for url in self.urls }
-        exists = list(exists_obj.values())
-        if all(exists):
-            return True
-        if not any(exists):
-            return False
-        msg = f'{self.url} partially exists: {exists_obj}'
-        if self.write is Always or self.write is Never:
-            stderr(msg)
-            return True
-        else:
-            raise ValueError(msg)
+    def _df(self) -> DataFrame:
+        mmj = ModesMonthJson(self.ym, **self.kwargs)
+        id2idx = mmj.id2idx
+
+        se_am = AggregatedMonth(self.ym, 'se', 'c', **self.kwargs)
+        se = se_am.df
+
+        se_ids = (
+            se
+            .rename(columns={
+                'Start Station ID': 'sid',
+                'End Station ID': 'eid',
+                'Count': 'count',
+            })
+            .merge(id2idx.rename('sidx').to_frame(), left_on='sid', right_index=True, how='left')
+            .merge(id2idx.rename('eidx').to_frame(), left_on='eid', right_index=True, how='left')
+            [['sidx', 'eidx', 'count']]
+        )
+        return se_ids
+
+    @property
+    def checkpoint_kwargs(self):
+        return dict(
+            fmt='json',
+            read_kwargs=self._read,
+            write_kwargs=self._write,
+        )
+
+    def checkpoint(self, read: Union[None, Read] = Unset) -> Union[None, Delayed, DataFrame]:
+        return super().checkpoint(read)
+
+    def _write(self, df):
+        se_ids_obj = self.df_to_json(df)
+        with self.fd('w') as f:
+            json.dump(se_ids_obj, f, separators=(',', ':'))
+
+    def _read(self) -> DataFrame:
+        with self.fd('r') as f:
+            se_ids_obj = json.load(f)
+        return self.json_to_df(se_ids_obj)
+
+    @staticmethod
+    def df_to_json(se_ids):
+        return (
+            se_ids
+            .groupby('sidx')
+            .apply(lambda df: df.set_index('eidx')['count'].to_dict())
+            .to_dict()
+        )
+
+    @staticmethod
+    def json_to_df(se_ids_obj):
+        return pd.DataFrame([
+            dict(sidx=sidx, eidx=eidx, count=count)
+            for sidx, eidxs in se_ids_obj.items()
+            for eidx, count in eidxs.items()
+        ])
 
 
 class StationPairsJsons(MonthTables):
@@ -155,8 +106,7 @@ def urls(ctx):
     station_pair_jsons = StationPairsJsons(**o)
     months = station_pair_jsons.children
     for month in months:
-        for url in month.urls:
-            print(url)
+        print(month.url)
 
 
 @station_pair_jsons.command()

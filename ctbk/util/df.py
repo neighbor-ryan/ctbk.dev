@@ -51,23 +51,31 @@ def checkpoint_df(
         df: pd.DataFrame,
         url: str,
         read: Optional[Read] = Disk,
-        fmt: Literal['pqt', 'csv'] = 'pqt',
+        fmt: Literal['pqt', 'csv', 'json'] = 'pqt',
         read_kwargs: Optional[dict] = None,
         write_kwargs: Optional[dict] = None,
 ) -> Union[None, pd.DataFrame]:
     write_kwargs = write_kwargs or {}
-    if fmt == 'pqt':
+    if callable(write_kwargs):
+        write_kwargs(df)
+    elif fmt == 'pqt':
         df.to_parquet(url, **write_kwargs)
     elif fmt == 'csv':
         df.to_csv(url, **write_kwargs)
+    elif fmt == 'json':
+        df.to_json(url, **write_kwargs)
     else:
         raise ValueError(f"Unrecognized fmt: {fmt}")
     if read is Disk:
         read_kwargs = read_kwargs or dict()
-        if fmt == 'pqt':
+        if callable(read_kwargs):
+            return read_kwargs()
+        elif fmt == 'pqt':
             return pd.read_parquet(url, **read_kwargs)
         elif fmt == 'csv':
             return pd.read_csv(url, **read_kwargs)
+        elif fmt == 'json':
+            return pd.read_json(url, **read_kwargs)
         else:
             raise ValueError(f"Unrecognized fmt: {fmt}")
     elif read is Memory:
@@ -79,7 +87,7 @@ def checkpoint_df(
 def checkpoint_dd(
         df: dd.DataFrame,
         url: str, read: Optional[Read] = Disk,
-        fmt: Literal['pqt', 'csv'] = 'pqt',
+        fmt: Literal['pqt', 'csv', 'json'] = 'pqt',
         write_kwargs: Optional[dict] = None,
         read_kwargs: Optional[dict] = None,
 ) -> Union[None, Delayed, dd.DataFrame]:
