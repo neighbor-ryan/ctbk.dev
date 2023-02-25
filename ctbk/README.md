@@ -4,13 +4,32 @@ CLI for generating [ctbk.dev] datasets (derived from Citi Bike public data in [`
 ## Data flow
 
 ```mermaid
-Graph LR;
-z[Zips]
-c[Csvs]
-z --> c
+flowchart LR;
+z["TripdataZips\ns3://tripdata"]
+c["TripdataCsvs\ns3://ctbk/csvs"]
+n["NormalizedMonths\ns3://ctbk/normalized/YYYYMM.parquet"]
+agg_sc["AggregatedMonths(YYYYMM, 's', 'c')\ns3://ctbk/aggregated/s_c_YYYYMM.parquet"]
+agg_sec["AggregatedMonths(YYYYMM, 'se', 'c')\ns3://ctbk/aggregated/se_c_YYYYMM.parquet"]
+agg_ymrgtb["AggregatedMonths(YYYYMM, 'ymrgtb', 'cd')\ns3://ctbk/aggregated/ymrgtb_cd_YYYYMM.parquet"]
+smh_in["StationMetaHists(YYYYMM, 'in')\ns3://ctbk/stations/meta_hists/in_YYYYMM.parquet"]
+smh_il["StationMetaHists(YYYYMM, 'il')\ns3://ctbk/stations/meta_hists/il_YYYYMM.parquet"]
+sm["StationModes\ns3://ctbk/aggregated/YYYYMM/stations.json"]
+spj["StationPairJsons\ns3://ctbk/aggregated/YYYYMM/se_c.json"]
+
+z --> c --> n 
+n --> agg_sc
+n --> agg_sec
+n --> agg_ymrgtb
+n --> smh_in
+n --> smh_il
+smh_in --> sm
+smh_il --> sm
+agg_sc --> sm
+sm --> spj
+agg_sec --> spj
 ```
 
-### `TripdataZips` (a.k.a. `zip`s): Public Citi Bike `.csv.zip` files
+### `TripdataZips` (a.k.a. `zip`s): public Citi Bike `.csv.zip` files
 - Released as NYC and JC `.csv.zip` files at s3://tripdata
 - See https://tripdata.s3.amazonaws.com/index.html
 
