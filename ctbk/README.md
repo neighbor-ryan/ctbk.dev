@@ -1,7 +1,10 @@
 # `ctbk` python library
 CLI for generating [ctbk.dev] datasets (derived from Citi Bike public data in [`s3://tripdata`]).
 
-## Data flow
+- [Data flow](#data-flow)
+- [Usage](#usage)
+
+## Data flow <a id="data-flow"></a>
 
 ```mermaid
 flowchart LR;
@@ -75,6 +78,7 @@ agg_sec --> spj
 - Writes `<root>/ctbk/aggregated/<YYYYMM>/se_c.json`
 - See also: https://ctbk.s3.amazonaws.com/index.html#/aggregated
 
+## Usage <a id="usage"></a>
 
 <details><summary><code>ctbk</code></summary>
 
