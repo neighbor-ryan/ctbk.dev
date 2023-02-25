@@ -1,24 +1,28 @@
 # [ctbk.dev](https://ctbk.dev/): Citi Bike Dashboard
 
-[![Screenshot of dashboard; per-month ride counts going back 5 years, with a 12mo rolling avg showing mostly steady growth](www/public/screenshots/ctbk-rides.png)][ctbk.dev]
+[![Screenshot of dashboard; per-month ride counts going back to June 2013, with a 12mo rolling avg showing mostly steady growth](www/public/screenshots/ctbk-rides.png)][ctbk.dev]
 
-### Station/Ridership Map: [ctbk.dev/stations]
+### Station/Ridership Map
 [![Map of Citi Bike stations, Hoboken NJ Transit Terminal selected, showing destinations for rides beginning there](www/public/screenshots/ctbk-stations.png)][ctbk.dev/stations]
+[ctbk.dev/stations]
 
-### JC & Hoboken Only: [ctbk.dev/?r=jh][ctbk nj plot]
-[![Screenshot of dashboard; per-month ride counts going back 5 years, with a 12mo rolling avg showing mostly steady growth](www/public/screenshots/ctbk-nj.png)][ctbk nj plot]
+### JC & Hoboken Only
+[![Screenshot of dashboard; per-month ride counts for Jersey City and Hoboken only, going back to June 2013, with a 12mo rolling avg showing mostly steady growth](www/public/screenshots/ctbk-nj.png)][ctbk nj plot]
+[ctbk.dev/?r=jh][ctbk nj plot]
 
 ### Ride Minute %'s by Gender
-[ctbk.dev?d=1406-2101&g=mf&pct&s=g&y=m][ctbk gender pct plot]:
 [![](www/public/screenshots/ctbk-ride-minutes-by-gender.png)][ctbk gender pct plot]
-Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
+[ctbk.dev?d=1406-2101&g=mf&pct&s=g&y=m][ctbk gender pct plot]; Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
 
 ### Ride %'s by User Type
-
-[ctbk.dev/?s=u&pct=][ctbk user type pct plot]
 [![](www/public/screenshots/ctbk-rides-by-user.png)][ctbk user type pct plot]
+[ctbk.dev/?s=u&pct=][ctbk user type pct plot]
 
+### Total Classic / E-bike Ride Minutes
+[![](www/public/screenshots/ctbk-ebike-minutes.png)][ctbk ebike minutes plot]
+[ctbk.dev?y=m&s=b&rt=ce][ctbk ebike minutes plot]
 
+Other notes:
 - [Auto-updates with new data each month](#auto-update)
 - [Powered by cleaned, public data (derived from the official Citibike data)](#cleaned-data)
 - Interactive! Filter/Stack by:
@@ -27,12 +31,6 @@ Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
   - region (NYC and/or JC)
   - date range (at monthly granularity, back to system launch in June 2013)
 - URL syncs with plot controls, for ease of linking to specific views, e.g.:
-
-### Total Classic / E-bike Ride Minutes
-
-[ctbk.dev?y=m&s=b&rt=ce][ctbk ebike minutes plot]
-[![](www/public/screenshots/ctbk-ebike-minutes.png)][ctbk ebike minutes plot]
-
 
 ## Cleaned, public data <a id="cleaned-data"></a>
 I fixed some rough edges in [Citibike's published data][citibike system data] and published the results to [the `ctbk` Amazon S3 bucket][`s3://ctbk`].
