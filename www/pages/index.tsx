@@ -169,7 +169,8 @@ export default function App({ data, }: { data: Row[] }) {
         avg: [ rollingAvgs, setRollingAvgs ],
     }: ParsedParams = parseQueryParams({ params })
 
-    let df = useMemo(() => {
+    let df = useMemo(
+        () => {
             let df = new DataFrame(data)
             let m = new Series(
                 df
@@ -181,8 +182,10 @@ export default function App({ data, }: { data: Row[] }) {
                 df
                     .drop({ columns: ['Year', 'Month'] })
                     .addColumn("m", m)
-                    .rename({ 'Count': 'Rides', 'Duration': 'Ride minutes', })
+                    .rename({ 'Count': 'Rides' })
             )
+            df = df.addColumn('Ride minutes', df.column('Duration').div(60))
+            df = df.drop({ columns: [ 'Duration' ]})
             return df
         },
         [ data ]
