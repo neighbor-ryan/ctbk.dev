@@ -3,20 +3,17 @@ from shutil import copyfileobj
 from typing import Optional, Union
 from zipfile import ZipFile, ZIP_LZMA
 
-from click import pass_context, option, argument
 from dask import delayed
+from utz import cached_property, Unset
 
 from ctbk import Monthy, YM
-from ctbk.cli.base import ctbk, dask
 from ctbk.csvs import ReadsTripdataZip
 from ctbk.has_root_cli import HasRootCLI
-from ctbk.tasks import Tasks
 from ctbk.util.constants import BKT
 from ctbk.util.read import Read
-from ctbk.util.region import REGIONS, region
+from ctbk.util.region import region
 from ctbk.util.ym import dates
 from ctbk.zips import TripdataZips
-from utz import cached_property, err, process, Unset
 
 DIR = f'{BKT}/sampled/tripdata'
 DEFAULT_NROWS = 1000

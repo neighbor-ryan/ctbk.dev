@@ -144,16 +144,186 @@ Options:
   --help            Show this message and exit.
 
 Commands:
-  zips                Read .csv.zip files from s3://tripdata
-  csvs                Extract CSVs from "tripdata" .zip files.
+  zip                 Read .csv.zip files from s3://tripdata
+  csv                 Extract CSVs from "tripdata" .zip files.
   normalized          Normalize "tripdata" CSVs (combine regions for each...
   aggregated          Aggregate normalized ride entries by various...
-  station-meta-hists  Aggregate station name, lat/lng info from ride...
-  station-modes       Compute canonical station names, lat/lngs from...
-  station-pair-jsons  Write station-pair ride_counts keyed by...
-  sampled-zips        Generate test data by downsampling tripdata...
+  station-meta-hist   Aggregate station name, lat/lng info from ride...
+  station-modes-json  Compute canonical station names, lat/lngs from...
+  station-pairs-json  Write station-pair ride_counts keyed by...
+  sampled-zip         Generate test data by downsampling tripdata...
+
 ```
 </details>
+
+
+<details><summary><code>ctbk zip</code></summary>
+
+```
+Usage: ctbk zip [OPTIONS] COMMAND [ARGS]...
+
+  Read .csv.zip files from s3://tripdata
+
+Options:
+  -d, --dates TEXT
+  -r, --region [NYC|JC]
+  --help                 Show this message and exit.
+
+Commands:
+  urls  Print URLs for selected datasets
+
+```
+</details>
+
+
+<details><summary><code>ctbk csv</code></summary>
+
+```
+Usage: ctbk csv [OPTIONS] COMMAND [ARGS]...
+
+  Extract CSVs from "tripdata" .zip files. Writes to <root>/ctbk/csvs.
+
+Options:
+  -d, --dates TEXT
+  -r, --region [NYC|JC]
+  --help                 Show this message and exit.
+
+Commands:
+  urls    Print URLs for selected datasets
+  create  Create selected datasets
+  dag     Save and `open` a graph visualization of the datasets to be...
+
+```
+</details>
+
+
+<details><summary><code>ctbk normalized</code></summary>
+
+```
+Usage: ctbk normalized [OPTIONS] COMMAND [ARGS]...
+
+  Normalize "tripdata" CSVs (combine regions for each month, harmonize column
+  names, etc. Writes to <root>/ctbk/normalized/YYYYMM.parquet.
+
+Options:
+  -d, --dates TEXT
+  --help            Show this message and exit.
+
+Commands:
+  urls    Print URLs for selected datasets
+  create  Create selected datasets
+  dag     Save and `open` a graph visualization of the datasets to be...
+
+```
+</details>
+
+
+<details><summary><code>ctbk aggregated</code></summary>
+
+```
+Usage: ctbk aggregated [OPTIONS] COMMAND [ARGS]...
+
+  Aggregate normalized ride entries by various columns, summing ride counts or
+  durations. Writes to <root>/ctbk/aggregated/KEYS_YYYYMM.parquet.
+
+Options:
+  -d, --dates TEXT
+  --help            Show this message and exit.
+
+Commands:
+  urls    Print URLs for selected datasets
+  create  Create selected datasets
+  dag     Save and `open` a graph visualization of the datasets to be...
+
+```
+</details>
+
+
+<details><summary><code>ctbk station-meta-hist</code></summary>
+
+```
+Usage: ctbk station-meta-hist [OPTIONS] COMMAND [ARGS]...
+
+  Aggregate station name, lat/lng info from ride start and end fields. Writes
+  to <root>/ctbk/stations/meta_hists/KEYS_YYYYMM.parquet.
+
+Options:
+  -d, --dates TEXT
+  --help            Show this message and exit.
+
+Commands:
+  urls    Print URLs for selected datasets
+  create  Create selected datasets
+  dag     Save and `open` a graph visualization of the datasets to be...
+
+```
+</details>
+
+
+<details><summary><code>ctbk station-modes-json</code></summary>
+
+```
+Usage: ctbk station-modes-json [OPTIONS] COMMAND [ARGS]...
+
+  Compute canonical station names, lat/lngs from StationMetaHists. Writes to
+  <root>/ctbk/aggregated/YYYYMM/stations.json.
+
+Options:
+  -d, --dates TEXT
+  --help            Show this message and exit.
+
+Commands:
+  urls    Print URLs for selected datasets
+  create  Create selected datasets
+  dag     Save and `open` a graph visualization of the datasets to be...
+
+```
+</details>
+
+
+<details><summary><code>ctbk station-pairs-json</code></summary>
+
+```
+Usage: ctbk station-pairs-json [OPTIONS] COMMAND [ARGS]...
+
+  Write station-pair ride_counts keyed by StationModes' JSON indices. Writes
+  to <root>/ctbk/aggregated/YYYYMM/se_c.json.
+
+Options:
+  -d, --dates TEXT
+  --help            Show this message and exit.
+
+Commands:
+  urls    Print URLs for selected datasets
+  create  Create selected datasets
+  dag     Save and `open` a graph visualization of the datasets to be...
+
+```
+</details>
+
+
+<details><summary><code>ctbk sampled-zip</code></summary>
+
+```
+Usage: ctbk sampled-zip [OPTIONS] COMMAND [ARGS]...
+
+  Generate test data by downsampling tripdata .csv.zip files. Writes to
+  <root>/ctbk/sampled/tripdata.
+
+Options:
+  -d, --dates TEXT
+  -r, --region [NYC|JC]
+  --help                 Show this message and exit.
+
+Commands:
+  urls    Print URLs for selected datasets
+  create  Create selected datasets
+  dag     Save and `open` a graph visualization of the datasets to be...
+
+```
+</details>
+
+
 
 [`s3://tripdata`]: https://tripdata.s3.amazonaws.com/index.html
 [ctbk.dev]: https://ctbk.dev

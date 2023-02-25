@@ -2,13 +2,12 @@ import json
 from typing import Union
 
 import pandas as pd
-from click import pass_context
 from dask.delayed import Delayed
 from utz import Unset
 
 from ctbk import Monthy
 from ctbk.aggregated import AggregatedMonth, DIR
-from ctbk.cli.base import ctbk, dask
+from ctbk.has_root_cli import HasRootCLI
 from ctbk.month_table import MonthTable
 from ctbk.stations.modes import ModesMonthJson
 from ctbk.tasks import MonthTables
@@ -84,37 +83,15 @@ class StationPairsJson(MonthTable):
         ])
 
 
-class StationPairsJsons(MonthTables):
+class StationPairsJsons(HasRootCLI, MonthTables):
     DIR = DIR
+    CHILD_CLS = StationPairsJson
 
     def month(self, ym: Monthy) -> StationPairsJson:
         return StationPairsJson(ym, **self.kwargs)
 
 
-@ctbk.group(help=f"Write station-pair ride_counts keyed by StationModes' JSON indices. Writes to <root>/{DIR}/YYYYMM/se_c.json.")
-@pass_context
-@dates
-def station_pair_jsons(ctx, start, end):
-    ctx.obj.start = start
-    ctx.obj.end = end
-
-
-@station_pair_jsons.command()
-@pass_context
-def urls(ctx):
-    o = ctx.obj
-    station_pair_jsons = StationPairsJsons(**o)
-    months = station_pair_jsons.children
-    for month in months:
-        print(month.url)
-
-
-@station_pair_jsons.command()
-@pass_context
-@dask
-def create(ctx, dask):
-    o = ctx.obj
-    station_pair_jsons = StationPairsJsons(dask=dask, **o)
-    created = station_pair_jsons.create(read=None)
-    if dask:
-        created.compute()
+StationPairsJsons.cli(
+    help=f"Write station-pair ride_counts keyed by StationModes' JSON indices. Writes to <root>/{DIR}/YYYYMM/se_c.json.",
+    decos=[dates],
+)

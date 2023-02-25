@@ -2,7 +2,7 @@ import typing as t
 
 import click
 from click import pass_context, option, group, Context, Command
-from utz import o, DefaultDict, err
+from utz import o, DefaultDict, err, is_subsequence
 
 from ctbk.has_root import DEFAULT_ROOTS
 from ctbk.util import write, read
@@ -13,15 +13,13 @@ from ctbk.util.write import IfAbsent
 dask = option('--dask', is_flag=True)
 
 
-def is_subsequence(seq, s):
-    if not seq:
-        return True
-    [ ch, *rest ] = seq
-    idx = s.find(ch)
-    return is_subsequence(rest, s[(idx+1):]) if idx >= 0 else False
+class StableCommandOrder(click.Group):
+    def list_commands(self, ctx: Context) -> t.List[str]:
+        # Don't sort commands, print them in the order they're registered (see ctbk/__init__.py)
+        return list(self.commands.keys())
 
 
-class Ctbk(click.Group):
+class Ctbk(StableCommandOrder):
     def get_command(self, ctx: Context, cmd_name: str) -> t.Optional[Command]:
         command = super().get_command(ctx, cmd_name)
         if command:
@@ -53,10 +51,6 @@ class Ctbk(click.Group):
             cmds_str = '\n\t'.join(commands)
             err(f"No prefix or subsequence matches for `{cmd_name}`:\n\t{cmds_str}\n")
         return None
-
-    def list_commands(self, ctx: Context) -> t.List[str]:
-        # Don't sort commands, print them in the order they're registered (see ctbk/__init__.py)
-        return list(self.commands.keys())
 
     def get_help(self, ctx):
         orig_wrap_text = click.formatting.wrap_text

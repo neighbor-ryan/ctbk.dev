@@ -1,11 +1,12 @@
-from functools import wraps
-
-from click import pass_context, option
 from dataclasses import dataclass
+from functools import wraps
 from typing import Union
 
+import utz
+from utz import decos
+
 from ctbk import Monthy
-from ctbk.cli.base import ctbk, dask
+from ctbk.has_root_cli import HasRootCLI
 from ctbk.month_table import MonthTable
 from ctbk.normalized import NormalizedMonth, NormalizedMonths
 from ctbk.tasks import MonthTables
@@ -13,9 +14,6 @@ from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
 from ctbk.util.keys import Keys
 from ctbk.util.ym import dates
-
-import utz
-from utz import decos, process
 
 DIR = f'{BKT}/stations/meta_hists'
 
@@ -139,8 +137,9 @@ class StationMetaHist(MonthTable):
         return dict(write_kwargs=dict(index=False))
 
 
-class StationMetaHists(MonthTables):
+class StationMetaHists(HasRootCLI, MonthTables):
     DIR = DIR
+    CHILD_CLS = StationMetaHist
 
     def __init__(self, agg_keys: AggKeys, start: Monthy = None, end: Monthy = None, **kwargs):
         src = self.src = NormalizedMonths(start=start, end=end, **kwargs)
@@ -151,49 +150,17 @@ class StationMetaHists(MonthTables):
         return StationMetaHist(ym, agg_keys=self.agg_keys, **self.kwargs)
 
 
-GROUP_KEY_ARGS = [
-    # Features to group by
-    option('-y/-Y', '--year/--no-year'),
-    option('-m/-M', '--month/--no-month'),
-    option('-i/-I', '--id/--no-id'),
-    option('-n/-N', '--name/--no-name'),
-    option('-l/-L', '--lat-lng/--no-lat-lng'),
-]
-
-
-# TODO: factor common CLI subcommands
-@ctbk.group(help=f"Aggregate station name, lat/lng info from ride start and end fields. Writes to <root>/{DIR}/KEYS_YYYYMM.parquet.")
-@pass_context
-@dates
-def station_meta_hists(ctx, start, end):
-    ctx.obj.start = start
-    ctx.obj.end = end
-
-
 def agg_cmd(fn):
-    @station_meta_hists.command(fn.__name__)
-    @pass_context
-    @decos(GROUP_KEY_ARGS)
+    @decos(AggKeys.opts())
     @wraps(fn)
     def _fn(ctx, *args, **kwargs):
-        o = ctx.obj
-        agg_keys = AggKeys.load(utz.args(AggKeys, kwargs))
-        fn(*args, o=o, agg_keys=agg_keys, **utz.args(fn, kwargs))
+        agg_keys = AggKeys(**utz.args(AggKeys, kwargs))
+        fn(*args, ctx=ctx, agg_keys=agg_keys, **utz.args(fn, kwargs))
     return _fn
 
 
-@agg_cmd
-def urls(o, agg_keys):
-    station_meta_hists = StationMetaHists(agg_keys=agg_keys, **o)
-    months = station_meta_hists.children
-    for month in months:
-        print(month.url)
-
-
-@agg_cmd
-@dask
-def create(o, agg_keys, dask):
-    station_meta_hists = StationMetaHists(agg_keys=agg_keys, dask=dask, **o)
-    created = station_meta_hists.create(read=None)
-    if dask:
-        created.compute()
+StationMetaHists.cli(
+    help=f"Aggregate station name, lat/lng info from ride start and end fields. Writes to <root>/{DIR}/KEYS_YYYYMM.parquet.",
+    decos=[dates],
+    cmd_decos=[agg_cmd],
+)

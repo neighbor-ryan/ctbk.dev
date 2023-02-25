@@ -1,5 +1,8 @@
 from typing import Union
 
+from utz.case import dash_case
+from utz.cli import flag
+
 
 class Keys:
     KEYS = None
@@ -27,3 +30,10 @@ class Keys:
         else:
             names = cls.names()
             return cls(**{ names[key]: True for key in arg })
+
+    @classmethod
+    def opts(cls):
+        return [
+            flag(f'-{ch}', f'--{dash_case(name)}')
+            for name, ch in cls.KEYS.items()
+        ]

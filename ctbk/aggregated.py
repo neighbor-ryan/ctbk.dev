@@ -4,9 +4,12 @@ from typing import Union
 
 import dask.dataframe as dd
 import pandas as pd
-from click import option, pass_context, argument
+import utz
+from pandas import Series
+from utz import decos
+
 from ctbk import Monthy
-from ctbk.cli.base import ctbk, dask
+from ctbk.has_root_cli import HasRootCLI
 from ctbk.month_table import MonthTable
 from ctbk.normalized import NormalizedMonth, NormalizedMonths
 from ctbk.tasks import MonthTables
@@ -14,9 +17,6 @@ from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
 from ctbk.util.keys import Keys
 from ctbk.util.ym import dates
-from pandas import Series
-import utz
-from utz import decos, process
 
 DIR = f'{BKT}/aggregated'
 
@@ -155,8 +155,9 @@ class AggregatedMonth(MonthTable):
         return counts
 
 
-class AggregatedMonths(MonthTables):
+class AggregatedMonths(HasRootCLI, MonthTables):
     DIR = DIR
+    CHILD_CLS = AggregatedMonth
 
     def __init__(
             self,
@@ -177,82 +178,18 @@ class AggregatedMonths(MonthTables):
         return AggregatedMonth(ym, agg_keys=self.agg_keys, sum_keys=self.sum_keys, **self.kwargs)
 
 
-GROUP_KEY_ARGS = [
-    # Features to group by
-    option('-y/-Y', '--year/--no-year'),
-    option('-m/-M', '--month/--no-month'),
-    option('-w/-W', '--weekday/--no-weekday'),
-    option('-h/-H', '--hour/--no-hour'),
-    option('-r/-R', '--region/--no-region'),
-    option('-g/-G', '--gender/--no-gender'),
-    option('-t/-T', '--user-type/--no-user-type'),
-    option('-b/-B', '--rideable-type/--no-rideable-type'),
-    option('-s/-S', '--start-station/--no-start-station'),
-    option('-e/-E', '--end-station/--no-end-station'),
-    # Features to aggregate
-    option('-c/-C', '--count/--no-count', default=True),
-    option('-d/-D', '--duration/--no-duration'),
-]
-
-
 def agg_sum_cmd(fn):
-    @aggregated.command()
-    @pass_context
-    @decos(GROUP_KEY_ARGS)
+    @decos(AggKeys.opts())
     @wraps(fn)
     def _fn(ctx, *args, **kwargs):
-        o = ctx.obj
         agg_keys = AggKeys(**utz.args(AggKeys, kwargs))
         sum_keys = SumKeys(**utz.args(SumKeys, kwargs))
-        fn(*args, o=o, agg_keys=agg_keys, sum_keys=sum_keys, **spec_args(fn, kwargs))
+        fn(*args, ctx=ctx, agg_keys=agg_keys, sum_keys=sum_keys, **utz.args(fn, kwargs))
     return _fn
 
 
-@ctbk.group(help=f"Aggregate normalized ride entries by various columns, summing ride counts or durations. Writes to <root>/{DIR}/KEYS_YYYYMM.parquet.")
-@pass_context
-@dates
-def aggregated(ctx, start, end):
-    ctx.obj.start = start
-    ctx.obj.end = end
-
-
-@agg_sum_cmd
-def urls(o, agg_keys, sum_keys):
-    aggregated = AggregatedMonths(
-        agg_keys=agg_keys,
-        sum_keys=sum_keys,
-        **o,
-    )
-    months = aggregated.children
-    for month in months:
-        print(month.url)
-
-
-@dask
-@agg_sum_cmd
-def create(o, agg_keys, sum_keys, dask=True):
-    aggregated = AggregatedMonths(
-        agg_keys=agg_keys,
-        sum_keys=sum_keys,
-        **o,
-        dask=dask,
-    )
-    created = aggregated.create(read=None)
-    if dask:
-        created.compute()
-
-
-@agg_sum_cmd
-@option('-O', '--no-open', is_flag=True)
-@argument('filename')
-def dag(o, agg_keys, sum_keys, no_open, filename):
-    aggregated = AggregatedMonths(
-        agg_keys=agg_keys,
-        sum_keys=sum_keys,
-        **o,
-        dask=True,
-    )
-    df = aggregated.df
-    df.visualize(filename)
-    if not no_open:
-        process.run('open', filename)
+AggregatedMonths.cli(
+    help=f"Aggregate normalized ride entries by various columns, summing ride counts or durations. Writes to <root>/{DIR}/KEYS_YYYYMM.parquet.",
+    decos=[dates],
+    cmd_decos=[agg_sum_cmd],
+)

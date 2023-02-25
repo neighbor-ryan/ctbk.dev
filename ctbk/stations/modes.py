@@ -3,18 +3,18 @@ from typing import Union
 
 import numpy as np
 import pandas as pd
-from click import pass_context
+from numpy import nan
+from pandas import Series
+from utz import cached_property, err
+
 from ctbk import Monthy
 from ctbk.aggregated import AggregatedMonth, DIR
-from ctbk.cli.base import ctbk, dask
+from ctbk.has_root_cli import HasRootCLI
 from ctbk.month_table import MonthTable
 from ctbk.stations.meta_hists import StationMetaHist
 from ctbk.tasks import MonthTables
 from ctbk.util.df import DataFrame, apply, sxs, meta
 from ctbk.util.ym import dates
-from numpy import nan
-from pandas import Series
-from utz import cached_property, err
 
 
 def row_sketch(a):
@@ -103,7 +103,7 @@ def transform(df: DataFrame) -> DataFrame:
 
 
 class ModesMonthJson(MonthTable):
-    NAMES = [ 'modes_month_json', 'mmj', 'station_modes', 'sm', ]
+    NAMES = [ 'station_modes_json', 'smj', 'modes_month_json', 'mmj', 'station_modes', 'sm', ]
     DIR = DIR
 
     @property
@@ -203,37 +203,15 @@ class ModesMonthJson(MonthTable):
         )
 
 
-class ModesMonthJsons(MonthTables):
+class ModesMonthJsons(HasRootCLI, MonthTables):
     DIR = DIR
+    CHILD_CLS = ModesMonthJson
 
     def month(self, ym: Monthy) -> ModesMonthJson:
         return ModesMonthJson(ym, **self.kwargs)
 
 
-@ctbk.group(help=f"Compute canonical station names, lat/lngs from StationMetaHists. Writes to <root>/{DIR}/YYYYMM/stations.json.")
-@pass_context
-@dates
-def station_modes(ctx, start, end):
-    ctx.obj.start = start
-    ctx.obj.end = end
-
-
-@station_modes.command()
-@pass_context
-def urls(ctx):
-    o = ctx.obj
-    modes_month_jsons = ModesMonthJsons(**o)
-    months = modes_month_jsons.children
-    for month in months:
-        print(month.url)
-
-
-@station_modes.command()
-@pass_context
-@dask
-def create(ctx, dask):
-    o = ctx.obj
-    modes_month_jsons = ModesMonthJsons(dask=dask, **o)
-    created = modes_month_jsons.create(read=None)
-    if dask:
-        created.compute()
+ModesMonthJsons.cli(
+    help=f"Compute canonical station names, lat/lngs from StationMetaHists. Writes to <root>/{DIR}/YYYYMM/stations.json.",
+    decos=[dates],
+)
