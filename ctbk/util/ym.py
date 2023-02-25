@@ -150,6 +150,4 @@ def dates(fn):
             start, end = GENESIS, None
         fn(*args, start=start, end=end, **kwargs)
 
-    _fn.__name__ = fn.__name__
-    _fn.__doc__ = fn.__doc__
     return _fn

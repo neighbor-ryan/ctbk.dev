@@ -208,7 +208,6 @@ class NormalizedMonth(MonthTable):
 class NormalizedMonths(MonthTables, HasRootCLI):
     DIR = DIR
     CHILD_CLS = NormalizedMonth
-    ROOT_DECOS = [ dates ]
 
     def __init__(self, start: Monthy = None, end: Monthy = None, **kwargs):
         src = self.src = TripdataCsvs(start=start, end=end, **kwargs)
@@ -218,32 +217,7 @@ class NormalizedMonths(MonthTables, HasRootCLI):
         return NormalizedMonth(ym, **self.kwargs)
 
 
-# @ctbk.group(help=f"Normalize \"tripdata\" CSVs (combine regions for each month, harmonize column names, etc. Writes to <root>/{DIR}/YYYYMM.parquet.")
-# @pass_context
-# @dates
-# def normalized(ctx, start, end):
-#     ctx.obj.start = start
-#     ctx.obj.end = end
-
-
-# @normalized.command()
-# @pass_context
-# def urls(ctx):
-#     o = ctx.obj
-#     normalized = NormalizedMonths(**o)
-#     months = normalized.children
-#     for month in months:
-#         print(month.url)
-#
-#
-# @normalized.command()
-# @pass_context
-# @dask
-# def create(ctx, dask):
-#     o = ctx.obj
-#     normalized = NormalizedMonths(dask=dask, **o)
-#     created = normalized.create(read=None)
-#     if dask:
-#         created.compute()
-
-NormalizedMonths.cli(help=f"Normalize \"tripdata\" CSVs (combine regions for each month, harmonize column names, etc. Writes to <root>/{DIR}/YYYYMM.parquet.")
+NormalizedMonths.cli(
+    help=f"Normalize \"tripdata\" CSVs (combine regions for each month, harmonize column names, etc. Writes to <root>/{DIR}/YYYYMM.parquet.",
+    decos=[dates],
+)

@@ -4,13 +4,16 @@ from typing import Optional, Union
 from zipfile import ZipFile, ZIP_LZMA
 
 from click import pass_context, option, argument
+from dask import delayed
+
 from ctbk import Monthy, YM
-from ctbk.cli.base import ctbk, dask, region
+from ctbk.cli.base import ctbk, dask
 from ctbk.csvs import ReadsTripdataZip
+from ctbk.has_root_cli import HasRootCLI
 from ctbk.tasks import Tasks
 from ctbk.util.constants import BKT
 from ctbk.util.read import Read
-from ctbk.util.region import REGIONS
+from ctbk.util.region import REGIONS, region
 from ctbk.util.ym import dates
 from ctbk.zips import TripdataZips
 from utz import cached_property, err, process, Unset
@@ -22,6 +25,7 @@ DEFAULT_NROWS = 1000
 class SampledZip(ReadsTripdataZip):
     DIR = DIR
     DEFAULT_COMPRESSION = ZIP_LZMA
+    NAMES = ['sampled_zip', 'szip', 'sz']
 
     def __init__(self, *args, nrows=DEFAULT_NROWS, **kwargs):
         self.nrows = nrows
@@ -35,27 +39,33 @@ class SampledZip(ReadsTripdataZip):
 
     def _create(self, read: Union[None, Read] = Unset) -> None:
         src = self.src
-        with src.fd('rb') as zin:
-            z_in = ZipFile(zin)
-            with self.mkdirs():
-                z_out = ZipFile(self.url, 'w', compression=self.DEFAULT_COMPRESSION)
-                names = z_in.namelist()
-                print(f'{src.url}: zip names: {names}')
+        src_create = src.create(read=read)
+        def make(src_create):
+            with src.fd('rb') as zin:
+                z_in = ZipFile(zin)
+                with self.fd('w') as f:
+                    z_out = ZipFile(f, 'w', compression=self.DEFAULT_COMPRESSION)
+                    names = z_in.namelist()
+                    print(f'{src.url}: zip names: {names}')
 
-                for name in names:
-                    with z_in.open(name, 'r') as i, z_out.open(name, 'w') as o:
-                        if name.endswith('.csv'):
-                            for lineno, line in enumerate(i):
-                                o.write(line)
-                                if lineno == self.nrows:
-                                    break
-                        else:
-                            copyfileobj(i, o)
+                    for name in names:
+                        with z_in.open(name, 'r') as i, z_out.open(name, 'w') as o:
+                            if name.endswith('.csv'):
+                                for lineno, line in enumerate(i):
+                                    o.write(line)
+                                    if lineno == self.nrows:
+                                        break
+                            else:
+                                copyfileobj(i, o)
+        if self.dask:
+            return delayed(make)(src_create, dask_key_name=f'SampledZip_{self.region}_{self.ym}')
+        else:
+            return make(src_create)
 
 
-class SampledZips(Tasks):
+class SampledZips(HasRootCLI):
     DIR = DIR
-    NAMES = ['sampled_zip', 'szip', 'sz']
+    CHILD_CLS = SampledZip
 
     def __init__(self, start: Monthy = None, end: Monthy = None, nrows=DEFAULT_NROWS, regions: Optional[list[str]] = None, **kwargs):
         src = self.src = TripdataZips(start=start, end=end, regions=regions, roots=kwargs.get('roots'))
@@ -76,44 +86,7 @@ class SampledZips(Tasks):
         ]
 
 
-@ctbk.group(help=f"Generate test data by downsampling tripdata .csv.zip files. Writes to <root>/{DIR}.")
-@pass_context
-@region
-@dates
-def sampled_zips(ctx, start, end, region=None):
-    ctx.obj.start = start
-    ctx.obj.end = end
-    ctx.obj.regions = [region] if region else REGIONS
-
-
-@sampled_zips.command()
-@pass_context
-@dask
-def urls(ctx, dask):
-    zips = SampledZips(**ctx.obj, dask=dask)
-    for zip in zips.children:
-        print(zip.url)
-
-
-@sampled_zips.command()
-@pass_context
-@dask
-def create(ctx, dask):
-    zips = SampledZips(**ctx.obj)
-    created = zips.create(read=None)
-    if dask:
-        created.compute()
-
-
-@sampled_zips.command()
-@pass_context
-@option('-O', '--no-open', is_flag=True)
-@argument('filename', required=False)
-def dag(ctx, no_open, filename):
-    zips = SampledZips(**ctx.obj, dask=True)
-    result = zips.create()
-    filename = filename or 'sampled_zip_dag.png'
-    err(f"Writing to {filename}")
-    result.visualize(filename)
-    if not no_open:
-        process.run('open', filename)
+SampledZips.cli(
+    help=f"Generate test data by downsampling tripdata .csv.zip files. Writes to <root>/{DIR}.",
+    decos=[dates, region],
+)

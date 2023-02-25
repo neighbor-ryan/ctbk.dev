@@ -1,13 +1,14 @@
-from click import pass_context
 from typing import Optional
+
 from utz import cached_property, DefaultDict
 
 from ctbk import YM, Monthy
-from ctbk.cli.base import ctbk, region
+from ctbk.has_root_cli import HasRootCLI
 from ctbk.task import Task
 from ctbk.tasks import Tasks
 from ctbk.util import GENESIS, S3
-from ctbk.util.region import REGIONS, Region, get_regions
+from ctbk.util.region import REGIONS, Region, get_regions, region
+from ctbk.util.ym import dates
 
 DIR = 'tripdata'
 
@@ -44,8 +45,9 @@ class TripdataZip(Task):
         return url
 
 
-class TripdataZips(Tasks):
+class TripdataZips(HasRootCLI):
     DIR = DIR
+    CHILD_CLS = TripdataZip
 
     def __init__(
             self,
@@ -98,19 +100,9 @@ class TripdataZips(Tasks):
         ]
 
 
-@ctbk.group(help="Read .csv.zip files from s3://tripdata")
-def zips():
-    pass
-
-
-@zips.command()
-@pass_context
-@region
-def urls(ctx, region):
-    o = ctx.obj
-    months = TripdataZips(start=o.start, end=o.end, regions=[region] if region else None, roots=o.roots)
-    urls = months.zips
-    if region:
-        urls = [ url for url in urls if url.region == region ]
-    for url in urls:
-        print(url.url)
+TripdataZips.cli(
+    help="Read .csv.zip files from s3://tripdata",
+    decos=[dates, region],
+    create=False,
+    dag=False,
+)

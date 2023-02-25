@@ -1,18 +1,16 @@
 import typing as t
 
 import click
-from click import pass_context, option, group, Choice, Context, Command
+from click import pass_context, option, group, Context, Command
 from utz import o, DefaultDict, err
 
 from ctbk.has_root import DEFAULT_ROOTS
 from ctbk.util import write, read
-from ctbk.util.read import Disk
 from ctbk.util.constants import S3, DEFAULT_ROOT
-from ctbk.util.region import REGIONS
+from ctbk.util.read import Disk
 from ctbk.util.write import IfAbsent
 
 dask = option('--dask', is_flag=True)
-region = option('-r', '--region', type=Choice(REGIONS))
 
 
 def is_subsequence(seq, s):
