@@ -211,7 +211,7 @@ class ModesMonthJsons(MonthTables):
         return ModesMonthJson(ym, **self.kwargs)
 
 
-@ctbk.group()
+@ctbk.group(help=f"Compute canonical station names, lat/lngs from StationMetaHists. Writes to <root>/{DIR}/YYYYMM/stations.json.")
 @pass_context
 @dates
 def station_modes(ctx, start, end):

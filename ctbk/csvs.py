@@ -153,7 +153,7 @@ class TripdataCsvs(Tasks):
             raise NotImplementedError("Unified DataFrame is large, you probably want .dd instead (.dd.compute() if you must)")
 
 
-@ctbk.group('csvs')
+@ctbk.group(help=f"Extract CSVs from \"tripdata\" .zip files. Writes to <root>/{DIR}.")
 @pass_context
 @region
 @dates

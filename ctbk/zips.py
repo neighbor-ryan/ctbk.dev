@@ -98,7 +98,7 @@ class TripdataZips(Tasks):
         ]
 
 
-@ctbk.group()
+@ctbk.group(help="Read .csv.zip files from s3://tripdata")
 def zips():
     pass
 

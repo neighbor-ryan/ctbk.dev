@@ -160,7 +160,7 @@ GROUP_KEY_ARGS = [
 
 
 # TODO: factor common CLI subcommands
-@ctbk.group()
+@ctbk.group(help=f"Aggregate station name, lat/lng info from ride start and end fields. Writes to <root>/{DIR}/KEYS_YYYYMM.parquet.")
 @pass_context
 @dates
 def station_meta_hists(ctx, start, end):

@@ -91,7 +91,7 @@ class StationPairsJsons(MonthTables):
         return StationPairsJson(ym, **self.kwargs)
 
 
-@ctbk.group()
+@ctbk.group(help=f"Write station-pair ride_counts keyed by StationModes' JSON indices. Writes to <root>/{DIR}/YYYYMM/se_c.json.")
 @pass_context
 @dates
 def station_pair_jsons(ctx, start, end):

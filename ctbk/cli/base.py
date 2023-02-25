@@ -1,3 +1,5 @@
+import typing as t
+
 import click
 from click import pass_context, option, group, Choice, Context
 from utz import o, DefaultDict
@@ -14,6 +16,11 @@ region = option('-r', '--region', type=Choice(REGIONS))
 
 
 class Ctbk(click.Group):
+
+    def list_commands(self, ctx: Context) -> t.List[str]:
+        # Don't sort commands, print them in the order they're registered (see ctbk/__init__.py)
+        return list(self.commands.keys())
+
     def get_help(self, ctx):
         orig_wrap_text = click.formatting.wrap_text
 
@@ -46,19 +53,19 @@ CLI for generating ctbk.dev datasets (derived from Citi Bike public data in `s3:
 - See https://tripdata.s3.amazonaws.com/index.html
 
 ### `TripdataCsvs` (a.k.a. `csv`s): unzipped and gzipped CSVs
-- Writes `<root>/ctbk/csvs/<YYYYMM>.csv`
+- Writes `<root>/ctbk/csvs/YYYYMM.csv`
 - See also: https://ctbk.s3.amazonaws.com/index.html#/csvs
 
 ### `NormalizedMonths` (a.k.a. `norm`s): normalize `csv`s
 - Merge regions (NYC, JC) for the same month, harmonize columns drop duplicate data, etc.
-- Writes `<root>/ctbk/normalized/<YYYYMM>.parquet`
+- Writes `<root>/ctbk/normalized/YYYYMM.parquet`
 - See also: https://ctbk.s3.amazonaws.com/index.html#/normalized
 
 ### `AggregatedMonths` (a.k.a. `agg`s): compute histograms over each month's rides:
 - Group by any of several \"aggregation keys\" ({year, month, day, hour, user type, bike 
   type, start and end station, …}) 
 - Produce any \"sum keys\" ({ride counts, duration in seconds})
-- Writes `<root>/ctbk/aggregated/<agg_keys>_<sum_keys>_<YYYYMM>.parquet`
+- Writes `<root>/ctbk/aggregated/KEYS_YYYYMM.parquet`
 - See also: https://ctbk.s3.amazonaws.com/index.html#/aggregated?p=8
 
 ### `StationMetaHists` (a.k.a. `smh`s): compute station {id,name,lat/lng} histograms:
@@ -66,7 +73,7 @@ CLI for generating ctbk.dev datasets (derived from Citi Bike public data in `s3:
   ride's start and end stations (whereas `agg`'s rows are 1:1 with rides)
 - "agg_keys" can include id (i), name (n), and lat/lng (l); there are no "sum_keys" 
   (only counting is supported)
-- Writes `<root>/ctbk/stations/meta_hists/<YYYYMM>.parquet`
+- Writes `<root>/ctbk/stations/meta_hists/YYYYMM/KEYS.parquet`
 - See also: https://ctbk.s3.amazonaws.com/index.html#/stations/meta_hists
 
 ### `StationModes` (a.k.a. `sm`s): canonical {id,name,lat/lng} info for each station:
@@ -74,17 +81,17 @@ CLI for generating ctbk.dev datasets (derived from Citi Bike public data in `s3:
   - `name` is chosen as the "mode" (most commonly listed name for that station ID)
   - `lat/lng` is taken to be the mean of the lat/lngs reported for each ride's start 
     and end station
-- Writes `<root>/ctbk/aggregated/<YYYYMM>/stations.json`
+- Writes `<root>/ctbk/aggregated/YYYYMM/stations.json`
 - See also: https://ctbk.s3.amazonaws.com/index.html#/aggregated
 
 ### `StationPairJsons` (a.k.a. `spj`s): counts of rides between each pair of stations:
 - JSON formatted as `{ <start idx>: { <end idx>: <count> } }`
 - `idx`s are based on order of appearance in `StationModes` / `stations.json` above
   (which is also sorted by station ID)
-- Values are read from `AggregatedMonths(<ym>, 'se', 'c')`:
+- Values are read from `AggregatedMonths(YYYYMM, 'se', 'c')`:
   - group by station start ("s") and end ("e"),
   - sum ride counts ("c")
-- Writes `<root>/ctbk/aggregated/<YYYYMM>/se_c.json`
+- Writes `<root>/ctbk/aggregated/YYYYMM/se_c.json`
 - See also: https://ctbk.s3.amazonaws.com/index.html#/aggregated
 """)
 @pass_context

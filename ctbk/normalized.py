@@ -217,7 +217,7 @@ class NormalizedMonths(MonthTables):
         return NormalizedMonth(ym, **self.kwargs)
 
 
-@ctbk.group()
+@ctbk.group(help=f"Normalize \"tripdata\" CSVs (combine regions for each month, harmonize column names, etc. Writes to <root>/{DIR}/YYYYMM.parquet.")
 @pass_context
 @dates
 def normalized(ctx, start, end):

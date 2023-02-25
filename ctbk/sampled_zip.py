@@ -78,7 +78,7 @@ class SampledZips(Tasks):
         ]
 
 
-@ctbk.group()
+@ctbk.group(help=f"Generate test data by downsampling tripdata .csv.zip files. Writes to <root>/{DIR}.")
 @pass_context
 @region
 @dates

@@ -1,3 +1,4 @@
+from functools import wraps
 from typing import Union
 
 import dask.dataframe as dd
@@ -196,9 +197,10 @@ GROUP_KEY_ARGS = [
 
 
 def agg_sum_cmd(fn):
-    @aggregated.command(fn.__name__)
+    @aggregated.command()
     @pass_context
     @decos(GROUP_KEY_ARGS)
+    @wraps(fn)
     def _fn(ctx, *args, **kwargs):
         o = ctx.obj
         agg_keys = AggKeys(**spec_args(AggKeys, kwargs))
@@ -207,7 +209,7 @@ def agg_sum_cmd(fn):
     return _fn
 
 
-@ctbk.group()
+@ctbk.group(help=f"Aggregate normalized ride entries by various columns, summing ride counts or durations. Writes to <root>/{DIR}/KEYS_YYYYMM.parquet.")
 @pass_context
 @dates
 def aggregated(ctx, start, end):
