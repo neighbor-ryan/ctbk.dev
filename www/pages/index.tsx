@@ -451,7 +451,7 @@ export default function App({ data, }: { data: Row[] }) {
     const basePath = getBasePath()
 
     function icon(src: string, href: string, title: string) {
-        return <a href={href} title={title}>
+        return <a href={href} title={title} target={"_blank"}>
             <img className={css.icon} alt={title} src={`${basePath}/assets/${src}.png`} />
         </a>
     }
@@ -608,10 +608,11 @@ export default function App({ data, }: { data: Row[] }) {
                             <li><Link href={"/?r=jh&s=r"}>JC + Hoboken</Link></li>
                             <li><Link href={"/?y=m&s=g&pct=&g=mf&d=1406-2101"}>Ride minute %'s, Men vs. Women</Link>, Jun 2014 – January 2021</li>
                             <li><Link href={"/?s=u&pct="}>Annual vs. daily user %'s</Link></li>
+                            <li><Link href={"/?y=m&s=b&rt=ce"}>Classic / E-bike ride minutes</Link></li>
                             <li><Link href={"/"}>Default view (system-wide rides over time)</Link></li>
                         </ul>
-                        <p>This plot should refresh when <a href={"https://www.citibikenyc.com/system-data"}>new data is published by Citibike</a> (typically around the 2nd week of each month, covering the previous month).</p>
-                        <p><a href={"https://github.com/neighbor-ryan/ctbk.dev"}>The GitHub repo</a> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"}>planned enhancements</a>.</p>
+                        <p>This plot should refresh when <a href={"https://www.citibikenyc.com/system-data"} target={"_blank"}>new data is published by Citibike</a> (typically around the 2nd week of each month, covering the previous month).</p>
+                        <p><a href={"https://github.com/neighbor-ryan/ctbk.dev"} target={"_blank"}>The GitHub repo</a> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"} target={"_blank"}>planned enhancements</a>.</p>
                         <hr/>
                         <h3 id={"map"}>Map: Stations + Common Destinations</h3>
                         <p>Check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in January 2023</Link>.</p>
@@ -620,12 +621,10 @@ export default function App({ data, }: { data: Row[] }) {
                         <h3 id="qc">🚧 Data-quality issues 🚧</h3>
                         {MD(`
 Several things changed in February 2021 (presumably as part of [the Lyft acquistion](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):
-- "Gender" information no longer provided (all rides labeled "unknown" starting February 2021)
-- A new "Rideable Type" field was added, containing values \`docked_bike\` and \`electric_bike\` 🎉; however, it is mostly incorrect at present, and disabled above:
-  - Prior to February 2021, the field is absent (even though e-citibikes were in widespread use before then)
-  - Since February 2021, only a tiny number of rides are labeled \`electric_bike\` (122 in April 2021, 148 in May, 113 in June); this is certainly not accurate!
-    - One possible explanation: [electric citibikes were launched in Jersey City and Hoboken around April 2021](https://www.hobokengirl.com/hoboken-jersey-city-citi-bike-share-program/); perhaps those bikes were part of a new fleet that show up as \`electric_bike\` in the data (while extant NYC e-citibikes don't).
-    - These \`electric_bike\` rides showed up in the default ("NYC") data, not the "JC" data, but it could be all in flux; February through April 2021 were also updated when the May 2021 data release happened in early June.
+- "Gender" information is no longer provided:
+  - All rides are labeled "unknown" starting February 2021
+  - [Here's an example showing the available data](?y=m&s=g&pct=&g=mf&d=1406-2101)
+- A new "Rideable Type" field was added, containing values \`docked_bike\` and \`electric_bike\` 🎉; however, [it currently only shows ebike data from June 2021](?y=m&s=b&rt=ce)
 - The "User Type" values changed ("Annual" → "member", "Daily" → "casual"); I'm using the former/old values here, they seem equivalent.
                     `)}
                         <div className={css.footer}>
