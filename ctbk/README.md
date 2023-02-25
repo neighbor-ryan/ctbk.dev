@@ -80,6 +80,13 @@ agg_sec --> spj
 
 ## Usage <a id="usage"></a>
 
+Install this library:
+```bash
+pip install -e .
+```
+
+Then the `ctbk` executable will be available, which exposes a subcommand for each of the stages above:
+
 <details><summary><code>ctbk</code></summary>
 
 ```
@@ -323,7 +330,14 @@ Commands:
 ```
 </details>
 
+Abbreviations for each subcommand are supported, e.g.:
+```bash
+# Save and open a graph visualization of the computations involved in creating
+# `normalized` (`n`) datasets for the months from 202201 to the present
+ctbk n -d2022- dag
+```
 
+See [`HasRoot`](./has_root.py) for more info about top-level `-r/--read`, `-w/--write`, and `-t/--root` parameters.
 
 [`s3://tripdata`]: https://tripdata.s3.amazonaws.com/index.html
 [ctbk.dev]: https://ctbk.dev

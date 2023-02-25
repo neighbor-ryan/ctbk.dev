@@ -60,6 +60,10 @@ My hope is that this dashboard will solve both of these issues, by:
 - always staying up to date with the latest published data
 - providing 5-10 orthogonal, common-sense toggles that let you easily answer a large number of basic system-level questions
 
+## Implementation
+- [ctbk/](./ctbk) contains a Python library that derives various datasets from Citi Bike's public data at [`s3://tripdata`]
+- [www/](./www) contains the static web app served at [ctbk.dev].
+
 ## Feedback / Contributing
 Feel free to [file an issue here][github new issue] with any comments, bug reports, or feedback!
 
