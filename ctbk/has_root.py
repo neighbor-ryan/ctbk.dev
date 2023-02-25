@@ -1,11 +1,11 @@
+from typing import Optional
+
 import dask.dataframe as dd
 import pandas as pd
-from typing import Optional
 from utz import DefaultDict
 
 from ctbk.util.read import Read, Disk
 from ctbk.util.write import IfAbsent, Write
-
 
 DEFAULT_ROOTS = dr = DefaultDict({'zip': 's3:/'}, 's3')
 
@@ -65,6 +65,10 @@ class HasRoot:
     """
     DIR = None    # Subdir under "root" that this class writes to / reads from
     NAMES = None  # Aliases this class can be addressed as in CLI flags (`<alias>=<value>`)
+
+    @classmethod
+    def names(cls):
+        return cls.NAMES
 
     def __init__(
             self,

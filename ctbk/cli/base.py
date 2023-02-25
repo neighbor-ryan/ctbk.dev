@@ -1,8 +1,8 @@
 import typing as t
 
 import click
-from click import pass_context, option, group, Choice, Context
-from utz import o, DefaultDict
+from click import pass_context, option, group, Choice, Context, Command
+from utz import o, DefaultDict, err
 
 from ctbk.has_root import DEFAULT_ROOTS
 from ctbk.util import write, read
@@ -15,7 +15,46 @@ dask = option('--dask', is_flag=True)
 region = option('-r', '--region', type=Choice(REGIONS))
 
 
+def is_subsequence(seq, s):
+    if not seq:
+        return True
+    [ ch, *rest ] = seq
+    idx = s.find(ch)
+    return is_subsequence(rest, s[(idx+1):]) if idx >= 0 else False
+
+
 class Ctbk(click.Group):
+    def get_command(self, ctx: Context, cmd_name: str) -> t.Optional[Command]:
+        command = super().get_command(ctx, cmd_name)
+        if command:
+            return command
+
+        commands = self.commands
+        prefix_cmds = [ name for name in commands if name.startswith(cmd_name) ]
+        if len(prefix_cmds) == 1:
+            return commands[prefix_cmds[0]]
+
+        for command in commands.values():
+            aliases = getattr(command, 'ALIASES', None)
+            if aliases and cmd_name in aliases:
+                return command
+
+        if len(prefix_cmds) > 1:
+            prefix_cmds_str = '\n\t'.join(prefix_cmds)
+            err(f"{len(prefix_cmds)} commands found beginning with `{cmd_name}`:\n\t{prefix_cmds_str}\n")
+            return None
+
+        subseq_cmds = [ name for name in commands if is_subsequence(cmd_name, name) ]
+        if len(subseq_cmds) == 1:
+            return commands[subseq_cmds[0]]
+
+        elif len(subseq_cmds) > 1:
+            subseq_cmds_str = '\n\t'.join(subseq_cmds)
+            err(f"No commands found beginning with `{cmd_name}`, and {len(subseq_cmds)} subsequence matches:\n\t{subseq_cmds_str}\n")
+        else:
+            cmds_str = '\n\t'.join(commands)
+            err(f"No prefix or subsequence matches for `{cmd_name}`:\n\t{cmds_str}\n")
+        return None
 
     def list_commands(self, ctx: Context) -> t.List[str]:
         # Don't sort commands, print them in the order they're registered (see ctbk/__init__.py)

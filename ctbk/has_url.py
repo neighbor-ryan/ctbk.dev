@@ -4,8 +4,7 @@ from os.path import dirname
 from urllib.parse import urlparse
 
 import fsspec
-
-from ctbk.util import cached_property, stderr
+from utz import cached_property, err
 
 
 class HasURL(ABC):
@@ -64,7 +63,7 @@ class HasURL(ABC):
             rm_dir = False
         finally:
             if rm_dir:
-                stderr(f"Removing dir after failed write: {top_made_dir}")
+                err(f"Removing dir after failed write: {top_made_dir}")
                 fs.delete(top_made_dir)
 
     @contextmanager
@@ -80,5 +79,5 @@ class HasURL(ABC):
             finally:
                 if not succeeded:
                     if fs.exists(url):
-                        stderr(f"Removing failed write: {url}")
+                        err(f"Removing failed write: {url}")
                         fs.delete(url)

@@ -1,23 +1,22 @@
+from dataclasses import dataclass
 from functools import wraps
 from typing import Union
 
 import dask.dataframe as dd
 import pandas as pd
 from click import option, pass_context, argument
-from dataclasses import dataclass
-from pandas import Series
-from utz import process
-
 from ctbk import Monthy
 from ctbk.cli.base import ctbk, dask
 from ctbk.month_table import MonthTable
 from ctbk.normalized import NormalizedMonth, NormalizedMonths
 from ctbk.tasks import MonthTables
 from ctbk.util.constants import BKT
-from ctbk.util.convert import spec_args, decos
 from ctbk.util.df import DataFrame
 from ctbk.util.keys import Keys
 from ctbk.util.ym import dates
+from pandas import Series
+import utz
+from utz import decos, process
 
 DIR = f'{BKT}/aggregated'
 
@@ -203,8 +202,8 @@ def agg_sum_cmd(fn):
     @wraps(fn)
     def _fn(ctx, *args, **kwargs):
         o = ctx.obj
-        agg_keys = AggKeys(**spec_args(AggKeys, kwargs))
-        sum_keys = SumKeys(**spec_args(SumKeys, kwargs))
+        agg_keys = AggKeys(**utz.args(AggKeys, kwargs))
+        sum_keys = SumKeys(**utz.args(SumKeys, kwargs))
         fn(*args, o=o, agg_keys=agg_keys, sum_keys=sum_keys, **spec_args(fn, kwargs))
     return _fn
 

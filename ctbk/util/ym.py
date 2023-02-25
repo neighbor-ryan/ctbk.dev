@@ -1,3 +1,4 @@
+from functools import wraps
 from typing import Tuple
 
 from click import option
@@ -130,6 +131,7 @@ END = None
 
 def dates(fn):
     @option('-d', '--dates')
+    @wraps(fn)
     def _fn(*args, dates=None, **kwargs):
         if dates:
             pcs = dates.split('-')

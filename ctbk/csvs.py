@@ -1,28 +1,26 @@
 #!/usr/bin/env python
-import dask.dataframe as dd
-import pandas as pd
 from abc import ABC
-from click import pass_context, option, argument
 from contextlib import contextmanager
-from dask.delayed import delayed, Delayed
-from gzip_stream import GZIPCompressedStream
 from shutil import copyfileobj
 from typing import Optional, Union
-from utz import singleton, Unset, process
 from zipfile import ZipFile
 
+import dask.dataframe as dd
+import pandas as pd
 from ctbk import YM, Monthy
-from ctbk.cli.base import ctbk, dask, region
+from ctbk.cli.base import region
+from ctbk.has_root_cli import HasRootCLI
 from ctbk.table import Table
 from ctbk.task import Task
-from ctbk.tasks import Tasks
-from ctbk.util import cached_property, stderr
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
 from ctbk.util.read import Read
 from ctbk.util.region import REGIONS, Region
 from ctbk.util.ym import dates
 from ctbk.zips import TripdataZips, TripdataZip
+from dask.delayed import delayed, Delayed
+from gzip_stream import GZIPCompressedStream
+from utz import cached_property, singleton, Unset
 
 DIR = f'{BKT}/csvs'
 
@@ -108,8 +106,10 @@ class TripdataCsv(ReadsTripdataZip, Table):
             return pd.read_csv(self.url, dtype=str)
 
 
-class TripdataCsvs(Tasks):
+class TripdataCsvs(HasRootCLI):
     DIR = DIR
+    CHILD_CLS = TripdataCsv
+    # ROOT_DECOS = [ dates, region ]
 
     def __init__(self, start: Monthy = None, end: Monthy = None, regions: Optional[list[str]] = None, **kwargs):
         src = self.src = TripdataZips(start=start, end=end, regions=regions, roots=kwargs.get('roots'))
@@ -153,44 +153,49 @@ class TripdataCsvs(Tasks):
             raise NotImplementedError("Unified DataFrame is large, you probably want .dd instead (.dd.compute() if you must)")
 
 
-@ctbk.group(help=f"Extract CSVs from \"tripdata\" .zip files. Writes to <root>/{DIR}.")
-@pass_context
-@region
-@dates
-def csvs(ctx, start, end, region=None):
-    ctx.obj.start = start
-    ctx.obj.end = end
-    ctx.obj.regions = [region] if region else REGIONS
+TripdataCsvs.cli(
+    help=f"Extract CSVs from \"tripdata\" .zip files. Writes to <root>/{DIR}.",
+    decos=[ dates, region ],
+)
 
-
-@csvs.command()
-@pass_context
-@dask
-def urls(ctx, dask):
-    csvs = TripdataCsvs(dask=dask, **ctx.obj)
-    for csv in csvs.children:
-        print(csv.url)
-
-
-@csvs.command()
-@pass_context
-@dask
-def create(ctx, dask):
-    csvs = TripdataCsvs(dask=dask, **ctx.obj)
-    created = csvs.create(read=None)
-    if dask:
-        created.compute()
-
-
-@csvs.command()
-@pass_context
-@option('-O', '--no-open', is_flag=True)
-@argument('filename', required=False)
-def dag(ctx, no_open, filename):
-    csvs = TripdataCsvs(dask=True, **ctx.obj)
-    result = csvs.create(read=None)
-    filename = filename or 'csvs_dag.png'
-    stderr(f"Writing to {filename}")
-    result.visualize(filename)
-    if not no_open:
-        process.run('open', filename)
+# @ctbk.group(help=)
+# @pass_context
+# @region
+# @dates
+# def csvs(ctx, start, end, region=None):
+#     ctx.obj.start = start
+#     ctx.obj.end = end
+#     ctx.obj.regions = [region] if region else REGIONS
+#
+#
+# @csvs.command()
+# @pass_context
+# @dask
+# def urls(ctx, dask):
+#     csvs = TripdataCsvs(dask=dask, **ctx.obj)
+#     for csv in csvs.children:
+#         print(csv.url)
+#
+#
+# @csvs.command()
+# @pass_context
+# @dask
+# def create(ctx, dask):
+#     csvs = TripdataCsvs(dask=dask, **ctx.obj)
+#     created = csvs.create(read=None)
+#     if dask:
+#         created.compute()
+#
+#
+# @csvs.command()
+# @pass_context
+# @option('-O', '--no-open', is_flag=True)
+# @argument('filename', required=False)
+# def dag(ctx, no_open, filename):
+#     csvs = TripdataCsvs(dask=True, **ctx.obj)
+#     result = csvs.create(read=None)
+#     filename = filename or 'csvs_dag.png'
+#     err(f"Writing to {filename}")
+#     result.visualize(filename)
+#     if not no_open:
+#         process.run('open', filename)

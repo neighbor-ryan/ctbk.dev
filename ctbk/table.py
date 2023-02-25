@@ -1,16 +1,12 @@
-from os.path import dirname, exists
-
-import dask.dataframe as dd
-import pandas as pd
 from abc import ABC
-from dask.delayed import Delayed
+from os.path import dirname, exists
 from typing import Union
-from utz import Unset
 
 from ctbk.task import Task
-from ctbk.util import cached_property, stderr
 from ctbk.util.df import DataFrame, checkpoint_dd, checkpoint_df
 from ctbk.util.read import Read
+from dask.delayed import Delayed
+from utz import cached_property, err, Unset
 
 
 class Table(Task, ABC):
@@ -53,5 +49,5 @@ class Table(Task, ABC):
             return df
         finally:
             if rmdir:
-                stderr(f"Removing directory {parent} after failed write")
+                err(f"Removing directory {parent} after failed write")
                 self.fs.delete(parent)  # TODO: remove all directory levels that were created

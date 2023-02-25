@@ -5,9 +5,10 @@ import pandas as pd
 from abc import ABC
 from click import command, argument, option
 from typing import Generator
+from utz import err
 
 from ctbk.cli.base import dask
-from ctbk.util import stderr, S3
+from ctbk.util import S3
 from ctbk.util.df import DataFrame
 from ctbk.util.ym import dates, YM, Monthy
 
@@ -41,7 +42,7 @@ class MonthAggTable(ABC):
         try:
             df = self.dpd.read_parquet(url)
         except FileNotFoundError as e:
-            stderr(f'FileNotFoundError: {url}')
+            err(f'FileNotFoundError: {url}')
             raise
         return df
 
@@ -75,12 +76,12 @@ class MonthAggTable(ABC):
         out = self.out
         if exists(out):
             if self.overwrite:
-                stderr(f'Overwriting {out}')
+                err(f'Overwriting {out}')
             else:
-                stderr(f'{out} exists')
+                err(f'{out} exists')
                 return
         else:
-            stderr(f'Writing {out}')
+            err(f'Writing {out}')
 
         mapped_dfs = self.mapped_dfs()
         df = self.reduce(mapped_dfs)

@@ -1,21 +1,20 @@
-import dask.dataframe as dd
-import pandas as pd
 import re
-from click import pass_context
-from numpy import nan
 from re import sub
 from typing import Pattern
 
+import dask.dataframe as dd
+import pandas as pd
+from numpy import nan
+from utz import err
+
 from ctbk import Monthy
-from ctbk.cli.base import ctbk, dask
 from ctbk.csvs import TripdataCsv, TripdataCsvs
+from ctbk.has_root_cli import HasRootCLI
 from ctbk.month_table import MonthTable
-from ctbk.table import Table
 from ctbk.tasks import MonthTables
-from ctbk.util import stderr
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
-from ctbk.util.region import REGIONS, Region, get_regions
+from ctbk.util.region import Region, get_regions
 from ctbk.util.ym import dates
 
 DIR = f'{BKT}/normalized'
@@ -99,7 +98,7 @@ def get_region(station_id, src: str, file_region: str):
         )
     ]
     if not regions:
-        stderr(f'{src}: unrecognized station: {station_id}')
+        err(f'{src}: unrecognized station: {station_id}')
         return nan
     if len(regions) > 1:
         raise ValueError(f'{src}: station ID {station_id} matches regions {",".join(regions)}')
@@ -117,18 +116,18 @@ def normalize_fields(df: DataFrame, src, region: Region) -> DataFrame:
         if normalized_col in normalize_fields_map:
             rename_dict[col] = normalize_fields_map[normalized_col]
         else:
-            stderr(f'Unexpected field: {normalized_col} ({col})')
+            err(f'Unexpected field: {normalized_col} ({col})')
 
     df = df.rename(columns=rename_dict)
     if 'Gender' not in df:
-        stderr(f'{src}: "Gender" column not found; setting to 0 ("unknown") for all rows')
+        err(f'{src}: "Gender" column not found; setting to 0 ("unknown") for all rows')
         df['Gender'] = 0  # unknown
     if 'Rideable Type' not in df:
-        stderr(f'{src}: "Rideable Type" column not found; setting to "unknown" for all rows')
+        err(f'{src}: "Rideable Type" column not found; setting to "unknown" for all rows')
         df['Rideable Type'] = 'unknown'
     if 'Member/Casual' in df:
         assert 'User Type' not in df
-        stderr(f'{src}: renaming/harmonizing "member_casual" → "User Type", substituting "member" → "Subscriber", "casual" → "customer"')
+        err(f'{src}: renaming/harmonizing "member_casual" → "User Type", substituting "member" → "Subscriber", "casual" → "customer"')
         df['User Type'] = df['Member/Casual'].map({'member':'Subscriber','casual':'Customer'})
         del df['Member/Casual']
 
@@ -147,21 +146,21 @@ def add_region(df: DataFrame, src: str, region: Region) -> DataFrame:
     sys_none_end = df['End Region'].isin({NONE, 'SYS'})
     sys_none = sys_none_start | sys_none_end
     # sys_nones = df[sys_none]
-    # stderr("Computing sys_none_counts…")
+    # err("Computing sys_none_counts…")
     # sys_none_counts = value_counts(sys_nones[['Start Region', 'End Region']]).sort_index()
-    # stderr("sys_none_counts:")
-    # stderr(str(sys_none_counts))
+    # err("sys_none_counts:")
+    # err(str(sys_none_counts))
 
     def fill_ends(r):
         return r['Start Region'] if r['End Region'] == NONE else r['End Region']
     df['End Region'] = df[['Start Region', 'End Region']].apply(fill_ends, axis=1, **meta(None))
     # no_end = df['End Region'] == NONE
     # df.loc[no_end, 'End Region'] = df.loc[no_end, 'Start Region']  # assume incomplete rides ended in the region they started in
-    # stderr(f'Dropping {sys_none_counts.sum()} SYS/NONE records')
+    # err(f'Dropping {sys_none_counts.sum()} SYS/NONE records')
     df = df[~sys_none]
     # region_matrix = value_counts(df[['Start Region', 'End Region']]).sort_index().rename('Count')
-    # stderr('Region matrix:')
-    # stderr(str(region_matrix))
+    # err('Region matrix:')
+    # err(str(region_matrix))
     return df
 
 
@@ -186,7 +185,7 @@ class NormalizedMonth(MonthTable):
                     .value_counts()
                     .sort_index()
                 )
-                stderr(f'{num_wrong_yms} rides not in {ym}:\n{wrong_dates_hist}')
+                err(f'{num_wrong_yms} rides not in {ym}:\n{wrong_dates_hist}')
             return df[~wrong_yms]
 
         if self.dask:
@@ -206,8 +205,10 @@ class NormalizedMonth(MonthTable):
         ])
 
 
-class NormalizedMonths(MonthTables):
+class NormalizedMonths(MonthTables, HasRootCLI):
     DIR = DIR
+    CHILD_CLS = NormalizedMonth
+    ROOT_DECOS = [ dates ]
 
     def __init__(self, start: Monthy = None, end: Monthy = None, **kwargs):
         src = self.src = TripdataCsvs(start=start, end=end, **kwargs)
@@ -217,30 +218,32 @@ class NormalizedMonths(MonthTables):
         return NormalizedMonth(ym, **self.kwargs)
 
 
-@ctbk.group(help=f"Normalize \"tripdata\" CSVs (combine regions for each month, harmonize column names, etc. Writes to <root>/{DIR}/YYYYMM.parquet.")
-@pass_context
-@dates
-def normalized(ctx, start, end):
-    ctx.obj.start = start
-    ctx.obj.end = end
+# @ctbk.group(help=f"Normalize \"tripdata\" CSVs (combine regions for each month, harmonize column names, etc. Writes to <root>/{DIR}/YYYYMM.parquet.")
+# @pass_context
+# @dates
+# def normalized(ctx, start, end):
+#     ctx.obj.start = start
+#     ctx.obj.end = end
 
 
-@normalized.command()
-@pass_context
-def urls(ctx):
-    o = ctx.obj
-    normalized = NormalizedMonths(**o)
-    months = normalized.children
-    for month in months:
-        print(month.url)
+# @normalized.command()
+# @pass_context
+# def urls(ctx):
+#     o = ctx.obj
+#     normalized = NormalizedMonths(**o)
+#     months = normalized.children
+#     for month in months:
+#         print(month.url)
+#
+#
+# @normalized.command()
+# @pass_context
+# @dask
+# def create(ctx, dask):
+#     o = ctx.obj
+#     normalized = NormalizedMonths(dask=dask, **o)
+#     created = normalized.create(read=None)
+#     if dask:
+#         created.compute()
 
-
-@normalized.command()
-@pass_context
-@dask
-def create(ctx, dask):
-    o = ctx.obj
-    normalized = NormalizedMonths(dask=dask, **o)
-    created = normalized.create(read=None)
-    if dask:
-        created.compute()
+NormalizedMonths.cli(help=f"Normalize \"tripdata\" CSVs (combine regions for each month, harmonize column names, etc. Writes to <root>/{DIR}/YYYYMM.parquet.")

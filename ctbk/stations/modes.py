@@ -4,18 +4,17 @@ from typing import Union
 import numpy as np
 import pandas as pd
 from click import pass_context
-from numpy import nan
-from pandas import Series
-
-from ctbk import Monthy, cached_property
+from ctbk import Monthy
 from ctbk.aggregated import AggregatedMonth, DIR
 from ctbk.cli.base import ctbk, dask
 from ctbk.month_table import MonthTable
 from ctbk.stations.meta_hists import StationMetaHist
 from ctbk.tasks import MonthTables
-from ctbk.util import stderr
 from ctbk.util.df import DataFrame, apply, sxs, meta
 from ctbk.util.ym import dates
+from numpy import nan
+from pandas import Series
+from utz import cached_property, err
 
 
 def row_sketch(a):
@@ -60,7 +59,7 @@ def mode_sketch(row_hist: DataFrame, thresh: float = 0.5, sum_key: str = 'count'
         )
         below_thresh = row_sketches[row_sketches.mode_pct < thresh]
         if not below_thresh.empty:
-            stderr(f'{len(below_thresh)} index entries with mode_pct < {thresh}:\n{below_thresh}')
+            err(f'{len(below_thresh)} index entries with mode_pct < {thresh}:\n{below_thresh}')
         annotated = (
             row_hist
             .sort_values([idx_name, sum_key], ascending=False)
@@ -131,7 +130,7 @@ class ModesMonthJson(MonthTable):
                 .sort_values('count', ascending=False)
             )
             mode_sketch = cls.get_mode_sketch(df)
-            stderr(f'{mode_sketch.head()}')
+            err(f'{mode_sketch.head()}')
         return df['name'].iloc[0]
 
     @staticmethod

@@ -1,12 +1,12 @@
 from click import pass_context
 from typing import Optional
-from utz import DefaultDict
+from utz import cached_property, DefaultDict
 
 from ctbk import YM, Monthy
 from ctbk.cli.base import ctbk, region
 from ctbk.task import Task
 from ctbk.tasks import Tasks
-from ctbk.util import cached_property, GENESIS, S3
+from ctbk.util import GENESIS, S3
 from ctbk.util.region import REGIONS, Region, get_regions
 
 DIR = 'tripdata'

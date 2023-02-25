@@ -1,15 +1,14 @@
-import dask.dataframe as dd
 from abc import ABC
-from dask import delayed
-from dask.delayed import Delayed
 from typing import Union
-from utz import Unset
 
+import dask.dataframe as dd
 from ctbk.has_root import HasRoot
 from ctbk.has_url import HasURL
-from ctbk.util import stderr
 from ctbk.util.read import Read
 from ctbk.util.write import Always, Never
+from dask import delayed
+from dask.delayed import Delayed
+from utz import Unset, err
 
 
 class Task(HasRoot, HasURL, ABC):
@@ -25,10 +24,10 @@ class Task(HasRoot, HasURL, ABC):
         url = self.url
         if self.exists():
             if self.write is Always:
-                stderr(f'Overwriting {url}')
+                err(f'Overwriting {url}')
                 return self._create(read=read)
             elif read is None:
-                stderr(f'{url} already exists')
+                err(f'{url} already exists')
                 if self.dask:
                     def exists_noop():
                         pass
@@ -36,12 +35,12 @@ class Task(HasRoot, HasURL, ABC):
                 else:
                     return None
             else:
-                stderr(f'Reading {url}')
+                err(f'Reading {url}')
                 return self._read()
         elif self.write is Never:
             raise RuntimeError(f"{url} doesn't exist, but `write` is `Never`")
         else:
-            stderr(f'Writing {url}')
+            err(f'Writing {url}')
             return self._create(read=read)
 
     def _read(self) -> Union[None, Delayed]:

@@ -10,10 +10,12 @@ from ctbk.month_table import MonthTable
 from ctbk.normalized import NormalizedMonth, NormalizedMonths
 from ctbk.tasks import MonthTables
 from ctbk.util.constants import BKT
-from ctbk.util.convert import spec_args, decos
 from ctbk.util.df import DataFrame
 from ctbk.util.keys import Keys
 from ctbk.util.ym import dates
+
+import utz
+from utz import decos, process
 
 DIR = f'{BKT}/stations/meta_hists'
 
@@ -175,8 +177,8 @@ def agg_cmd(fn):
     @wraps(fn)
     def _fn(ctx, *args, **kwargs):
         o = ctx.obj
-        agg_keys = AggKeys.load(spec_args(AggKeys, kwargs))
-        fn(*args, o=o, agg_keys=agg_keys, **spec_args(fn, kwargs))
+        agg_keys = AggKeys.load(utz.args(AggKeys, kwargs))
+        fn(*args, o=o, agg_keys=agg_keys, **utz.args(fn, kwargs))
     return _fn
 
 
