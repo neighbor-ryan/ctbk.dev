@@ -214,12 +214,19 @@ export default function App({ data, }: { data: Row[] }) {
         if (regions && regions.length < Regions.length) {
             parendStrings.push(`${regions.join("+")}`)
         }
+        if (rideableTypes.length && rideableTypes.length < RideableTypes.length) {
+            parendStrings.push(`${rideableTypes.join("/")} bikes`)
+        }
+        if (userTypes.length && userTypes.length < UserTypes.length) {
+            const [userType] = userTypes
+            parendStrings.push({ Annual: "Annual members", Daily: "Daily customers" }[userType])
+        }
         const byName = stackBy == 'None' ? undefined : (stackBy == 'Rideable Type' ? 'Bike Type' : stackBy)
         if (stackPercents && byName) parendStrings.push(`% by ${byName}`)
         else if (stackPercents) parendStrings.push(`%`)
         else if (byName) parendStrings.push(`by ${byName}`)
         return (parendStrings.length) ? `${parendStrings.join(", ")}` : undefined
-    }, [ regions, stackPercents, stackBy, ] )
+    }, [ regions, rideableTypes, userTypes, stackPercents, stackBy, ] )
 
     const normalized = useMemo(
         () => (
