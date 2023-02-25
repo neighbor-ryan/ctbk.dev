@@ -8,10 +8,16 @@
 ### JC & Hoboken Only: [ctbk.dev/?r=jh][ctbk nj plot]
 [![Screenshot of dashboard; per-month ride counts going back 5 years, with a 12mo rolling avg showing mostly steady growth](www/public/screenshots/ctbk-nj.png)][ctbk nj plot]
 
-### Ride Minute %, by Gender
+### Ride Minute %'s by Gender
 [ctbk.dev?d=1406-2101&g=mf&pct&s=g&y=m][ctbk gender pct plot]:
-[![](./gender-percents-minutes.png)][ctbk gender pct plot]
+[![](www/public/screenshots/ctbk-ride-minutes-by-gender.png)][ctbk gender pct plot]
 Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
+
+### Ride %'s by User Type
+
+[ctbk.dev/?s=u&pct=][ctbk user type pct plot]
+[![](www/public/screenshots/ctbk-rides-by-user.png)][ctbk user type pct plot]
+
 
 - [Auto-updates with new data each month](#auto-update)
 - [Powered by cleaned, public data (derived from the official Citibike data)](#cleaned-data)
@@ -21,6 +27,12 @@ Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
   - region (NYC and/or JC)
   - date range (at monthly granularity, back to system launch in June 2013)
 - URL syncs with plot controls, for ease of linking to specific views, e.g.:
+
+### Total Classic / E-bike Ride Minutes
+
+[ctbk.dev?y=m&s=b&rt=ce][ctbk ebike minutes plot]
+[![](www/public/screenshots/ctbk-ebike-minutes.png)][ctbk ebike minutes plot]
+
 
 ## Cleaned, public data <a id="cleaned-data"></a>
 I fixed some rough edges in [Citibike's published data][citibike system data] and published the results to [the `ctbk` Amazon S3 bucket][`s3://ctbk`].
@@ -77,3 +89,5 @@ Feel free to [file an issue here][github new issue] with any comments, bug repor
 [ctbk gender pct plot]: https://ctbk.dev/?y=m&s=g&pct=&g=mf&d=1406-2101
 [ctbk.dev/stations]: https://ctbk.dev/stations?ll=40.733_-74.036&z=14&ss=HB102
 [ctbk nj plot]: https://ctbk.dev/?r=jh
+[ctbk user type pct plot]: https://ctbk.dev/?s=u&pct=
+[ctbk ebike minutes plot]: ctbk.dev?y=m&s=b&rt=ce
