@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import json
 from typing import Union
 
 import numpy as np
@@ -9,14 +8,12 @@ from numpy import nan
 from pandas import Series
 
 from ctbk import Monthy, cached_property
-from ctbk.aggregated import AggregatedMonth
+from ctbk.aggregated import AggregatedMonth, DIR
 from ctbk.cli.base import ctbk, dask
-from ctbk.month_agg_table import MonthAggTable
 from ctbk.month_table import MonthTable
 from ctbk.stations.meta_hists import StationMetaHist
 from ctbk.tasks import MonthTables
 from ctbk.util import stderr
-from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame, apply, sxs, meta
 from ctbk.util.ym import dates
 
@@ -104,9 +101,6 @@ def transform(df: DataFrame) -> DataFrame:
         'Longitude': 'lng',
     })
     return joined
-
-
-DIR = f'{BKT}/aggregated'
 
 
 class ModesMonthJson(MonthTable):
@@ -211,7 +205,6 @@ class ModesMonthJson(MonthTable):
 
 
 class ModesMonthJsons(MonthTables):
-    # NAMES = [ 'modes_month_json', 'mmj' ]
     DIR = DIR
 
     def month(self, ym: Monthy) -> ModesMonthJson:
