@@ -3,8 +3,13 @@ on:
   push:
     branches:
       - daily
+      - push-www
   schedule:
     - cron: "0 17 3-11 * *"
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_DEFAULT_REGION: us-east-1
 jobs:
   csvs:
     uses: ./.github/workflows/step.yml
@@ -68,3 +73,40 @@ jobs:
       name: Build station-pair count JSONs
       run: ctbk --s3 station-pair-jsons create --dask
     secrets: inherit
+  ymrgtb_cd_json:
+    name: Write `ymrgtb_cd.json` used by www
+    # needs: group_counts-year-month-region-gender-type-bike-counts-durations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ env.GITHUB_REF }}
+          fetch-depth: 0
+          ssh-key: ${{ secrets.WWW_DEPLOY_KEY }}
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+          cache: pip
+      - run: pip install -e .
+      - run: python -m ctbk.ymrgtb_cd -f
+      - run: |
+          name=ymrgtb_cd.json
+          json=www/public/assets/$name
+          branch="${GITHUB_REF##*/}"
+          if git diff --quiet --exit-code -- $json && [ "$branch" != "push-www" ]; then
+            echo "No change detected to $name"
+          else
+            git add $json
+            git config --global user.name "GitHub Actions"
+            git config --global user.email "github@actions"
+            if [ "$branch" == "push-www" ]; then
+              echo "branch push-www; committing and pushing"
+              git commit --allow-empty -m '`push-www` GitHub Action'
+            else
+              echo "$name changed; committing and pushing"
+              git commit -m "Update $name"
+            fi
+            git config --global pull.rebase false
+            git pull origin www
+            git push origin HEAD:www
+          fi
