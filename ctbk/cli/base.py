@@ -132,9 +132,16 @@ CLI for generating ctbk.dev datasets (derived from Citi Bike public data in `s3:
 @option('--s3', is_flag=True, help="Alias for `--root s3:/`, pointing all classes' \"root\" dirs at S3")
 def ctbk(ctx, reads, roots, writes, s3):
     if s3:
-        roots = [S3] + (roots or [])
+        roots = [S3] + (list(roots) or [])
 
-    roots = DefaultDict.load(roots, fallback=DEFAULT_ROOT) if roots else DEFAULT_ROOTS
+    if roots:
+        roots = DefaultDict.load(roots)
+        roots = DefaultDict(
+            configs={ **DEFAULT_ROOTS.configs, **roots.configs },
+            default=roots.default or DEFAULT_ROOTS.default,
+        )
+    else:
+        roots = DEFAULT_ROOTS
     reads = DefaultDict.load(reads, name2value=read.parse, fallback=Disk)
     writes = DefaultDict.load(writes, name2value=write.parse, fallback=IfAbsent)
     ctx.obj = o(roots=roots, reads=reads, writes=writes)

@@ -77,10 +77,13 @@ class TripdataZips(HasRootCLI):
         end1, last1 = m2r2u[-1]
         missing1 = [ region for region, month in last1.items() if not month.exists() ]
         if missing1:
-            end2, last2 = m2r2u[-2]
-            missing2 = [ region for region, month in last2.items() if not month.exists() ]
-            if missing2:
-                raise RuntimeError(f"Missing regions from {end1} ({', ' .join(missing1)}) and {end2} ({', '.join(missing2)})")
+            if len(m2r2u) < 2:
+                raise RuntimeError(f"Missing regions from {end1} ({', ' .join(missing1)})")
+            else:
+                end2, last2 = m2r2u[-2]
+                missing2 = [ region for region, month in last2.items() if not month.exists() ]
+                if missing2:
+                    raise RuntimeError(f"Missing regions from {end1} ({', ' .join(missing1)}) and {end2} ({', '.join(missing2)})")
             end = end2 + 1
             m2r2u = dict(m2r2u[:-1])
         else:

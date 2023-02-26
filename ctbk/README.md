@@ -355,6 +355,25 @@ Notes:
   - The `ctbk --s3` flag (equivalent to `-ts3` or `--root s3`) would point them at S3.
   - Pointing at your own bucket (`-ts3://my_bucket`) will result in files being written under `s3://my_bucket/ctbk/`.
 
+#### `--dask` / `dag`
+The `--dask` enables [Dask] for parallel computation. Dask also powers a rudimentary DAG visualization for each stage, e.g.:
+```bash
+ctbk --s3 -tagg=s3 agg -d202210- dag -ymr
+```
+produces:
+
+![aggregated_dag](https://user-images.githubusercontent.com/465045/221389405-2a27511f-7d9c-4d33-b335-bbb8fe2a7049.png)
+
+This vaguely shows a computation that:
+- produces 4 months of aggregated `ymr_c_YYYYMM.parquet` files
+  - grouped by year (`y`), month (`m`), and region (`r`)
+  - counting (`c`) rides
+- written to a local folder `s3/ctbk/aggregated/`
+  - `-tagg=s3` is short for `--root aggregated=s3`
+  - `s3` as "root" URL prefix results in writing to a local relative path `s3/ctbk/…`
+- reads input [`NormalizedMonth`] data on S3 (`s3://ctbk/normalized`)
+  - `--s3` is short for `-ts3` or `--root s3`, meaning datasets besides `agg` are read from S3
+
 ### GitHub Actions ([`ci.yml`]) <a id="ghas"></a>
 [`ci.yml`] breaks each derived dataset into a separate job, [for example](https://github.com/neighbor-ryan/ctbk.dev/actions/runs/4272517971):
 
@@ -374,3 +393,4 @@ Any changes are pushed to [the www branch][@www], which triggers [the `www.yml` 
 [`www.yml`]: ../.github/workflows/www.yml
 [@www]: https://github.com/neighbor-ryan/ctbk.dev/tree/www
 [www GHA]: https://github.com/neighbor-ryan/ctbk.dev/actions/workflows/www.yml
+[Dask]: https://www.dask.org/
