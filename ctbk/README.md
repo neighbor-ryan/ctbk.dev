@@ -3,6 +3,8 @@ CLI for generating [ctbk.dev] datasets (derived from Citi Bike public data in [`
 
 - [Data flow](#data-flow)
 - [Usage](#usage)
+  - [Generating derived data](#data-generation)
+  - [GitHub Actions ([`ci.yml`])](#ghas)
 
 ## Data flow <a id="data-flow"></a>
 
@@ -339,5 +341,36 @@ ctbk n -d2022- dag
 
 See [`HasRoot`](./has_root.py) for more info about top-level `-r/--read`, `-w/--write`, and `-t/--root` parameters.
 
+### Generating derived data <a id="data-generation"></a>
+All the data can be generated in a local `s3/ctbk` directory (mirroring [`s3://ctbk`]), like:
+
+```bash
+ctbk spj create --dask
+```
+Notes:
+- `spj` stands for `station-pair-json` (the final derived data product in the diagram above](#data-flow))
+- `create`ing it involves also `create`ing all predecessor datasets
+- The initial `TripdataZips` datasets are read-only and read from [`s3://tripdata`], by default.
+- Other datasets default to a local `s3/` folder.
+  - The `ctbk --s3` flag (equivalent to `-ts3` or `--root s3`) would point them at S3.
+  - Pointing at your own bucket (`-ts3://my_bucket`) will result in files being written under `s3://my_bucket/ctbk/`.
+
+### GitHub Actions ([`ci.yml`]) <a id="ghas"></a>
+[`ci.yml`] breaks each derived dataset into a separate job, [for example](https://github.com/neighbor-ryan/ctbk.dev/actions/runs/4272517971):
+
+![ctbk dev gha dag](https://user-images.githubusercontent.com/465045/221387746-92200afa-9d9c-40c5-8066-166b10a9ad07.png)
+
+It also includes a final call to generate JSON used by the main plot at [ctbk.dev]:
+```bash
+python -m ctbk.ymrgtb_cd -f
+```
+
+Any changes are pushed to [the www branch][@www], which triggers [the `www.yml` GHA][www GHA], which rebuilds and deploys the site. The code for the site is under [../www](../www).
+
+[`s3://ctbk`]: https://ctbk.s3.amazonaws.com/index.html
 [`s3://tripdata`]: https://tripdata.s3.amazonaws.com/index.html
 [ctbk.dev]: https://ctbk.dev
+[`ci.yml`]: ../.github/workflows/ci.yml
+[`www.yml`]: ../.github/workflows/www.yml
+[@www]: https://github.com/neighbor-ryan/ctbk.dev/tree/www
+[www GHA]: https://github.com/neighbor-ryan/ctbk.dev/actions/workflows/www.yml
