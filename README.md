@@ -92,4 +92,4 @@ Feel free to [file an issue here][github new issue] with any comments, bug repor
 [ctbk.dev/stations]: https://ctbk.dev/stations?ll=40.733_-74.036&z=14&ss=HB102
 [ctbk nj plot]: https://ctbk.dev/?r=jh
 [ctbk user type pct plot]: https://ctbk.dev/?s=u&pct=
-[ctbk ebike minutes plot]: ctbk.dev?y=m&s=b&rt=ce
+[ctbk ebike minutes plot]: https://ctbk.dev?y=m&s=b&rt=ce
