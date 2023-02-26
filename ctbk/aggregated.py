@@ -143,15 +143,6 @@ class AggregatedMonth(MonthTable):
             .sum()
             .reset_index()
         )
-        if agg_keys.get('y') and agg_keys.get('m'):
-            meta_kwargs = dict(meta=Series(name='Month', dtype=str)) if isinstance(counts, dd.DataFrame) else dict()
-            counts['Month'] = counts.apply(
-                lambda r: pd.to_datetime(
-                    '%d-%02d' % (int(r['Start Year']), int(r['Start Month']))
-                ),
-                axis=1,
-                **meta_kwargs,
-            )
         return counts
 
 
@@ -178,7 +169,7 @@ class AggregatedMonths(HasRootCLI, MonthTables):
         return AggregatedMonth(ym, agg_keys=self.agg_keys, sum_keys=self.sum_keys, **self.kwargs)
 
 
-def agg_sum_cmd(fn):
+def command(fn):
     @decos(*AggKeys.opts(), *SumKeys.opts())
     @wraps(fn)
     def _fn(ctx, *args, **kwargs):
@@ -191,5 +182,5 @@ def agg_sum_cmd(fn):
 AggregatedMonths.cli(
     help=f"Aggregate normalized ride entries by various columns, summing ride counts or durations. Writes to <root>/{DIR}/KEYS_YYYYMM.parquet.",
     decos=[dates],
-    cmd_decos=[agg_sum_cmd],
+    cmd_decos=[command],
 )

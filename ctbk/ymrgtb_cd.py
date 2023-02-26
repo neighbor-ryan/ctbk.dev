@@ -23,7 +23,6 @@ class YmrgtbCdJson(MonthAggTable):
                     **meta('User Type', self.dask),
                 )
             })
-            .drop(columns='Month')
             .rename(columns={
                 'Start Year': 'Year',
                 'Start Month': 'Month',

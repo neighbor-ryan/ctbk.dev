@@ -3,7 +3,7 @@ from typing import Optional
 
 import click
 import utz
-from click import argument, option, pass_context
+from click import argument, option, pass_context, Choice
 from utz import err, process, decos
 from utz.case import dash_case
 
@@ -72,11 +72,18 @@ class HasRootCLI(Tasks, HasRoot, ABC):
         if dag:
             @cmd(help="Save and `open` a graph visualization of the datasets to be computed")
             @option('-O', '--no-open', is_flag=True)
+            @option('-f', '--format', type=Choice(['png', 'svg']))
             @argument('filename', required=False)
-            def dag(ctx, no_open, filename, **kwargs):
-                tasks = cls(dask=True, **ctx.obj, **kwargs)
+            def dag(ctx, no_open, format, filename, **kwargs):
+                o = ctx.obj
+                tasks = cls(dask=True, **o, **kwargs)
                 result = tasks.create(read=None)
-                filename = filename or f'{cls.name()}_dag.png'
+                start = o['start']
+                end = o['end']
+                if filename and format and not filename.endswith(f'.{format}'):
+                    raise ValueError(f"-f/--format {format} doesn't match filename {filename}")
+                format = format or 'png'
+                filename = filename or f'{cls.name()}_{start}-{end}_dag.{format}'
                 err(f"Writing to {filename}")
                 result.visualize(filename)
                 if not no_open:
