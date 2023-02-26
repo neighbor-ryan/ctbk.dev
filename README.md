@@ -1,10 +1,9 @@
-# [ctbk.dev](https://ctbk.dev/)
-Citi Bike Dashboard
+# [ctbk.dev](https://ctbk.dev/) Citi Bike Dashboard
 
 - [ctbk/](ctbk) contains a Python library and CLI (`ctbk`) that derives various datasets from Citi Bike's public data at [`s3://tripdata`]
 - [s3://ctbk] contains cleaned, public data output by [`ctbk`]
 - [www/](www) contains the static web app served at [ctbk.dev].
-- GitHub Actions in [.githug/workflows](.github/workflows):
+- GitHub Actions in [.github/workflows](.github/workflows):
   - poll for new Citi Bike data at the start of each month
   - compute new derived data when found, and
   - build and publish the [ctbk.dev] website
@@ -39,15 +38,6 @@ Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
 [ctbk.dev?y=m&s=b&rt=ce][ctbk ebike minutes plot]:
 
 [![](www/public/screenshots/ctbk-ebike-minutes.png)][ctbk ebike minutes plot]
-
-## Implementation
-- [ctbk/](./ctbk) contains a Python library and CLI (`ctbk`) that derives various datasets from Citi Bike's public data at [`s3://tripdata`]
-- [s3://ctbk] contains cleaned, public data output by `ctbk`
-- [www/](./www) contains the static web app served at [ctbk.dev].
-- GitHub Actions in [.githug/workflows](.github/workflows):
-  - poll for new Citi Bike data at the start of each month
-  - compute new derived data when found, and
-  - build and publish the [ctbk.dev] website
 
 ## Prior Art
 [Many][ckran-20210305] [great][toddschneider-20160113] [analyses][jc-analysis-2017] [of][jc-analysis-2018] [Citi Bbike][datastudio-analysis] [data][cl2871-analysis] [have][tableau #citibike] [been][coursera citibike viz course] [done][juanjocarin analysis] over the years!
