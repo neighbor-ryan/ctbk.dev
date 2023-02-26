@@ -10,27 +10,35 @@ Citi Bike Dashboard
   - build and publish the [ctbk.dev] website
 
 ## Screenshots <a id="screenshots"></a>
+[ctbk.dev]:
+
 [![Screenshot of dashboard; per-month ride counts going back to June 2013, with a 12mo rolling avg showing mostly steady growth](www/public/screenshots/ctbk-rides.png)][ctbk.dev]
 
 ### Station/Ridership Map
+[ctbk.dev/stations]:
+
 [![Map of Citi Bike stations, Hoboken NJ Transit Terminal selected, showing destinations for rides beginning there](www/public/screenshots/ctbk-stations.png)][ctbk.dev/stations]
-[ctbk.dev/stations]
 
 ### JC & Hoboken Only
+[ctbk.dev/?r=jh][ctbk nj plot]:
+
 [![Screenshot of dashboard; per-month ride counts for Jersey City and Hoboken only, going back to June 2013, with a 12mo rolling avg showing mostly steady growth](www/public/screenshots/ctbk-nj.png)][ctbk nj plot]
-[ctbk.dev/?r=jh][ctbk nj plot]
 
 ### Ride Minute %'s by Gender
+[ctbk.dev?d=1406-2101&g=mf&pct&s=g&y=m][ctbk gender pct plot]:
+
 [![](www/public/screenshots/ctbk-ride-minutes-by-gender.png)][ctbk gender pct plot]
-[ctbk.dev?d=1406-2101&g=mf&pct&s=g&y=m][ctbk gender pct plot]; Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
+Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
 
 ### Ride %'s by User Type
+[ctbk.dev/?s=u&pct=][ctbk user type pct plot]:
+
 [![](www/public/screenshots/ctbk-rides-by-user.png)][ctbk user type pct plot]
-[ctbk.dev/?s=u&pct=][ctbk user type pct plot]
 
 ### Total Classic / E-bike Ride Minutes
+[ctbk.dev?y=m&s=b&rt=ce][ctbk ebike minutes plot]:
+
 [![](www/public/screenshots/ctbk-ebike-minutes.png)][ctbk ebike minutes plot]
-[ctbk.dev?y=m&s=b&rt=ce][ctbk ebike minutes plot]
 
 ## Implementation
 - [ctbk/](./ctbk) contains a Python library and CLI (`ctbk`) that derives various datasets from Citi Bike's public data at [`s3://tripdata`]
