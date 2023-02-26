@@ -75,7 +75,7 @@ jobs:
     secrets: inherit
   ymrgtb_cd_json:
     name: Write `ymrgtb_cd.json` used by www
-    # needs: group_counts-year-month-region-gender-type-bike-counts-durations
+    needs: group_counts-year-month-region-gender-type-bike-counts-durations
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
