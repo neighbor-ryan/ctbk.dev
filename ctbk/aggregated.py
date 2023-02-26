@@ -179,7 +179,7 @@ class AggregatedMonths(HasRootCLI, MonthTables):
 
 
 def agg_sum_cmd(fn):
-    @decos(AggKeys.opts())
+    @decos(*AggKeys.opts(), *SumKeys.opts())
     @wraps(fn)
     def _fn(ctx, *args, **kwargs):
         agg_keys = AggKeys(**utz.args(AggKeys, kwargs))
