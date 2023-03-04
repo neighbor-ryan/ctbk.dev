@@ -1,6 +1,8 @@
 from os.path import exists
+from urllib.parse import urlparse
 
 import dask.dataframe as dd
+import fsspec
 import pandas as pd
 from abc import ABC
 from click import command, argument, option
@@ -19,8 +21,6 @@ class MonthAggTable(ABC):
     OUT = None
 
     def __init__(self, start, end, root=None, overwrite=False, dask=False, out=None):
-        self.start = start
-        self.end = end or YM()
         self.root = root or self.ROOT
         if not self.SRC:
             raise RuntimeError(f"Set {self.__class__.__name__}.SRC")
@@ -30,6 +30,30 @@ class MonthAggTable(ABC):
         self.dask = dask
         self.out = out or self.OUT
         self.dpd = dd if dask else pd
+
+        self.start = start
+        if end:
+            self.end = end
+        else:
+            last = YM()
+            scheme = urlparse(self.dir).scheme
+            fs = fsspec.filesystem(scheme)
+            last_urls = []
+            found = False
+            # In the worst case, the most recent data will be 2 months behind the current calendar month (e.g. at the
+            # beginning of a month, when the previous month's data has not been published yet
+            for i in range(3):
+                last_url = self.url(last)
+                last_urls.append(last_url)
+
+                if fs.exists(last_url):
+                    found = True
+                    break
+                else:
+                    last -= 1
+            if not found:
+                raise ValueError(f"Couldn't find any of: {last_urls}")
+            self.end = last + 1
 
     def url(self, ym: Monthy) -> str:
         return f'{self.dir}/{ym}.parquet'

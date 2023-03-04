@@ -1,8 +1,8 @@
 from abc import ABC
 
-from ctbk import Monthy
 from ctbk.table import Table
 from ctbk.task import Task
+from ctbk.util import Monthy
 
 
 class MonthTask(Task, ABC):

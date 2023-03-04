@@ -10,7 +10,7 @@ from utz import cached_property, err
 from ctbk.aggregated import AggregatedMonth, DIR
 from ctbk.has_root_cli import HasRootCLI
 from ctbk.month_table import MonthTable
-from ctbk.stations.meta_hists import StationMetaHist
+from ctbk.stations.meta_hists import StationMetaHist, StationMetaHists, AggKeys
 from ctbk.tasks import MonthTables
 from ctbk.util.df import DataFrame, apply, sxs, meta
 from ctbk.util.ym import dates, Monthy
@@ -205,6 +205,11 @@ class ModesMonthJson(MonthTable):
 class ModesMonthJsons(HasRootCLI, MonthTables):
     DIR = DIR
     CHILD_CLS = ModesMonthJson
+
+    def __init__(self, start: Monthy = None, end: Monthy = None, **kwargs):
+        # Just used for inferring fallback ending month
+        src = StationMetaHists(agg_keys=AggKeys.load('in'), start=start, end=end, **kwargs)
+        super().__init__(start=src.start, end=src.end, **kwargs)
 
     def month(self, ym: Monthy) -> ModesMonthJson:
         return ModesMonthJson(ym, **self.kwargs)

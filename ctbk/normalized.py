@@ -7,7 +7,6 @@ import pandas as pd
 from numpy import nan
 from utz import err
 
-from ctbk import Monthy
 from ctbk.csvs import TripdataCsv, TripdataCsvs
 from ctbk.has_root_cli import HasRootCLI
 from ctbk.month_table import MonthTable

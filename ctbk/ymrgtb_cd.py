@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-from ctbk import Monthy
 from ctbk.month_agg_table import MonthAggTable
+from ctbk.util import Monthy
 from ctbk.util.df import meta, DataFrame
 
 

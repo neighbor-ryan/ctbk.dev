@@ -145,6 +145,7 @@ class AggregatedMonth(MonthTable):
 class AggregatedMonths(HasRootCLI, MonthTables):
     DIR = DIR
     CHILD_CLS = AggregatedMonth
+    SRC_CLS = NormalizedMonths
 
     def __init__(
             self,
@@ -155,7 +156,7 @@ class AggregatedMonths(HasRootCLI, MonthTables):
             end: Monthy = None,
             **kwargs
     ):
-        src = self.src = NormalizedMonths(start=start, end=end, **kwargs)
+        src = self.src = self.SRC_CLS(start=start, end=end, **kwargs)
         self.agg_keys = agg_keys
         self.sum_keys = sum_keys
         self.sort_agg_keys = sort_agg_keys
