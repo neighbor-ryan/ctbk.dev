@@ -6,13 +6,12 @@ from zipfile import ZipFile, ZIP_LZMA
 from dask import delayed
 from utz import cached_property, Unset
 
-from ctbk import Monthy, YM
 from ctbk.csvs import ReadsTripdataZip
 from ctbk.has_root_cli import HasRootCLI
 from ctbk.util.constants import BKT
 from ctbk.util.read import Read
 from ctbk.util.region import region
-from ctbk.util.ym import dates
+from ctbk.util.ym import dates, Monthy, YM
 from ctbk.zips import TripdataZips
 
 DIR = f'{BKT}/sampled/tripdata'

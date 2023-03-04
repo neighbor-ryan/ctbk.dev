@@ -5,7 +5,6 @@ from typing import Union
 import utz
 from utz import decos
 
-from ctbk import Monthy
 from ctbk.has_root_cli import HasRootCLI
 from ctbk.month_table import MonthTable
 from ctbk.normalized import NormalizedMonth, NormalizedMonths
@@ -13,7 +12,7 @@ from ctbk.tasks import MonthTables
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
 from ctbk.util.keys import Keys
-from ctbk.util.ym import dates
+from ctbk.util.ym import dates, Monthy
 
 DIR = f'{BKT}/stations/meta_hists'
 

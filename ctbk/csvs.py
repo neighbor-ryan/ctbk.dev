@@ -7,7 +7,6 @@ from zipfile import ZipFile
 
 import dask.dataframe as dd
 import pandas as pd
-from ctbk import YM, Monthy
 from ctbk.has_root_cli import HasRootCLI
 from ctbk.table import Table
 from ctbk.task import Task
@@ -15,7 +14,7 @@ from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
 from ctbk.util.read import Read
 from ctbk.util.region import REGIONS, Region, region
-from ctbk.util.ym import dates
+from ctbk.util.ym import dates, YM, Monthy
 from ctbk.zips import TripdataZips, TripdataZip
 from dask.delayed import delayed, Delayed
 from gzip_stream import GZIPCompressedStream

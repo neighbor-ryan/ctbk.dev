@@ -15,7 +15,7 @@ from ctbk.tasks import MonthTables
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
 from ctbk.util.region import Region, get_regions
-from ctbk.util.ym import dates
+from ctbk.util.ym import dates, Monthy
 
 DIR = f'{BKT}/normalized'
 

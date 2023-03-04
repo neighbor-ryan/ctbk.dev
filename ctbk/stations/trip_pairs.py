@@ -5,7 +5,6 @@ import pandas as pd
 from dask.delayed import Delayed
 from utz import Unset
 
-from ctbk import Monthy
 from ctbk.aggregated import AggregatedMonth, DIR
 from ctbk.has_root_cli import HasRootCLI
 from ctbk.month_table import MonthTable
@@ -13,7 +12,7 @@ from ctbk.stations.modes import ModesMonthJson
 from ctbk.tasks import MonthTables
 from ctbk.util.df import DataFrame
 from ctbk.util.read import Read
-from ctbk.util.ym import dates
+from ctbk.util.ym import dates, Monthy
 
 
 class StationPairsJson(MonthTable):
