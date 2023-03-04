@@ -206,11 +206,6 @@ class ModesMonthJsons(HasRootCLI, MonthTables):
     DIR = DIR
     CHILD_CLS = ModesMonthJson
 
-    def __init__(self, start: Monthy = None, end: Monthy = None, **kwargs):
-        # Just used for inferring fallback ending month
-        src = StationMetaHists(agg_keys=AggKeys.load('in'), start=start, end=end, **kwargs)
-        super().__init__(start=src.start, end=src.end, **kwargs)
-
     def month(self, ym: Monthy) -> ModesMonthJson:
         return ModesMonthJson(ym, **self.kwargs)
 

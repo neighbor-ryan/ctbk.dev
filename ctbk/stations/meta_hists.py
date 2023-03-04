@@ -139,12 +139,10 @@ class StationMetaHist(MonthTable):
 class StationMetaHists(HasRootCLI, MonthTables):
     DIR = DIR
     CHILD_CLS = StationMetaHist
-    SRC_CLS = NormalizedMonths
 
-    def __init__(self, agg_keys: AggKeys, start: Monthy = None, end: Monthy = None, **kwargs):
-        src = self.src = self.SRC_CLS(start=start, end=end, **kwargs)
+    def __init__(self, agg_keys: AggKeys, **kwargs):
         self.agg_keys = agg_keys
-        super().__init__(start=src.start, end=src.end, **kwargs)
+        super().__init__(**kwargs)
 
     def month(self, ym: Monthy) -> StationMetaHist:
         return StationMetaHist(ym, agg_keys=self.agg_keys, **self.kwargs)

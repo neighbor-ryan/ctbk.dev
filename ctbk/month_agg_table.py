@@ -1,12 +1,10 @@
+from abc import ABC
 from os.path import exists
-from urllib.parse import urlparse
+from typing import Generator
 
 import dask.dataframe as dd
-import fsspec
 import pandas as pd
-from abc import ABC
 from click import command, argument, option
-from typing import Generator
 from utz import err
 
 from ctbk.cli.base import dask
@@ -35,25 +33,9 @@ class MonthAggTable(ABC):
         if end:
             self.end = end
         else:
-            last = YM()
-            scheme = urlparse(self.dir).scheme
-            fs = fsspec.filesystem(scheme)
-            last_urls = []
-            found = False
-            # In the worst case, the most recent data will be 2 months behind the current calendar month (e.g. at the
-            # beginning of a month, when the previous month's data has not been published yet
-            for i in range(3):
-                last_url = self.url(last)
-                last_urls.append(last_url)
-
-                if fs.exists(last_url):
-                    found = True
-                    break
-                else:
-                    last -= 1
-            if not found:
-                raise ValueError(f"Couldn't find any of: {last_urls}")
-            self.end = last + 1
+            from ctbk import TripdataZips
+            zips = TripdataZips(start=start, end=end)
+            self.end = zips.end
 
     def url(self, ym: Monthy) -> str:
         return f'{self.dir}/{ym}.parquet'

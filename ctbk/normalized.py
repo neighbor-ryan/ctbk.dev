@@ -208,10 +208,6 @@ class NormalizedMonths(MonthTables, HasRootCLI):
     DIR = DIR
     CHILD_CLS = NormalizedMonth
 
-    def __init__(self, start: Monthy = None, end: Monthy = None, **kwargs):
-        src = self.src = TripdataCsvs(start=start, end=end, **kwargs)
-        super().__init__(start=src.start, end=src.end, **kwargs)
-
     def month(self, ym: Monthy) -> NormalizedMonth:
         return NormalizedMonth(ym, **self.kwargs)
 

@@ -26,7 +26,12 @@ class Tasks(HasRoot, ABC):
 class MonthTasks(Tasks, ABC):
     def __init__(self, start: Monthy, end: Monthy, **kwargs):
         self.start: YM = YM(start)
-        self.end: YM = YM(end)
+        if not end:
+            from ctbk import TripdataZips
+            zips = TripdataZips(start=start, end=end, roots=kwargs.get('roots'))
+            self.end = zips.end
+        else:
+            self.end: YM = YM(end)
         super().__init__(**kwargs)
 
     def month(self, ym: Monthy) -> Task:
