@@ -611,7 +611,7 @@ export default function App({ data, }: { data: Row[] }) {
                             <li><Link href={"/?y=m&s=b&rt=ce"}>Classic / E-bike ride minutes</Link></li>
                             <li><Link href={"/"}>Default view (system-wide rides over time)</Link></li>
                         </ul>
-                        <p>This plot should refresh when <a href={"https://www.citibikenyc.com/system-data"} target={"_blank"}>new data is published by Citibike</a> (typically around the 2nd week of each month, covering the previous month).</p>
+                        <p>This plot should refresh when <a href={"https://www.citibikenyc.com/system-data"} target={"_blank"}>new data is published by Citi Bike</a> (typically around the 2nd week of each month, covering the previous month).</p>
                         <p><a href={"https://github.com/neighbor-ryan/ctbk.dev"} target={"_blank"}>The GitHub repo</a> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"} target={"_blank"}>planned enhancements</a>.</p>
                         <hr/>
                         <h3 id={"map"}>Map: Stations + Common Destinations</h3>
