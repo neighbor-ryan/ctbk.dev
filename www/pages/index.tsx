@@ -7,8 +7,7 @@ import React, {ReactNode, useMemo, useState} from 'react';
 import css from "./index.module.css"
 import controlCss from "../src/controls.module.css"
 
-import * as Plotly from "plotly.js"
-import {Layout} from "plotly.js"
+import {Data, Layout} from "plotly.js"
 
 import {Checkbox} from "../src/checkbox";
 import {Checklist} from "../src/checklist";
@@ -16,6 +15,7 @@ import {DateRange, DateRange2Dates, dateRangeParam} from "../src/date-range";
 import Head from "../src/head"
 import {Radios} from "../src/radios";
 
+import Image from "next/image"
 import {getBasePath} from "next-utils/basePath"
 import {loadSync} from "next-utils/load"
 import MD from "next-utils/md"
@@ -30,8 +30,9 @@ import Link from "next/link";
 import 'react-tooltip/dist/react-tooltip.css'
 
 import {darken} from "../src/colors";
-import {ArrayType1D} from "danfojs/dist/danfojs-base/shared/types";
+import {Figure} from "react-plotly.js";
 
+import { useEffect } from "react";
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false, })
 const Tooltip = dynamic(() => import("react-tooltip").then(m => m.Tooltip), { ssr: false, })
 
@@ -143,6 +144,14 @@ const BikeTypeLabel = (suffix: number | string) =>
         <div>E-bike data seems to be</div>
         <div>mostly missing / undercounted</div>
     </WarningLabel>
+
+type InitializedPlot = {
+    figure: Readonly<Figure>
+    graphDiv: Readonly<HTMLElement>
+    set: boolean
+}
+
+type PlotInitialized = { time: number, set: boolean }
 
 export default function App({ data, }: { data: Row[] }) {
     const params: Params = {
@@ -401,9 +410,9 @@ export default function App({ data, }: { data: Row[] }) {
     )
 
     // Create Plotly trace data, including colors (when stacking)
-    const traces: Plotly.Data[] = useMemo(
+    const traces: Data[] = useMemo(
         () => {
-            const rollingTraces: Plotly.Data[] = rollingSeries.map(
+            const rollingTraces: Data[] = rollingSeries.map(
                 ({ stackVal, n, s }) => {
                     const stackName = stackVal || 'Total'
                     const name = stackVal ? `${stackVal} (${n}mo)` : `${n}mo avg`
@@ -418,13 +427,13 @@ export default function App({ data, }: { data: Row[] }) {
                         line: {width: 4,},
                         hovertemplate,
                         legendrank: 101 + 2 * legendRanks[stackVal]
-                    } as Plotly.Data
+                    } as Data
                 }
             )
             console.log("rollingTraces:", rollingTraces)
 
             // Bar data (including color fades when stacking)
-            const barTraces: Plotly.Data[] = pivotedClamped && pivotedClamped.columns.map(k => {
+            const barTraces: Data[] = pivotedClamped && pivotedClamped.columns.map(k => {
                 const series = pivotedClamped[k]
                 const x = series.index
                 const y = series.values
@@ -490,6 +499,49 @@ export default function App({ data, }: { data: Row[] }) {
         margin: { t: 0, r: 0, b: 40, l: 0, },
     }
 
+    const [ initialized, setInitialized ] = useState(false)
+    const clickToToggle = false
+    // const width = 768
+    const height = 450
+    const src = 'plot-fallback.png'
+    const [ initializedPlot, setInitializedPlot ] = useState<InitializedPlot | null>(null)
+    const downloadOnInit = false
+    const [ firstRender, setFirstRender ] = useState<Date>(new Date)
+    const [ plotInitialized, setPlotInitialized ] = useState<PlotInitialized | null>(null)
+    useEffect(
+        () => {
+            if (!plotInitialized) return
+            const { time } = plotInitialized
+            const delayMs = time - firstRender?.getTime()
+            console.log(`Plot initialized ${delayMs / 1000}s after initial page render`)
+        },
+        [ plotInitialized?.set ]
+    )
+    useEffect(
+        () => {
+            console.log("plotly effect:", initializedPlot, downloadOnInit)
+            if (!initializedPlot) return
+            const { figure, graphDiv, set } = initializedPlot
+            if (!set) return
+            if (!downloadOnInit) return
+            import('plotly.js')
+                .then(m => m.default)
+                .then(
+                    Plotly => Plotly.downloadImage(
+                        figure,
+                        {
+                            width: graphDiv.offsetWidth,
+                            height: graphDiv.offsetHeight,
+                            filename: "rides",
+                            format: "png",
+                        }
+                    )
+                )
+                .then(img => console.log('downloaded img:', img))
+        },
+        [ initializedPlot?.set ]
+    )
+
     return (
         <div id="plot" className={css.container}>
             <Head
@@ -498,27 +550,67 @@ export default function App({ data, }: { data: Row[] }) {
                 thumbnail={`ctbk-rides`}
             />
             <main className={css.main}>
-                <div className={css.titleContainer}>
+                <div
+                    className={css.titleContainer}
+                    onClick={() => clickToToggle && setInitialized(!initialized)}
+                >
                     <h1 className={css.title}>{title}</h1>
                     {subtitle && <p className={css.subtitle}>{subtitle}</p>}
                 </div>
                 {/* Main plot: bar graph + rolling avg line(s) */}
-                <Plot
-                    className={css.plotly}
-                    onDoubleClick={() => setDateRange('All')}
-                    onRelayout={e => {
-                        if (!('xaxis.range[0]' in e && 'xaxis.range[1]' in e)) return
-                        let [ start, end ] = [ e['xaxis.range[0]'], e['xaxis.range[1]'], ].map(s => s ? new Date(s) : undefined)
-                        start = start ? moment(start).subtract(1, 'month').toDate() : start
-                        const dateRange = (!start && !end) ? 'All' : { start, end, }
-                        // console.log("relayout:", e, start, end, dateRange,)
-                        setDateRange(dateRange)
-                    }}
-                    data={traces}
-                    useResizeHandler
-                    layout={layout}
-                    config={{ displayModeBar: false, /*responsive: true,*/ }}
-                />
+                <div className={css.plotWrapper}>
+                    <div
+                        className={`${css.fallback} ${initialized ? css.hidden : ""}`}
+                        style={{ height: `${height}px`, maxHeight: `${height}px` }}
+                        onClick={() => clickToToggle && setInitialized(true)}
+                    >
+                        <Image
+                            alt={title}
+                            src={`${basePath}/${src}`}
+                            // width={width}
+                            // height={height}
+                            layout={"fill"}
+                            // fill  // TODO: Next 13 requires updating <Link> in next-utils/md
+                            // layout="responsive"
+                            // loading="lazy"
+                        />
+                    </div>
+                    {
+                        <Plot
+                            className={css.plotly}
+                            style={{ visibility: initialized ? undefined : "hidden", width: "100%", height: `${height}px` }}
+                            onInitialized={async (figure: Readonly<Figure>, graphDiv: Readonly<HTMLElement>) => {
+                                if (!plotInitialized) {
+                                    // This can still run more than once; true once-only semantics (for storing only a
+                                    // timestamp only the first time this code path is hit) comes from
+                                    // `useEffect(…, [ set ])` above.
+                                    setPlotInitialized({ time: Date.now(), set: true })
+                                }
+
+                                console.log("initialized:", figure, graphDiv)
+                                setInitializedPlot({ figure, graphDiv, set: true })
+                                clickToToggle || setInitialized(true)
+                            }}
+                            onDoubleClick={() => setDateRange('All')}
+                            onRelayout={e => {
+                                if (!('xaxis.range[0]' in e && 'xaxis.range[1]' in e)) return
+                                let [start, end] = [e['xaxis.range[0]'], e['xaxis.range[1]'],].map(s => s ? new Date(s) : undefined)
+                                start = start ? moment(start).subtract(1, 'month').toDate() : start
+                                const dateRange = (!start && !end) ? 'All' : {start, end,}
+                                // console.log("relayout:", e, start, end, dateRange,)
+                                setDateRange(dateRange)
+                            }}
+                            data={traces}
+                            useResizeHandler
+                            layout={layout}
+                            config={{
+                                displayModeBar: false,
+                                // staticPlot: true,
+                                // responsive: true,
+                            }}
+                        />
+                    }
+                </div>
                 {/* DateRange controls */}
                 <div className={css.row}>
                     <details className={css.controls}>
@@ -616,7 +708,15 @@ export default function App({ data, }: { data: Row[] }) {
                         <hr/>
                         <h3 id={"map"}>Map: Stations + Common Destinations</h3>
                         <p>Check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in January 2023</Link>.</p>
-                        <a href={"./stations"}><img className={css.map} src={"screenshots/ctbk-stations.png"} /></a>
+                        <a href={"./stations"}>
+                            <Image
+                                className={css.map}
+                                src={"screenshots/ctbk-stations.png"}
+                                alt={"Map of stations in Jersey City, sized by ridership, and showing connections to other stations"}
+                                layout={"fill"}
+                                loading={"lazy"}
+                            />
+                        </a>
                         <hr />
                         <h3 id="qc">🚧 Data-quality issues 🚧</h3>
                         {MD(`

@@ -16,7 +16,7 @@
         "leaflet": "^1.9.2",
         "lodash": "^4.17.21",
         "moment": "^2.29.1",
-        "next": "12.3.3",
+        "next": "^12.3.4",
         "next-transpile-modules": "^10.0.0",
         "next-utils": "https://gitpkg.now.sh/runsascoded/next-utils/dist?2daa7c1",
         "node-fetch": "^2.6.1",

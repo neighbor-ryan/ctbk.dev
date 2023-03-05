@@ -13,6 +13,9 @@ const nextConfig = {
     images: {
         unoptimized: true,
     },
+    // webpack(webpackConfig) {
+    //     return { ...webpackConfig, optimization: { minimize: false } };
+    // },
 }
 
 const withMDX = require('@next/mdx')({
