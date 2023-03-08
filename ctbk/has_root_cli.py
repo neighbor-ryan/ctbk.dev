@@ -54,7 +54,8 @@ class HasRootCLI(Tasks, HasRoot, ABC):
             @cmd(help="Print URLs for selected datasets")
             def urls(ctx, **kwargs):
                 o = ctx.obj
-                tasks = cls(**o, **kwargs)
+                filtered_kwargs = utz.args(cls, dict(**o, **kwargs))
+                tasks = cls(**filtered_kwargs)
                 children = tasks.children
                 for month in children:
                     print(month.url)

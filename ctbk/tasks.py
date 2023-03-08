@@ -37,6 +37,9 @@ class MonthTasks(Tasks, ABC):
     def month(self, ym: Monthy) -> Task:
         raise NotImplementedError
 
+    def url(self, ym: Monthy) -> str:
+        return self.month(ym).url
+
     @cached_property
     def children(self) -> list[Task]:
         return [

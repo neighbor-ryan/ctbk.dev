@@ -5,9 +5,10 @@ from typing import Generator
 import dask.dataframe as dd
 import pandas as pd
 from click import command, argument, option
-from utz import err
+from utz import err, cached_property, DefaultDict
 
 from ctbk.cli.base import dask
+from ctbk.tasks import MonthTasks, MonthTables
 from ctbk.util import S3
 from ctbk.util.df import DataFrame
 from ctbk.util.ym import dates, YM, Monthy
@@ -15,50 +16,37 @@ from ctbk.util.ym import dates, YM, Monthy
 
 class MonthAggTable(ABC):
     ROOT = S3
-    SRC = None
+    SRC_CLS = None
     OUT = None
 
     def __init__(self, start, end, root=None, overwrite=False, dask=False, out=None):
         self.root = root or self.ROOT
-        if not self.SRC:
-            raise RuntimeError(f"Set {self.__class__.__name__}.SRC")
-        self.src = self.SRC
-        self.dir = f'{self.root}/{self.src}'
         self.overwrite = overwrite
         self.dask = dask
         self.out = out or self.OUT
         self.dpd = dd if dask else pd
 
-        self.start = start
-        if end:
-            self.end = end
-        else:
-            from ctbk import TripdataZips
-            zips = TripdataZips(start=start, end=end)
-            self.end = zips.end
+        self.src = src = self.SRC_CLS(start=start, end=end, **self.src_kwargs())
+        self.start = src.start
+        self.end = src.end
 
-    def url(self, ym: Monthy) -> str:
-        return f'{self.dir}/{ym}.parquet'
-
-    def read(self, url):
-        return self.dpd.read_parquet(url)
-
-    def load(self, ym: Monthy) -> DataFrame:
-        url = self.url(ym)
-        try:
-            df = self.dpd.read_parquet(url)
-        except FileNotFoundError as e:
-            err(f'FileNotFoundError: {url}')
-            raise
-        return df
+    def src_kwargs(self):
+        return dict(roots=DefaultDict({}, self.root), dask=self.dask)
 
     @property
-    def months(self) -> Generator['YM', None, None]:
+    def dir(self):
+        return self.src.dir
+
+    def url(self, ym: Monthy) -> str:
+        return self.src.url(ym)
+
+    @property
+    def months(self) -> Generator[YM, None, None]:
         return self.start.until(self.end)
 
     @property
     def dfs(self) -> list[DataFrame]:
-        return [ self.load(ym) for ym in self.months ]
+        return [ self.src.df(ym) for ym in self.months ]
 
     def mapped_dfs(self) -> list[DataFrame]:
         return [ self.map(df) for df in self.dfs ]
@@ -89,6 +77,9 @@ class MonthAggTable(ABC):
         else:
             err(f'Writing {out}')
 
+        self._run()
+
+    def _run(self):
         mapped_dfs = self.mapped_dfs()
         df = self.reduce(mapped_dfs)
         self.write(df)
