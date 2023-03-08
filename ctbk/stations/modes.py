@@ -5,15 +5,15 @@ import numpy as np
 import pandas as pd
 from numpy import nan
 from pandas import Series
-from utz import cached_property, err
+from utz import cached_property, err, YM
 
 from ctbk.aggregated import AggregatedMonth, DIR
 from ctbk.has_root_cli import HasRootCLI
 from ctbk.month_table import MonthTable
-from ctbk.stations.meta_hists import StationMetaHist
+from ctbk.stations.meta_hists import StationMetaHist, StationMetaHists, GroupByKeys
 from ctbk.tasks import MonthTables
 from ctbk.util.df import DataFrame, apply, sxs, meta
-from ctbk.util.ym import dates, Monthy
+from ctbk.util.ym import dates, Monthy, GENESIS
 
 
 def row_sketch(a):
@@ -155,6 +155,15 @@ class ModesMonthJson(MonthTable):
         id2idx = ids.set_index('id').idx
         return id2idx
 
+    @cached_property
+    def all_meta_hists(self):
+        return StationMetaHists(GroupByKeys.load('in'), start=GENESIS, end=None, **self.kwargs).df
+
+    @cached_property
+    def name_to_init_ym(self):
+        all_meta_hists = self.all_meta_hists
+        return all_meta_hists.groupby('name')['ym'].min().rename('first_seen')
+
     def _df(self) -> DataFrame:
         dask = self.dask
         smh_in = StationMetaHist(self.ym, 'in', **self.kwargs)
@@ -180,7 +189,9 @@ class ModesMonthJson(MonthTable):
             .set_index('id')
             .starts
         )
+        name_to_init_ym = self.name_to_init_ym
         stations = sxs(names, lls, starts)
+        stations = stations.merge(name_to_init_ym, left_on='name', right_index=True, how='left')
         stations['starts'] = stations.starts.fillna(0).astype(int)
         return stations
 
@@ -188,11 +199,13 @@ class ModesMonthJson(MonthTable):
         with self.fd('r') as f:
             df = pd.read_json(f, orient='index', convert_axes=False)
         df.index.name = 'id'
+        if 'first_seen' in df:
+            df['first_seen'] = df['first_seen'].apply(YM)
         return df
 
     def _write(self, df):
         with self.fd('w') as f:
-            df.to_json(f, orient='index')
+            df.assign(first_seen=df.first_seen.apply(str)).to_json(f, orient='index')
 
     @property
     def checkpoint_kwargs(self):
