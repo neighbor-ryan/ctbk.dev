@@ -12,6 +12,12 @@ import fetch from "node-fetch";
 import _ from "lodash";
 import {LAST_MONTH_PATH} from "../src/paths";
 
+import chroma from 'chroma-js';
+
+// const colors = chroma.scale([ 'red', 'orange', 'yellow', ]);
+const colors = chroma.scale([ 'yellow', 'orange', 'red', ]);
+// const colors = chroma.scale([ 'green', 'blue', 'purple', ]);
+
 const DEFAULT_CENTER = { lat: 40.758, lng: -73.965, }
 const DEFAULT_ZOOM = 12
 
@@ -28,6 +34,7 @@ type StationValue = {
     lat: number
     lng: number
     starts: number
+    first_seen?: string
 }
 
 type Idx = string
@@ -37,6 +44,16 @@ type Stations = { [id: ID]: StationValue }
 type YmProps = {
     ym: string
     stations: Stations
+}
+
+function ym2date(ymStr: string) {
+    const year = parseInt(ymStr.substring(0, 4))
+    const month = parseInt(ymStr.substring(4))
+    return new Date(year, month - 1)
+}
+
+function ym2time(ymStr: string) {
+    return ym2date(ymStr).getTime()
 }
 
 export async function getStaticProps(context: any) {
@@ -90,6 +107,10 @@ function getMetersPerPixel(map: L.Map) {
     //console.log("distanceX:", distanceX, "distanceY:", distanceY, "center:", centerLatLng, "zoom:", zoom)
     return distanceX
 }
+
+const genesis = new Date(2013, 5).getTime()
+const now = Date.now()
+const sinceGenesis = now - genesis
 
 function MapBody(
     {TileLayer, Marker, Circle, CircleMarker, Polyline, Pane, Tooltip, useMapEvents, useMap }: typeof ReactLeaflet,
@@ -159,28 +180,44 @@ function MapBody(
             console.log(`id ${id} not in stations`)
             return null
         }
-        const { name, lat, lng } = stations[id]
-        return <Circle key={id} center={{ lat, lng }} color={selected ? "yellow" : "orange"} radius={sqrt(count)}
-                       eventHandlers={{
-                           click: () => {
-                               if (id == selectedStationId) return
-                               console.log("click:", name)
-                               setSelectedStationId(id)
-                           },
-                           mouseover: () => {
-                               if (id == selectedStationId) return
-                               console.log("over:", name)
-                               setSelectedStationId(id)
-                           },
-                           mousedown: () => {
-                               if (id == selectedStationId) return
-                               console.log("down:", name)
-                               setSelectedStationId(id)
-                           },
-                       }}
+        const { name, lat, lng, first_seen } = stations[id]
+        let colorFrac
+        if (first_seen) {
+            const firstSeenTime = ym2time(first_seen)
+            const timeFrac = 1 - (now - firstSeenTime) / sinceGenesis
+            const base = 0
+            colorFrac = base + (1-base) * timeFrac
+            // console.log(`station first seen ${name}: ${first_seen}, ${fillOpacity}, timeFrac ${timeFrac}`)
+        } else {
+            colorFrac = 1
+        }
+        const color: string = colors(colorFrac).css()
+        return <Circle
+            key={id}
+            center={{ lat, lng }}
+            color={selected ? "yellow" : color}
+            radius={sqrt(count)}
+            eventHandlers={{
+                click: () => {
+                    if (id == selectedStationId) return
+                    console.log("click:", name)
+                    setSelectedStationId(id)
+                },
+                mouseover: () => {
+                    if (id == selectedStationId) return
+                    console.log("over:", name)
+                    setSelectedStationId(id)
+                },
+                mousedown: () => {
+                    if (id == selectedStationId) return
+                    console.log("down:", name)
+                    setSelectedStationId(id)
+                },
+            }}
         >
             <Tooltip className={css.tooltip} sticky={true} permanent={id == selectedStationId} pane={"selected"}>
                 <p>{name}: {count}</p>
+                <p>{first_seen && `First seen: ${first_seen}`}</p>
             </Tooltip>
         </Circle>
     }
@@ -249,9 +286,8 @@ export default function Home({ defaults }: { defaults: YmProps, }) {
 
     const { ymString } = useMemo(
         () => {
-            const year = parseInt(ym.substring(0, 4))
-            const month = parseInt(ym.substring(4))
-            const ymString = new Date(year, month - 1).toLocaleDateString('default', { month: 'short', year: 'numeric' })
+            const ymDate = ym2date(ym)
+            const ymString = ymDate.toLocaleDateString('default', { month: 'short', year: 'numeric' })
             const dir = `https://ctbk.s3.amazonaws.com/aggregated/${ym}`
             const stationPairsUrl = `${dir}/se_c.json`
             const stationsUrl = `${dir}/stations.json`
