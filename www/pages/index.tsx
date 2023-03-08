@@ -564,12 +564,12 @@ export default function App({ data, }: { data: Row[] }) {
                         style={{ height: `${height}px`, maxHeight: `${height}px` }}
                         onClick={() => clickToToggle && setInitialized(true)}
                     >
-                        <Image
+                        <img
                             alt={title}
                             src={`${basePath}/${src}`}
-                            // width={width}
-                            // height={height}
-                            layout={"fill"}
+                            width={"100%"}
+                            height={height}
+                            // layout={"fill"}
                             // fill  // TODO: Next 13 requires updating <Link> in next-utils/md
                             // layout="responsive"
                             // loading="lazy"
@@ -709,12 +709,12 @@ export default function App({ data, }: { data: Row[] }) {
                         <h3 id={"map"}>Map: Stations + Common Destinations</h3>
                         <p>Check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in January 2023</Link>.</p>
                         <a href={"./stations"}>
-                            <Image
+                            <img
                                 className={css.map}
                                 src={"screenshots/ctbk-stations.png"}
                                 alt={"Map of stations in Jersey City, sized by ridership, and showing connections to other stations"}
-                                layout={"fill"}
-                                loading={"lazy"}
+                                // layout={"fill"}
+                                // loading={"lazy"}
                             />
                         </a>
                         <hr />
