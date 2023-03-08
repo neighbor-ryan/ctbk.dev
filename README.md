@@ -40,7 +40,7 @@ Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
 [![](www/public/screenshots/ctbk-ebike-minutes.png)][ctbk ebike minutes plot]
 
 ## Prior Art
-[Many][ckran-20210305] [great][toddschneider-20160113] [analyses][jc-analysis-2017] [of][jc-analysis-2018] [Citi Bbike][datastudio-analysis] [data][cl2871-analysis] [have][tableau #citibike] [been][coursera citibike viz course] [done][juanjocarin analysis] over the years!
+[Many][ckran-20210305] [great][toddschneider-20160113] [analyses][jc-analysis-2017] [of][jc-analysis-2018] [Citi Bike][datastudio-analysis] [data][cl2871-analysis] [have][tableau #citibike] [been][coursera citibike viz course] [done][juanjocarin analysis] over the years!
 
 My hope is that this dashboard will:
 - stay up to date automatically

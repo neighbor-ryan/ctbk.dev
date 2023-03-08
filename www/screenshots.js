@@ -1,7 +1,32 @@
+#!/usr/bin/env node
+
 const puppeteer = require('puppeteer');
+const program = require('commander');
+
+const cwd = __dirname
+
+const options =
+    program
+        .option('-h, --host <host or port>', 'Hostname to load screenshots from; numeric <port> is mapped to 127.0.0.1:<port>')
+        .option('-i, --include <regex>', 'Only generate screenshots whose name matches this regex')
+        .parse(process.argv)
+        .opts()
+
+let scheme
+let {host, include} = options
+if (host) {
+    scheme = 'http'
+    if (host.match(/^\d+$/)) {
+        host = `127.0.0.1:${host}`
+    }
+} else {
+    host = 'ctbk.dev'
+    scheme = 'https'
+}
+console.log("host:", host, "includes:", include);
 
 (async () => {
-    const dir = `public/screenshots`
+    const dir = `${cwd}/public/screenshots`
     const screens = {
         'ctbk-rides': { query: '', height: 540, },
         'ctbk-nj': { query: '?r=jh', },
@@ -16,10 +41,14 @@ const puppeteer = require('puppeteer');
 
     const items = Array.from(Object.entries(screens))
     for (let [ name, { query, width, height, selector } ] of items) {
+        if (include && !name.match(include)) {
+            console.log(`Skipping ${name}`)
+            continue
+        }
         width = width || 800
         height = height || 580
         selector = selector || '.plotly svg rect'
-        const url = `https://ctbk.dev/${query}`
+        const url = `${scheme}://${host}/${query}`
         console.log(`Loading ${url}`)
         await page.goto(url);
         console.log(`Loaded ${url}`)

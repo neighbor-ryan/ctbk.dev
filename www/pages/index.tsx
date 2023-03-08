@@ -39,10 +39,12 @@ const Tooltip = dynamic(() => import("react-tooltip").then(m => m.Tooltip), { ss
 const {pow} = Math
 
 const JSON_PATH = 'public/assets/ymrgtb_cd.json'
+import {LAST_MONTH_PATH} from "../src/paths";
 
 export async function getStaticProps(context: any) {
     const data = loadSync<Row[]>(JSON_PATH)
-    return { props: { data } }
+    const lastMonthStr = loadSync<string>(LAST_MONTH_PATH)
+    return { props: { data, lastMonthStr } }
 }
 
 type Params = {
@@ -153,7 +155,7 @@ type InitializedPlot = {
 
 type PlotInitialized = { time: number, set: boolean }
 
-export default function App({ data, }: { data: Row[] }) {
+export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr: string }) {
     const params: Params = {
         y: enumParam('Rides', YAxes),
         u: enumMultiParam(UserTypes, UserTypeQueryStrings, ''),
@@ -165,6 +167,17 @@ export default function App({ data, }: { data: Row[] }) {
         d: dateRangeParam(),
         avg: numberArrayParam([ 12 ]),
     }
+
+    const lastMonthDisplayStr = useMemo(
+        () => {
+            const lastMonthYear = parseInt(lastMonthStr.substring(0, 4))
+            const lastMonthIdx = parseInt(lastMonthStr.substring(4, 6)) - 1
+            const lastMonth = new Date(lastMonthYear, lastMonthIdx)
+            return lastMonth.toLocaleDateString('en-us', { month: "short", year: "numeric" })
+
+        },
+        [ lastMonthStr ]
+    )
 
     const {
         y: [ yAxis, setYAxis ],
@@ -707,7 +720,7 @@ export default function App({ data, }: { data: Row[] }) {
                         <p><a href={"https://github.com/neighbor-ryan/ctbk.dev"} target={"_blank"}>The GitHub repo</a> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"} target={"_blank"}>planned enhancements</a>.</p>
                         <hr/>
                         <h3 id={"map"}>Map: Stations + Common Destinations</h3>
-                        <p>Check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in January 2023</Link>.</p>
+                        <p>Check out <Link href={"./stations"}><a>this map visualization of stations and their ridership counts in {lastMonthDisplayStr}</a></Link>.</p>
                         <a href={"./stations"}>
                             <img
                                 className={css.map}
