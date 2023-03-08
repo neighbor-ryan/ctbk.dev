@@ -129,6 +129,7 @@
 }
 .fallback img {
     z-index: -1;
+    position: relative;
 }
 .plotly {
     width: 100%;

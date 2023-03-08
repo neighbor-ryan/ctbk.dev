@@ -57,6 +57,7 @@ type Params = {
     rt: Param<RideableType[]>
     d: Param<DateRange>
     avg: Param<number[]>
+    dl: Param<boolean>
 }
 
 type ParsedParams = {
@@ -69,6 +70,7 @@ type ParsedParams = {
     rt: ParsedParam<RideableType[]>
     d: ParsedParam<DateRange>
     avg: ParsedParam<number[]>
+    dl: ParsedParam<boolean>
 }
 
 type MonthVal = { m: string, v: number }
@@ -166,6 +168,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
         rt: enumMultiParam(RideableTypes, RideableTypeChars, ''),
         d: dateRangeParam(),
         avg: numberArrayParam([ 12 ]),
+        dl: boolParam,
     }
 
     const lastMonthDisplayStr = useMemo(
@@ -189,6 +192,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
         rt: [ rideableTypes, setRideableTypes ],
         d: [ dateRange, setDateRange ],
         avg: [ rollingAvgs, setRollingAvgs ],
+        dl: [ downloadPlotImage, setDownloadPlotImage ],
     }: ParsedParams = parseQueryParams({ params })
 
     let df = useMemo(
@@ -518,7 +522,6 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
     const height = 450
     const src = 'plot-fallback.png'
     const [ initializedPlot, setInitializedPlot ] = useState<InitializedPlot | null>(null)
-    const downloadOnInit = false
     const [ firstRender, setFirstRender ] = useState<Date>(new Date)
     const [ plotInitialized, setPlotInitialized ] = useState<PlotInitialized | null>(null)
     useEffect(
@@ -532,11 +535,11 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
     )
     useEffect(
         () => {
-            console.log("plotly effect:", initializedPlot, downloadOnInit)
+            console.log("plotly effect:", initializedPlot, downloadPlotImage)
             if (!initializedPlot) return
             const { figure, graphDiv, set } = initializedPlot
             if (!set) return
-            if (!downloadOnInit) return
+            if (!downloadPlotImage) return
             import('plotly.js')
                 .then(m => m.default)
                 .then(
