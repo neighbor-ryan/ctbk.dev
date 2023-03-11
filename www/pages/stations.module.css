@@ -42,3 +42,7 @@
 .lines {
     z-index: 450 !important;
 }
+
+.tooltip p {
+    margin-bottom: 0;
+}

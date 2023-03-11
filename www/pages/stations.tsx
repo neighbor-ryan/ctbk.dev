@@ -179,8 +179,8 @@ function MapBody(
                            },
                        }}
         >
-            <Tooltip sticky={true}>
-                {name}: {count}
+            <Tooltip className={css.tooltip} sticky={true} permanent={id == selectedStationId} pane={"selected"}>
+                <p>{name}: {count}</p>
             </Tooltip>
         </Circle>
     }
