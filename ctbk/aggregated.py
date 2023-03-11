@@ -20,6 +20,7 @@ DIR = f'{BKT}/aggregated'
 class GroupByKeys(keys.GroupByKeys):
     year: bool = False
     month: bool = False
+    day: bool = False
     weekday: bool = False
     hour: bool = False
     region: bool = False
@@ -32,6 +33,7 @@ class GroupByKeys(keys.GroupByKeys):
     KEYS = {
         'year': 'y',
         'month': 'm',
+        'day': 'd',
         'weekday': 'w',
         'hour': 'h',
         'region': 'r',
