@@ -10,7 +10,7 @@ from utz import cached_property, err
 from ctbk.aggregated import AggregatedMonth, DIR
 from ctbk.has_root_cli import HasRootCLI
 from ctbk.month_table import MonthTable
-from ctbk.stations.meta_hists import StationMetaHist, StationMetaHists, AggKeys
+from ctbk.stations.meta_hists import StationMetaHist
 from ctbk.tasks import MonthTables
 from ctbk.util.df import DataFrame, apply, sxs, meta
 from ctbk.util.ym import dates, Monthy

@@ -1,5 +1,7 @@
+from abc import ABC
 from typing import Union
 
+from click import option
 from utz.case import dash_case
 from utz.cli import flag
 
@@ -32,8 +34,25 @@ class Keys:
             return cls(**{ names[key]: True for key in arg })
 
     @classmethod
-    def opts(cls):
-        return [
-            flag(f'-{ch}', f'--{dash_case(name)}')
-            for name, ch in cls.KEYS.items()
-        ]
+    def char_name_summary(cls):
+        return ", ".join([ f"'{ch}' ({name})" for name, ch in cls.KEYS.items() ])
+
+    @classmethod
+    def opt(cls):
+        raise NotImplementedError
+
+    @classmethod
+    def help(cls):
+        raise NotImplementedError
+
+
+class GroupByKeys(Keys, ABC):
+    @classmethod
+    def opt(cls):
+        return option('-g', '--group-by', required=True, help=cls.help())
+
+
+class AggregateByKeys(Keys, ABC):
+    @classmethod
+    def opt(cls):
+        return option('-a', '--aggregate-by', required=True, help=cls.help())

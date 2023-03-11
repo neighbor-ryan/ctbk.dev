@@ -167,7 +167,6 @@ Commands:
   station-modes-json  Compute canonical station names, lat/lngs from...
   station-pairs-json  Write station-pair ride_counts keyed by...
   sampled-zip         Generate test data by downsampling tripdata...
-
 ```
 </details>
 
@@ -186,7 +185,6 @@ Options:
 
 Commands:
   urls  Print URLs for selected datasets
-
 ```
 </details>
 
@@ -207,7 +205,6 @@ Commands:
   urls    Print URLs for selected datasets
   create  Create selected datasets
   dag     Save and `open` a graph visualization of the datasets to be...
-
 ```
 </details>
 
@@ -228,7 +225,6 @@ Commands:
   urls    Print URLs for selected datasets
   create  Create selected datasets
   dag     Save and `open` a graph visualization of the datasets to be...
-
 ```
 </details>
 
@@ -243,13 +239,18 @@ Usage: ctbk aggregated [OPTIONS] COMMAND [ARGS]...
 
 Options:
   -d, --dates TEXT
-  --help            Show this message and exit.
+  -g, --group-by TEXT      One or more keys to group rides by: 'y' (year), 'm'
+                           (month), 'w' (weekday), 'h' (hour), 'r' (region),
+                           'g' (gender), 't' (user_type), 'b' (rideable_type),
+                           's' (start_station), 'e' (end_station)  [required]
+  -a, --aggregate-by TEXT  One or more keys to aggregate (sum) rides by: 'c'
+                           (count), 'd' (duration)  [required]
+  --help                   Show this message and exit.
 
 Commands:
   urls    Print URLs for selected datasets
   create  Create selected datasets
   dag     Save and `open` a graph visualization of the datasets to be...
-
 ```
 </details>
 
@@ -264,13 +265,16 @@ Usage: ctbk station-meta-hist [OPTIONS] COMMAND [ARGS]...
 
 Options:
   -d, --dates TEXT
-  --help            Show this message and exit.
+  -g, --group-by TEXT  One or more keys to group station occurrences (taken
+                       from both ride starts and ends) by: 'y' (year), 'm'
+                       (month), 'i' (id), 'n' (name), 'l' (lat_lng)
+                       [required]
+  --help               Show this message and exit.
 
 Commands:
   urls    Print URLs for selected datasets
   create  Create selected datasets
   dag     Save and `open` a graph visualization of the datasets to be...
-
 ```
 </details>
 
@@ -291,7 +295,6 @@ Commands:
   urls    Print URLs for selected datasets
   create  Create selected datasets
   dag     Save and `open` a graph visualization of the datasets to be...
-
 ```
 </details>
 
@@ -312,7 +315,6 @@ Commands:
   urls    Print URLs for selected datasets
   create  Create selected datasets
   dag     Save and `open` a graph visualization of the datasets to be...
-
 ```
 </details>
 
@@ -334,7 +336,6 @@ Commands:
   urls    Print URLs for selected datasets
   create  Create selected datasets
   dag     Save and `open` a graph visualization of the datasets to be...
-
 ```
 </details>
 
@@ -397,7 +398,7 @@ stderr messages about `Rideable Type` not being found are due to the chosen mont
 </details>
 
 Parallel computation with `--dask`:
-<details><summary><code>ctbk --s3 -tagg=tmproot agg -d202210-2023 create --dask -ymrc</code></summary>
+<details><summary><code>ctbk --s3 -tagg=tmproot agg -d202210-2023 -gymr -ac create --dask</code></summary>
 
 ```
 Writing tmproot/ctbk/aggregated/ymr_c_202210.parquet
@@ -469,7 +470,7 @@ Generate all the data used by [ctbk.dev] in a local `s3/ctbk` directory (mirrori
 [Dask] also powers a rudimentary DAG visualization for each stage, e.g.:
 
 4 months of [`aggregated`] data (by year, month, and region, counting rides), reading from existing upstream [`normalized`] data in S3:
-<details><summary><code>ctbk --s3 -tagg=tmproot agg -d202210- dag -ymrc</code></summary>
+<details><summary><code>ctbk --s3 -tagg=tmproot agg -d202210- -gymr -ac dag</code></summary>
 
 ![aggregated_dag](https://user-images.githubusercontent.com/465045/221421244-9d6c0289-36de-482a-9b32-892f86f32b7a.png)
 

@@ -29,35 +29,35 @@ jobs:
     uses: ./.github/workflows/step.yml
     with:
       name: Compute station name histograms
-      run: ctbk --s3 station-meta-hist create --dask -in
+      run: ctbk --s3 station-meta-hist -gin create --dask
     secrets: inherit
   meta_hist-latlngs:
     needs: normalized
     uses: ./.github/workflows/step.yml
     with:
       name: Compute station lat/lng histograms
-      run: ctbk --s3 station-meta-hist create --dask -il
+      run: ctbk --s3 station-meta-hist -gil create --dask
     secrets: inherit
   group_counts-start:
     needs: normalized
     uses: ./.github/workflows/step.yml
     with:
       name: Aggregate counts by start station
-      run: ctbk --s3 aggregated create --dask -s -c
+      run: ctbk --s3 aggregated -gs -ac create --dask
     secrets: inherit
   group_counts-start-end:
     needs: normalized
     uses: ./.github/workflows/step.yml
     with:
       name: Aggregate counts by station-pair
-      run: ctbk --s3 aggregated create --dask -se -c
+      run: ctbk --s3 aggregated -gse -ac create --dask
     secrets: inherit
   group_counts-year-month-region-gender-type-bike-counts-durations:
     needs: normalized
     uses: ./.github/workflows/step.yml
     with:
       name: Aggregate counts by (month, region, gender, user type, rideable type)
-      run: ctbk --s3 aggregated create --dask -ymrgtb -cd
+      run: ctbk --s3 aggregated -gymrgtb -acd create --dask
     secrets: inherit
   modes:
     needs: [meta_hist-names, meta_hist-latlngs, group_counts-start]

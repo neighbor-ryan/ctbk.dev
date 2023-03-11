@@ -7,18 +7,17 @@ from utz import decos
 
 from ctbk.has_root_cli import HasRootCLI
 from ctbk.month_table import MonthTable
-from ctbk.normalized import NormalizedMonth, NormalizedMonths
+from ctbk.normalized import NormalizedMonth
 from ctbk.tasks import MonthTables
-from ctbk.util import dates, Monthy
+from ctbk.util import dates, Monthy, keys
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
-from ctbk.util.keys import Keys
 
 DIR = f'{BKT}/aggregated'
 
 
 @dataclass
-class AggKeys(Keys):
+class GroupByKeys(keys.GroupByKeys):
     year: bool = False
     month: bool = False
     weekday: bool = False
@@ -43,9 +42,13 @@ class AggKeys(Keys):
         'end_station': 'e',
     }
 
+    @classmethod
+    def help(cls):
+        return f'One or more keys to group rides by: {cls.char_name_summary()}'
+
 
 @dataclass
-class SumKeys(Keys):
+class AggregateByKeys(keys.AggregateByKeys):
     count: bool = True
     duration: bool = False
 
@@ -53,6 +56,10 @@ class SumKeys(Keys):
         'count': 'c',
         'duration': 'd',
     }
+
+    @classmethod
+    def help(cls):
+        return f'One or more keys to aggregate (sum) rides by: {cls.char_name_summary()}'
 
 
 class AggregatedMonth(MonthTable):
@@ -62,80 +69,80 @@ class AggregatedMonth(MonthTable):
     def __init__(
             self,
             ym: Monthy,
-            agg_keys: Union[str, AggKeys, dict],
-            sum_keys: Union[str, SumKeys, dict],
+            group_by_keys: Union[str, GroupByKeys, dict],
+            aggregate_by_keys: Union[str, AggregateByKeys, dict],
             **kwargs
     ):
-        self.agg_keys = AggKeys.load(agg_keys)
-        self.sum_keys = SumKeys.load(sum_keys)
+        self.group_by_keys = GroupByKeys.load(group_by_keys)
+        self.aggregate_by_keys = AggregateByKeys.load(aggregate_by_keys)
         super().__init__(ym, **kwargs)
 
     @property
     def url(self):
-        return f'{self.dir}/{self.agg_keys.label}_{self.sum_keys.label}_{self.ym}.parquet'
+        return f'{self.dir}/{self.group_by_keys.label}_{self.aggregate_by_keys.label}_{self.ym}.parquet'
 
     def _df(self) -> DataFrame:
         src = NormalizedMonth(self.ym, **self.kwargs)
         df = src.df
-        agg_keys = dict(self.agg_keys)
-        sum_keys = dict(self.sum_keys)
-        group_keys = []
-        if agg_keys.get('r'):
+        group_by_keys = dict(self.group_by_keys)
+        aggregate_by_keys = dict(self.aggregate_by_keys)
+        group_by_cols = []
+        if group_by_keys.get('r'):
             df = df.rename(columns={'Start Region': 'Region'})  # assign rides to the region they originated in
-            group_keys.append('Region')
-        if agg_keys.get('y'):
+            group_by_cols.append('Region')
+        if group_by_keys.get('y'):
             if 'Start Year' not in df:
                 df['Start Year'] = df['Start Time'].dt.year
-            group_keys.append('Start Year')
-        if agg_keys.get('m'):
+            group_by_cols.append('Start Year')
+        if group_by_keys.get('m'):
             if 'Start Month' not in df:
                 df['Start Month'] = df['Start Time'].dt.month
-            group_keys.append('Start Month')
-        if agg_keys.get('d'):
+            group_by_cols.append('Start Month')
+        if group_by_keys.get('d'):
             if 'Start Day' not in df:
                 df['Start Day'] = df['Start Time'].dt.day
-            group_keys.append('Start Day')
-        if agg_keys.get('w'):
+            group_by_cols.append('Start Day')
+        if group_by_keys.get('w'):
             if 'Start Weekday' not in df:
                 df['Start Weekday'] = df['Start Time'].dt.weekday
-            group_keys.append('Start Weekday')
-        if agg_keys.get('h'):
+            group_by_cols.append('Start Weekday')
+        if group_by_keys.get('h'):
             if 'Start Hour' not in df:
                 df['Start Hour'] = df['Start Time'].dt.hour
-            group_keys.append('Start Hour')
-        if agg_keys.get('g'):
-            group_keys.append('Gender')
-        if agg_keys.get('t'):
-            group_keys.append('User Type')
-        if agg_keys.get('b'):
-            group_keys.append('Rideable Type')
-        if agg_keys.get('s'):
-            group_keys.append('Start Station ID')
-        if agg_keys.get('e'):
-            group_keys.append('End Station ID')
-        if agg_keys.get('n'):
-            group_keys.append('Start Station Name')
-        if agg_keys.get('N'):
-            group_keys.append('End Station Name')
-        if agg_keys.get('l'):
-            group_keys += ['Start Station Latitude', 'Start Station Longitude']
-        if agg_keys.get('L'):
-            group_keys += ['End Station Latitude', 'End Station Longitude']
+            group_by_cols.append('Start Hour')
+        if group_by_keys.get('g'):
+            group_by_cols.append('Gender')
+        if group_by_keys.get('t'):
+            group_by_cols.append('User Type')
+        if group_by_keys.get('b'):
+            group_by_cols.append('Rideable Type')
+        if group_by_keys.get('s'):
+            group_by_cols.append('Start Station ID')
+        if group_by_keys.get('e'):
+            group_by_cols.append('End Station ID')
+        if group_by_keys.get('n'):
+            group_by_cols.append('Start Station Name')
+        if group_by_keys.get('N'):
+            group_by_cols.append('End Station Name')
+        if group_by_keys.get('l'):
+            group_by_cols += ['Start Station Latitude', 'Start Station Longitude']
+        if group_by_keys.get('L'):
+            group_by_cols += ['End Station Latitude', 'End Station Longitude']
 
-        select_keys = []
-        if sum_keys.get('c'):
+        aggregate_by_cols = []
+        if aggregate_by_keys.get('c'):
             if 'Count' not in df:
                 df['Count'] = 1
-            select_keys.append('Count')
-        if sum_keys.get('d'):
+            aggregate_by_cols.append('Count')
+        if aggregate_by_keys.get('d'):
             if 'Duration' not in df:
                 df['Duration'] = (df['Stop Time'] - df['Start Time']).dt.seconds
-            select_keys.append('Duration')
+            aggregate_by_cols.append('Duration')
 
-        grouped = df.groupby(group_keys)
+        grouped = df.groupby(group_by_cols)
         counts = (
             grouped
-            [select_keys]
+            [aggregate_by_cols]
             .sum()
             .reset_index()
         )
@@ -148,32 +155,31 @@ class AggregatedMonths(HasRootCLI, MonthTables):
 
     def __init__(
             self,
-            agg_keys: AggKeys,
-            sum_keys: SumKeys,
+            group_by_keys: GroupByKeys,
+            aggregate_by_keys: AggregateByKeys,
             sort_agg_keys=False,
             **kwargs
     ):
-        self.agg_keys = agg_keys
-        self.sum_keys = sum_keys
+        self.group_by_keys = group_by_keys
+        self.aggregate_by_keys = aggregate_by_keys
         self.sort_agg_keys = sort_agg_keys
         super().__init__(**kwargs)
 
     def month(self, ym: Monthy) -> AggregatedMonth:
-        return AggregatedMonth(ym, agg_keys=self.agg_keys, sum_keys=self.sum_keys, **self.kwargs)
+        return AggregatedMonth(ym, group_by_keys=self.group_by_keys, aggregate_by_keys=self.aggregate_by_keys, **self.kwargs)
 
 
-def command(fn):
-    @decos(*AggKeys.opts(), *SumKeys.opts())
+def cmd(fn):
+    @decos([ GroupByKeys.opt(), AggregateByKeys.opt() ])
     @wraps(fn)
-    def _fn(ctx, *args, **kwargs):
-        agg_keys = AggKeys(**utz.args(AggKeys, kwargs))
-        sum_keys = SumKeys(**utz.args(SumKeys, kwargs))
-        fn(*args, ctx=ctx, agg_keys=agg_keys, sum_keys=sum_keys, **utz.args(fn, kwargs))
+    def _fn(ctx, *args, group_by, aggregate_by, **kwargs):
+        group_by_keys = GroupByKeys.load(group_by)
+        aggregate_by_keys = AggregateByKeys.load(aggregate_by)
+        fn(*args, ctx=ctx, group_by_keys=group_by_keys, aggregate_by_keys=aggregate_by_keys, **kwargs)
     return _fn
 
 
 AggregatedMonths.cli(
     help=f"Aggregate normalized ride entries by various columns, summing ride counts or durations. Writes to <root>/{DIR}/KEYS_YYYYMM.parquet.",
-    decos=[dates],
-    cmd_decos=[command],
+    decos=[dates, cmd],
 )

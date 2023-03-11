@@ -2,23 +2,20 @@ from dataclasses import dataclass
 from functools import wraps
 from typing import Union
 
-import utz
-from utz import decos
-
 from ctbk.has_root_cli import HasRootCLI
 from ctbk.month_table import MonthTable
-from ctbk.normalized import NormalizedMonth, NormalizedMonths
+from ctbk.normalized import NormalizedMonth
 from ctbk.tasks import MonthTables
+from ctbk.util import keys
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
-from ctbk.util.keys import Keys
 from ctbk.util.ym import dates, Monthy
 
 DIR = f'{BKT}/stations/meta_hists'
 
 
 @dataclass
-class AggKeys(Keys):
+class GroupByKeys(keys.GroupByKeys):
     year: bool = False
     month: bool = False
     id: bool = False
@@ -33,6 +30,10 @@ class AggKeys(Keys):
         'lat_lng': 'l',
     }
 
+    @classmethod
+    def help(cls):
+        return f'One or more keys to group station occurrences (taken from both ride starts and ends) by: {cls.char_name_summary()}'
+
 
 class StationMetaHist(MonthTable):
     DIR = DIR
@@ -41,15 +42,15 @@ class StationMetaHist(MonthTable):
     def __init__(
             self,
             ym: Monthy,
-            agg_keys: Union[str, AggKeys, dict],
+            group_by_keys: Union[str, GroupByKeys, dict],
             **kwargs
     ):
-        self.agg_keys = AggKeys.load(agg_keys)
+        self.group_by_keys = GroupByKeys.load(group_by_keys)
         super().__init__(ym, **kwargs)
 
     @property
     def url(self):
-        return f'{self.dir}/{self.agg_keys.label}_{self.ym}.parquet'
+        return f'{self.dir}/{self.group_by_keys.label}_{self.ym}.parquet'
 
     def _df(self) -> DataFrame:
         src = NormalizedMonth(self.ym, **self.kwargs)
@@ -60,16 +61,16 @@ class StationMetaHist(MonthTable):
             'Start Month': 'month',
             'Start Time': 'time'
         })
-        agg_keys = dict(self.agg_keys)
-        group_keys = []
-        if agg_keys.get('y'):
+        group_by_keys = dict(self.group_by_keys)
+        group_by_cols = []
+        if group_by_keys.get('y'):
             if 'year' not in df:
                 df['year'] = df['time'].dt.year
-            group_keys.append('year')
-        if agg_keys.get('m'):
+            group_by_cols.append('year')
+        if group_by_keys.get('m'):
             if 'month' not in df:
                 df['month'] = df['time'].dt.month
-            group_keys.append('month')
+            group_by_cols.append('month')
 
         # Below can be factored like this; can the above, and similar in `AggregatedMonth`?
         # COL_NAMES = {
@@ -83,28 +84,28 @@ class StationMetaHist(MonthTable):
         #
         # col_names = {
         #     prv_col: new_col
-        #     for key in dict(agg_keys)
+        #     for key in dict(self.group_by_keys)
         #     for prv_col, new_col in COL_NAMES[key].items()
         # }
 
         col_names = {}
-        if agg_keys.get('i'):
+        if group_by_keys.get('i'):
             col_names['Station ID'] = 'id'
-        if agg_keys.get('n'):
+        if group_by_keys.get('n'):
             col_names['Station Name'] = 'name'
-        if agg_keys.get('l'):
+        if group_by_keys.get('l'):
             col_names['Station Latitude'] = 'lat'
             col_names['Station Longitude'] = 'lng'
 
-        # Combine the names and lat/lngs given for each station, from both ride starts and ride ends.
-        # Histogram each one in and then combine then below
+        # Combine the names and lat/lngs for each station, from both ride starts and ride ends.
+        # Histogram each one and then combine them below
         def starts_ends_hist(starts: bool):
             prefix = 'Start' if starts else 'End'
             renames = {
                 f'{prefix} {cur_col}': new_col
                 for cur_col, new_col in col_names.items()
             }
-            cur_cols = group_keys + list(renames.keys())
+            cur_cols = group_by_cols + list(renames.keys())
             renamed = df[cur_cols].rename(columns=renames)
             grouped = renamed.groupby(renamed.columns.tolist())
             counts = (
@@ -140,25 +141,24 @@ class StationMetaHists(HasRootCLI, MonthTables):
     DIR = DIR
     CHILD_CLS = StationMetaHist
 
-    def __init__(self, agg_keys: AggKeys, **kwargs):
-        self.agg_keys = agg_keys
+    def __init__(self, group_by_keys: GroupByKeys, **kwargs):
+        self.group_by_keys = group_by_keys
         super().__init__(**kwargs)
 
     def month(self, ym: Monthy) -> StationMetaHist:
-        return StationMetaHist(ym, agg_keys=self.agg_keys, **self.kwargs)
+        return StationMetaHist(ym, group_by_keys=self.group_by_keys, **self.kwargs)
 
 
-def agg_cmd(fn):
-    @decos(AggKeys.opts())
+def cmd(fn):
+    @GroupByKeys.opt()
     @wraps(fn)
-    def _fn(ctx, *args, **kwargs):
-        agg_keys = AggKeys(**utz.args(AggKeys, kwargs))
-        fn(*args, ctx=ctx, agg_keys=agg_keys, **utz.args(fn, kwargs))
+    def _fn(ctx, *args, group_by_keys, **kwargs):
+        group_by_keys = GroupByKeys.load(group_by_keys)
+        fn(*args, ctx=ctx, group_by_keys=group_by_keys, **kwargs)
     return _fn
 
 
 StationMetaHists.cli(
     help=f"Aggregate station name, lat/lng info from ride start and end fields. Writes to <root>/{DIR}/KEYS_YYYYMM.parquet.",
-    decos=[dates],
-    cmd_decos=[agg_cmd],
+    decos=[dates, cmd],
 )
