@@ -15,7 +15,6 @@ import {DateRange, DateRange2Dates, dateRangeParam} from "../src/date-range";
 import Head from "../src/head"
 import {Radios} from "../src/radios";
 
-import Image from "next/image"
 import {getBasePath} from "next-utils/basePath"
 import {loadSync} from "next-utils/load"
 import MD from "next-utils/md"
@@ -31,6 +30,8 @@ import 'react-tooltip/dist/react-tooltip.css'
 
 import {darken} from "../src/colors";
 import {Figure} from "react-plotly.js";
+import fs from "fs";
+import {useParquetBuf} from "next-utils/parquet";
 
 import { useEffect } from "react";
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false, })
@@ -38,13 +39,13 @@ const Tooltip = dynamic(() => import("react-tooltip").then(m => m.Tooltip), { ss
 
 const {pow} = Math
 
-const JSON_PATH = 'public/assets/ymrgtb_cd.json'
+const PARQUET_PATH = 'public/assets/ymrgtb_cd.parquet'
 import {LAST_MONTH_PATH} from "../src/paths";
 
 export async function getStaticProps(context: any) {
-    const data = loadSync<Row[]>(JSON_PATH)
     const lastMonthStr = loadSync<string>(LAST_MONTH_PATH)
-    return { props: { data, lastMonthStr } }
+    const dataArr = fs.readFileSync(PARQUET_PATH).toJSON().data
+    return { props: { dataArr, lastMonthStr } }
 }
 
 type Params = {
@@ -157,7 +158,8 @@ type InitializedPlot = {
 
 type PlotInitialized = { time: number, set: boolean }
 
-export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr: string }) {
+export default function App({ dataArr, lastMonthStr }: { dataArr: number[], lastMonthStr: string }) {
+    const data = useParquetBuf<Row>(dataArr, 'ymrgtb_cd')
     const params: Params = {
         y: enumParam('Rides', YAxes),
         u: enumMultiParam(UserTypes, UserTypeQueryStrings, ''),
@@ -197,6 +199,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
 
     let df = useMemo(
         () => {
+            if (!data) return
             let df = new DataFrame(data)
             let m = new Series(
                 df
@@ -257,7 +260,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
     const normalized = useMemo(
         () => (
             df
-                .drop({ columns: 'Gender' })
+                ?.drop({ columns: 'Gender' })
                 .addColumn('Gender', df.Gender.map((g: number) => Int2Gender[g]))
                 .drop({ columns: 'Rideable Type' })
                 .addColumn('Rideable Type', df['Rideable Type'].map((r: RideableType) => NormalizeRideableType[r]))
@@ -267,6 +270,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
 
     const fdf = useMemo(
         () => {
+            if (!normalized) return
             // print("normalized", normalized)
             const filters = {
                 Region: regions,
@@ -293,6 +297,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
     // exclusive bound)
     const { start, end } = useMemo(
         () => {
+            if (!data) return { start: null, end: null }
             const last = moment(_.max(data.map(r => new Date(r.Year, r.Month - 1,)))).add(1, 'M').toDate()
             const { start, end } = mapValues<Date, string>(
                 DateRange2Dates(dateRange, last),
@@ -310,8 +315,8 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
             rename[`${yAxis}_sum`] = yAxis
             let groupCols = stackBy == 'None' ? ['m'] : ['m', stackBy]
             let grouped: DataFrame | null = null
-            if (fdf.shape[0]) {
-                grouped = fdf.groupby(groupCols).col([yAxis]).sum().rename(rename)
+            if (fdf?.shape[0]) {
+                grouped = fdf?.groupby(groupCols).col([yAxis]).sum().rename(rename)
             }
             let pivoted: DataFrame | null = null
             if (grouped) {
@@ -367,7 +372,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
             } else {
                 if (!pivoted) return []
                 let clampEnd = end
-                if (stackBy == 'Gender' && end > GenderRollingAvgCutoff) {
+                if (stackBy == 'Gender' && end && end > GenderRollingAvgCutoff) {
                     clampEnd = GenderRollingAvgCutoff
                 }
                 let avgs: NDF = fromEntries(
@@ -387,7 +392,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                             // print(`rolling df`, df)
                             return df.columns.map(stackVal => {
                                 let s = df[stackVal] as Series
-                                if (stackBy == 'Rideable Type' && stackVal == 'Unknown' && end > UnknownRideableCutoff) {
+                                if (stackBy == 'Rideable Type' && stackVal == 'Unknown' && end && end > UnknownRideableCutoff) {
                                     s = clampIndex(s, { end: UnknownRideableCutoff })
                                 }
                                 annualizedPercents(s).forEach(percent => console.log(`${stackVal}: ${annualPercentStr(percent)}`))
@@ -419,9 +424,9 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
     const pivotedClamped = useMemo(
         () => {
             if (!pivoted) return null
-            const pivotedClamped = clampIndex(pivoted, { start, end })
+            return clampIndex(pivoted, { start, end })
             // print("pivotedClamped", pivotedClamped)
-            return pivotedClamped
+            // return pivotedClamped
         },
         [ pivoted, start, end ]
     )
@@ -558,6 +563,8 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
         [ initializedPlot?.set ]
     )
 
+    const showFallbackImg = initialized && data
+
     return (
         <div id="plot" className={css.container}>
             <Head
@@ -576,7 +583,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                 {/* Main plot: bar graph + rolling avg line(s) */}
                 <div className={css.plotWrapper}>
                     <div
-                        className={`${css.fallback} ${initialized ? css.hidden : ""}`}
+                        className={`${css.fallback} ${showFallbackImg ? css.hidden : ""}`}
                         style={{ height: `${height}px`, maxHeight: `${height}px` }}
                         onClick={() => clickToToggle && setInitialized(true)}
                     >
@@ -594,7 +601,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                     {
                         <Plot
                             className={css.plotly}
-                            style={{ visibility: initialized ? undefined : "hidden", width: "100%", height: `${height}px` }}
+                            style={{ visibility: showFallbackImg ? undefined : "hidden", width: "100%", height: `${height}px` }}
                             onInitialized={async (figure: Readonly<Figure>, graphDiv: Readonly<HTMLElement>) => {
                                 if (!plotInitialized) {
                                     // This can still run more than once; true once-only semantics (for storing only a
@@ -723,7 +730,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                         <p><a href={"https://github.com/neighbor-ryan/ctbk.dev"} target={"_blank"}>The GitHub repo</a> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"} target={"_blank"}>planned enhancements</a>.</p>
                         <hr/>
                         <h3 id={"map"}>Map: Stations + Common Destinations</h3>
-                        <p>Check out <Link href={"./stations"}><a>this map visualization of stations and their ridership counts in {lastMonthDisplayStr}</a></Link>.</p>
+                        <p>Check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in {lastMonthDisplayStr}</Link>.</p>
                         <a href={"./stations"}>
                             <img
                                 className={css.map}

@@ -5,6 +5,7 @@
     "license": "MIT",
     "author": "Ryan Williams <ryan@runsascoded.com",
     "dependencies": {
+        "@duckdb/duckdb-wasm": "^1.21.0",
         "@next/mdx": "^13.0.6",
         "assert": "^2.0.0",
         "aws-sdk": "^2.1043.0",
@@ -17,9 +18,9 @@
         "leaflet": "^1.9.2",
         "lodash": "^4.17.21",
         "moment": "^2.29.1",
-        "next": "^12.3.4",
+        "next": "^13.2.4",
         "next-transpile-modules": "^10.0.0",
-        "next-utils": "https://gitpkg.now.sh/runsascoded/next-utils/dist?2daa7c1",
+        "next-utils": "https://gitpkg.now.sh/runsascoded/next-utils/dist?eb473e8",
         "node-fetch": "^2.6.1",
         "plotly.js": "^2.0.0",
         "process": "^0.11.10",
@@ -30,7 +31,8 @@
         "react-markdown": "^7.1.1",
         "react-plotly.js": "^2.5.1",
         "react-router-dom": "^6.0.2",
-        "react-tooltip": "^5.0.0"
+        "react-tooltip": "^5.0.0",
+        "web-worker": "^1.2.0"
     },
     "devDependencies": {
         "@types/chroma-js": "^2.4.0",

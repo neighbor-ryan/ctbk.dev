@@ -1,5 +1,5 @@
 from abc import ABC
-from os.path import exists
+from os.path import exists, splitext
 from typing import Generator
 
 import dask.dataframe as dd
@@ -76,7 +76,13 @@ class MonthAggTable(ABC):
         self.write_df(df)
 
     def write_df(self, df: pd.DataFrame):
-        df.to_json(self.out, 'records')
+        name, extension = splitext(self.out)
+        if extension == '.json':
+            df.to_json(self.out, 'records')
+        elif extension in [ '.pqt', '.parquet' ]:
+            df.to_parquet(self.out, index=False)
+        else:
+            raise ValueError(f"Unrecognized format/extension: {self.out}")
 
     def run(self):
         out = self.out

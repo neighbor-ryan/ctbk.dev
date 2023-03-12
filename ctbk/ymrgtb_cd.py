@@ -7,7 +7,7 @@ from ctbk.util.df import meta, DataFrame
 class YmrgtbCdJson(MonthAggTable):
     # Used by [`index.tsx`](www/pages/index.tsx) plot
     SRC = 'ctbk/aggregated'
-    OUT = 'www/public/assets/ymrgtb_cd.json'
+    OUT = 'www/public/assets/ymrgtb_cd.parquet'
 
     def url(self, ym: Monthy) -> str:
         return f'{self.dir}/ymrgtb_cd_{ym}.parquet'

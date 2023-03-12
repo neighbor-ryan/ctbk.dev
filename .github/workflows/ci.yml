@@ -74,7 +74,7 @@ jobs:
       run: ctbk --s3 station-pair-json create --dask
     secrets: inherit
   ymrgtb_cd_json:
-    name: Write `ymrgtb_cd.json` used by www
+    name: Write `ymrgtb_cd.parquet` used by www
     needs: group_counts-year-month-region-gender-type-bike-counts-durations
     runs-on: ubuntu-latest
     steps:
@@ -90,13 +90,13 @@ jobs:
       - run: pip install -e .
       - run: python -m ctbk.ymrgtb_cd -f
       - run: |
-          name=ymrgtb_cd.json
-          json=www/public/assets/$name
+          name=ymrgtb_cd.parquet
+          path=www/public/assets/$name
           branch="${GITHUB_REF##*/}"
-          if git diff --quiet --exit-code -- $json && [ "$branch" != "push-www" ]; then
+          if git diff --quiet --exit-code -- $path && [ "$branch" != "push-www" ]; then
             echo "No change detected to $name"
           else
-            git add $json
+            git add $path
             git config --global user.name "GitHub Actions"
             git config --global user.email "github@actions"
             if [ "$branch" == "push-www" ]; then

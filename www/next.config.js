@@ -9,6 +9,14 @@ const withTranspileModules = createTranspileModulesPlugin(["next-utils"]);
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
+    webpack: function (config, options) {
+        config.experiments = { asyncWebAssembly: true };
+        config.module.rules.push({
+            test: /\.wasm$/,
+            type: 'webassembly/sync',
+        });
+        return config;
+    },
     swcMinify: true,
     images: {
         unoptimized: true,
