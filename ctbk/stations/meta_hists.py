@@ -152,8 +152,8 @@ class StationMetaHists(HasRootCLI, MonthTables):
 def cmd(fn):
     @GroupByKeys.opt()
     @wraps(fn)
-    def _fn(ctx, *args, group_by_keys, **kwargs):
-        group_by_keys = GroupByKeys.load(group_by_keys)
+    def _fn(ctx, *args, group_by, **kwargs):
+        group_by_keys = GroupByKeys.load(group_by)
         fn(*args, ctx=ctx, group_by_keys=group_by_keys, **kwargs)
     return _fn
 
