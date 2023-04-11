@@ -13,40 +13,63 @@
 
 [![Screenshot of dashboard; per-month ride counts going back to June 2013, with a 12mo rolling avg showing mostly steady growth](www/public/screenshots/ctbk-rides.png)][ctbk.dev]
 
-### Station/Ridership Map
+### Station/Ridership Map <a id="ctbk-stations"></a>
 [ctbk.dev/stations]:
 
 [![Map of Citi Bike stations, Hoboken NJ Transit Terminal selected, showing destinations for rides beginning there](www/public/screenshots/ctbk-stations.png)][ctbk.dev/stations]
 
-### JC & Hoboken Only
+### JC & Hoboken Only <a id="ctbk-nj"></a>
 [ctbk.dev/?r=jh][ctbk nj plot]:
 
 [![Screenshot of dashboard; per-month ride counts for Jersey City and Hoboken only, going back to June 2013, with a 12mo rolling avg showing mostly steady growth](www/public/screenshots/ctbk-nj.png)][ctbk nj plot]
 
-### Ride Minute %'s by Gender
+### Ride Minute %'s by Gender <a id="ctbk-ride-minutes-by-gender"></a>
 [ctbk.dev?d=1406-2102&g=mf&pct&s=g&y=m][ctbk gender pct plot]:
 
 [![](www/public/screenshots/ctbk-ride-minutes-by-gender.png)][ctbk gender pct plot]
 Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
 
-### Ride %'s by User Type
+### Ride %'s by User Type <a id="ctbk-rides-by-user"></a>
 [ctbk.dev/?s=u&pct=][ctbk user type pct plot]:
 
 [![](www/public/screenshots/ctbk-rides-by-user.png)][ctbk user type pct plot]
 
-### Total Classic / E-bike Ride Minutes
+### Total Classic / E-bike Ride Minutes <a id="ctbk-ebike-minutes"></a>
 [ctbk.dev?y=m&s=b&rt=ce][ctbk ebike minutes plot]:
 
 [![](www/public/screenshots/ctbk-ebike-minutes.png)][ctbk ebike minutes plot]
 
-## Prior Art
+### Stations by launch date <a id="stations-by-creation-date"></a>
+This is a work-in-progress; red = newer, yellow = older:
+
+![](www/public/img/stations-by-creation-date.png)
+
+### E-bike minutes by user type <a id="ctbk-ebike-minutes-by-user"></a>
+
+[![](www/public/screenshots/ctbk-ebike-minutes-by-user.png)][ctbk ebike minutes by user plot]
+
+You can get some interesting upper bounds on e-bike fee revenue from this:
+- 6MM "member" e-bike minutes @ $0.16/min ⟹ ≈$1MM
+- 3MM "casual" e-bike minutes @ $0.26/min ⟹$750k
+
+That doesn't count various reasons that e-bike minutes end up being free (positive bike angel points for the ride, no classic bikes available at station, etc.). With the discussion around recent price increases, you can do some envelope math like:
+- Suppose an e-bike costs $1000 (probably a low-ball estimate)
+- Suppose 5 rides per e-bike per day, and avg. 15mins / ride ⟹ $15 in e-bike fees per e-bike per day ⟹ several months to break even on each e-bike, before accounting for any operational cost of maintaining the e-bike fleet. Most likely the bikes don't break even for years, I'd guess…
+
+### Ride Durations
+This isn't live anywhere yet, but:
+![](www/public/img/ride_durations_202303_10s.png)
+
+The peak of the distribution (rounded down to the nearest 10s) is 4m20s. See [notebook here](nbs/ride-lengths.ipynb).
+
+## Prior Art <a id="prior-art"></a>
 [Many][ckran-20210305] [great][toddschneider-20160113] [analyses][jc-analysis-2017] [of][jc-analysis-2018] [Citi Bike][datastudio-analysis] [data][cl2871-analysis] [have][tableau #citibike] [been][coursera citibike viz course] [done][juanjocarin analysis] [over][clif-kranish-20210125] [the][clif-kranish-20210210] years!
 
 My hope is that this dashboard will:
 - stay up to date automatically
 - support enough exploratory data analysis and visualization to answer most q's a layperson might have about system-wide stats
 
-## Feedback / Contributing
+## Feedback / Contributing <a id="feedback"></a>
 Feel free to [file an issue here][github new issue] with any comments, bug reports, or feedback!
 
 [ckran-20210305]: https://towardsdatascience.com/exploring-the-effects-of-the-pandemic-on-nyc-bike-share-usage-ab79f67ac2df
@@ -79,3 +102,4 @@ Feel free to [file an issue here][github new issue] with any comments, bug repor
 [ctbk nj plot]: https://ctbk.dev/?r=jh
 [ctbk user type pct plot]: https://ctbk.dev/?s=u&pct=
 [ctbk ebike minutes plot]: https://ctbk.dev?y=m&s=b&rt=ce
+[ctbk ebike minutes by user plot]: https://ctbk.dev/?y=m&s=u&rt=e

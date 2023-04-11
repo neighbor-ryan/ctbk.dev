@@ -34,6 +34,7 @@ console.log("host:", host, "includes:", include);
         'ctbk-ride-minutes-by-gender': { query: '?y=m&s=g&pct=&g=mf&d=1406-2102', },
         'ctbk-rides-by-user': { query: '?s=u&pct=', },
         'ctbk-ebike-minutes': { query: '?y=m&s=b&rt=ce', },
+        'ctbk-ebike-minutes-by-user': { query: '?y=m&s=u&rt=e', }
     }
 
     const browser = await puppeteer.launch();
