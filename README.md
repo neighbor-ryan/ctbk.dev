@@ -45,16 +45,17 @@ This is a work-in-progress; red = newer, yellow = older:
 ![](www/public/img/stations-by-creation-date.png)
 
 ### E-bike minutes by user type <a id="ctbk-ebike-minutes-by-user"></a>
+[ctbk.dev/?y=m&s=u&rt=e][ctbk ebike minutes by user plot]:
 
 [![](www/public/screenshots/ctbk-ebike-minutes-by-user.png)][ctbk ebike minutes by user plot]
 
 You can get some interesting upper bounds on e-bike fee revenue from this:
-- 6MM "member" e-bike minutes @ $0.16/min ⟹ ≈$1MM
-- 3MM "casual" e-bike minutes @ $0.26/min ⟹$750k
+- 6MM "member" e-bike minutes @ [$0.16/min][citi bike member pricing] ⟹ ≈$1MM
+- 3MM "casual" e-bike minutes @ [$0.26/min][citi bike day pricing] ⟹$750k
 
 That doesn't count various reasons that e-bike minutes end up being free (positive bike angel points for the ride, no classic bikes available at station, etc.). With the discussion around recent price increases, you can do some envelope math like:
 - Suppose an e-bike costs $1000 (probably a low-ball estimate)
-- Suppose 5 rides per e-bike per day, and avg. 15mins / ride ⟹ $15 in e-bike fees per e-bike per day ⟹ several months to break even on each e-bike, before accounting for any operational cost of maintaining the e-bike fleet. Most likely the bikes don't break even for years, I'd guess…
+- Suppose [10 rides per e-bike per day][citi ebike rides per day], and avg. 15mins / ride ⟹ $30 in e-bike fees per e-bike per day ⟹ 1-2 months to break even on each e-bike, *before accounting for any operational cost of maintaining the e-bike fleet.* Most likely the bikes don't break even for years, I'd guess…
 
 ### Ride Durations
 This isn't live anywhere yet, but:
@@ -103,3 +104,6 @@ Feel free to [file an issue here][github new issue] with any comments, bug repor
 [ctbk user type pct plot]: https://ctbk.dev/?s=u&pct=
 [ctbk ebike minutes plot]: https://ctbk.dev?y=m&s=b&rt=ce
 [ctbk ebike minutes by user plot]: https://ctbk.dev/?y=m&s=u&rt=e
+[citi bike day pricing]: https://citibikenyc.com/pricing/day
+[citi bike member pricing]: https://citibikenyc.com/pricing/annual
+[citi ebike rides per day]: https://ride.citibikenyc.com/blog/ridershiprecords#:~:text=Our%20ebikes%20are%20seeing%20more%20than%2010%20rides%20per%20bike%20per%20day
