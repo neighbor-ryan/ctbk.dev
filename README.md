@@ -40,7 +40,7 @@ Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
 [![](www/public/screenshots/ctbk-ebike-minutes.png)][ctbk ebike minutes plot]
 
 ## Prior Art
-[Many][ckran-20210305] [great][toddschneider-20160113] [analyses][jc-analysis-2017] [of][jc-analysis-2018] [Citi Bike][datastudio-analysis] [data][cl2871-analysis] [have][tableau #citibike] [been][coursera citibike viz course] [done][juanjocarin analysis] over the years!
+[Many][ckran-20210305] [great][toddschneider-20160113] [analyses][jc-analysis-2017] [of][jc-analysis-2018] [Citi Bike][datastudio-analysis] [data][cl2871-analysis] [have][tableau #citibike] [been][coursera citibike viz course] [done][juanjocarin analysis] [over][clif-kranish-20210125] [the][clif-kranish-20210210] years!
 
 My hope is that this dashboard will:
 - stay up to date automatically
@@ -51,6 +51,8 @@ Feel free to [file an issue here][github new issue] with any comments, bug repor
 
 [ckran-20210305]: https://towardsdatascience.com/exploring-the-effects-of-the-pandemic-on-nyc-bike-share-usage-ab79f67ac2df
 [toddschneider-20160113]: https://toddwschneider.com/posts/a-tale-of-twenty-two-million-citi-bikes-analyzing-the-nyc-bike-share-system/
+[clif-kranish-20210125]: https://towardsdatascience.com/exploring-bike-share-data-3e3b2f28760c
+[clif-kranish-20210210]: https://towardsdatascience.com/reverse-geocoding-with-nyc-bike-share-data-cdef427987f8
 [jc-analysis-2017]: https://www.bikejc.org/resources/citibikejc-2017
 [jc-analysis-2018]: https://www.bikejc.org/citi-bike-usage-jersey-city-2018
 [datastudio-analysis]: https://datastudio.google.com/u/0/reporting/a6fc910f-b100-4ac5-a72b-2fa35880f149/page/SKniB
