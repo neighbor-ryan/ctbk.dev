@@ -714,7 +714,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                         <h4>Examples</h4>
                         <ul>
                             <li><Link href={"/?r=jh&s=r"}>JC + Hoboken</Link></li>
-                            <li><Link href={"/?y=m&s=g&pct=&g=mf&d=1406-2101"}>Ride minute %'s, Men vs. Women</Link>, Jun 2014 – January 2021</li>
+                            <li><Link href={"/?y=m&s=g&pct=&g=mf&d=1406-2102"}>Ride minute %'s, Men vs. Women</Link>, Jun 2014 – January 2021</li>
                             <li><Link href={"/?s=u&pct="}>Annual vs. daily user %'s</Link></li>
                             <li><Link href={"/?y=m&s=b&rt=ce"}>Classic / E-bike ride minutes</Link></li>
                             <li><Link href={"/"}>Default view (system-wide rides over time)</Link></li>
@@ -739,7 +739,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
 Several things changed in February 2021 (presumably as part of [the Lyft acquistion](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):
 - "Gender" information is no longer provided:
   - All rides are labeled "unknown" starting February 2021
-  - [Here's an example showing the available data](?y=m&s=g&pct=&g=mf&d=1406-2101)
+  - [Here's an example showing the available data](?y=m&s=g&pct=&g=mf&d=1406-2102)
 - A new "Rideable Type" field was added, containing values \`docked_bike\` and \`electric_bike\` 🎉; however, [it currently only shows ebike data from June 2021](?y=m&s=b&rt=ce)
 - The "User Type" values changed ("Annual" → "member", "Daily" → "casual"); I'm using the former/old values here, they seem equivalent.
                     `)}

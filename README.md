@@ -24,7 +24,7 @@
 [![Screenshot of dashboard; per-month ride counts for Jersey City and Hoboken only, going back to June 2013, with a 12mo rolling avg showing mostly steady growth](www/public/screenshots/ctbk-nj.png)][ctbk nj plot]
 
 ### Ride Minute %'s by Gender
-[ctbk.dev?d=1406-2101&g=mf&pct&s=g&y=m][ctbk gender pct plot]:
+[ctbk.dev?d=1406-2102&g=mf&pct&s=g&y=m][ctbk gender pct plot]:
 
 [![](www/public/screenshots/ctbk-ride-minutes-by-gender.png)][ctbk gender pct plot]
 Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
@@ -72,7 +72,7 @@ Feel free to [file an issue here][github new issue] with any comments, bug repor
 
 [`ctbk`]: ctbk
 [ctbk.dev]: https://ctbk.dev/
-[ctbk gender pct plot]: https://ctbk.dev/?y=m&s=g&pct=&g=mf&d=1406-2101
+[ctbk gender pct plot]: https://ctbk.dev/?y=m&s=g&pct=&g=mf&d=1406-2102
 [ctbk.dev/stations]: https://ctbk.dev/stations?ll=40.733_-74.036&z=14&ss=HB102
 [ctbk nj plot]: https://ctbk.dev/?r=jh
 [ctbk user type pct plot]: https://ctbk.dev/?s=u&pct=
