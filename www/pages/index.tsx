@@ -15,7 +15,6 @@ import {DateRange, DateRange2Dates, dateRangeParam} from "../src/date-range";
 import Head from "../src/head"
 import {Radios} from "../src/radios";
 
-import Image from "next/image"
 import {getBasePath} from "next-utils/basePath"
 import {loadSync} from "next-utils/load"
 import MD from "next-utils/md"
@@ -723,7 +722,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                         <p><a href={"https://github.com/neighbor-ryan/ctbk.dev"} target={"_blank"}>The GitHub repo</a> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"} target={"_blank"}>planned enhancements</a>.</p>
                         <hr/>
                         <h3 id={"map"}>Map: Stations + Common Destinations</h3>
-                        <p>Check out <Link href={"./stations"}><a>this map visualization of stations and their ridership counts in {lastMonthDisplayStr}</a></Link>.</p>
+                        <p>Check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in {lastMonthDisplayStr}</Link>.</p>
                         <a href={"./stations"}>
                             <img
                                 className={css.map}
