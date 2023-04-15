@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import os
+from sys import stderr
 
 from click import command, option, argument
 from os.path import abspath, dirname, exists, join
@@ -12,10 +14,11 @@ def run(cmd):
 
 
 @command('sync')
+@option('-C', '--chdir', help='Move to this dir before running')
 @option('-d', '--dst', help='Bucket to sync to')
 @option('-n', '--dry-run', count=True, help='Pass once for dry-run, twice for dry-run + prompt to run')
 @argument('paths', nargs=-1)
-def main(dst, dry_run, paths):
+def main(chdir, dst, dry_run, paths):
     dir = dirname(abspath(__file__))
     YML_PATH = join(dir, 'sync.yml')
     if exists(YML_PATH):
@@ -24,6 +27,12 @@ def main(dst, dry_run, paths):
             config = yaml.safe_load(f)
     else:
         config = {}
+
+    chdir = config.get('chdir', chdir)
+    if chdir:
+        stderr.write(f'chdir: {chdir}\n')
+        os.chdir(chdir)
+    cwd = os.getcwd()
 
     if not dst and 'dst' in config:
         dst = config['dst']
@@ -42,7 +51,7 @@ def main(dst, dry_run, paths):
     for path in paths:
         cmd += [ '--include', path ]
 
-    cmd += [ dir, dst ]
+    cmd += [ cwd, dst ]
     run(cmd)
 
     if dry_run > 1:
