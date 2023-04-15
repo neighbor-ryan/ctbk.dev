@@ -519,7 +519,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
     const clickToToggle = false
     // const width = 768
     const height = 450
-    const src = 'plot-fallback.png'
+    const src = 'screenshots/plot-fallback.png'
     const [ initializedPlot, setInitializedPlot ] = useState<InitializedPlot | null>(null)
     const [ firstRender, setFirstRender ] = useState<Date>(new Date)
     const [ plotInitialized, setPlotInitialized ] = useState<PlotInitialized | null>(null)
@@ -547,7 +547,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                         {
                             width: graphDiv.offsetWidth,
                             height: graphDiv.offsetHeight,
-                            filename: "rides",
+                            filename: "plot-fallback",
                             format: "png",
                         }
                     )

@@ -34,14 +34,15 @@ console.log("host:", host, "includes:", include);
         'ctbk-ride-minutes-by-gender': { query: '?y=m&s=g&pct=&g=mf&d=1406-2102', },
         'ctbk-rides-by-user': { query: '?s=u&pct=', },
         'ctbk-ebike-minutes': { query: '?y=m&s=b&rt=ce', },
-        'ctbk-ebike-minutes-by-user': { query: '?y=m&s=u&rt=e', }
+        'ctbk-ebike-minutes-by-user': { query: '?y=m&s=u&rt=e', },
+        'plot-fallback': { query: '?dl=1', download: true },
     }
 
     const browser = await puppeteer.launch();
     const page = await browser.newPage();
 
     const items = Array.from(Object.entries(screens))
-    for (let [ name, { query, width, height, selector } ] of items) {
+    for (let [ name, { query, width, height, selector, download } ] of items) {
         if (include && !name.match(include)) {
             console.log(`Skipping ${name}`)
             continue
@@ -50,6 +51,14 @@ console.log("host:", host, "includes:", include);
         height = height || 580
         selector = selector || '.plotly svg rect'
         const url = `${scheme}://${host}/${query}`
+        const path = `${dir}/${name}.png`
+        if (download) {
+            console.log(`Setting download behavior to ${dir}`)
+            await page._client().send('Page.setDownloadBehavior', {
+                behavior: 'allow',
+                downloadPath: dir
+            });
+        }
         console.log(`Loading ${url}`)
         await page.goto(url);
         console.log(`Loaded ${url}`)
@@ -58,8 +67,13 @@ console.log("host:", host, "includes:", include);
         console.log("setViewport")
         await page.waitForSelector(selector);
         console.log("selector")
-        const path = `${dir}/${name}.png`
-        await page.screenshot({ path });
+        if (!download) {
+            await page.screenshot({path});
+        } else {
+            console.log("sleep 1s")
+            await new Promise(r => setTimeout(r, 1000))
+            console.log("sleep done")
+        }
     }
 
     await browser.close();
