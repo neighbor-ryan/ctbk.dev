@@ -735,7 +735,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                         <hr />
                         <h3 id="qc">🚧 Data-quality issues 🚧</h3>
                         {MD(`
-Several things changed in February 2021 (presumably as part of [the Lyft acquistion](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):
+Several things changed in February 2021 (presumably as part of [the Lyft acquisition](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):
 - "Gender" information is no longer provided:
   - All rides are labeled "unknown" starting February 2021
   - [Here's an example showing the available data](?y=m&s=g&pct=&g=mf&d=1406-2102)
