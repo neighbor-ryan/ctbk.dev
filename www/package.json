@@ -57,6 +57,7 @@
     "scripts": {
         "dev": "next dev",
         "build": "next build",
+        "deploy-s3": "aws s3 sync out/ s3://ctbk.dev/",
         "docker": "scripts/docker.py",
         "docker-build": "scripts/docker.py next build",
         "db": "scripts/docker.py next build",
