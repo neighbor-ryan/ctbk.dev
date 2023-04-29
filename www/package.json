@@ -19,7 +19,7 @@
         "lodash": "^4.17.21",
         "moment": "^2.29.1",
         "next": "^13.2.4",
-        "next-utils": "https://gitpkg.now.sh/runsascoded/next-utils/dist?1207fd8",
+        "next-utils": "https://gitpkg.now.sh/runsascoded/next-utils/dist?8308f2d",
         "node-fetch": "^2.6.1",
         "plotly.js": "^2.0.0",
         "process": "^0.11.10",
