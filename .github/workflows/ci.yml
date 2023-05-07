@@ -109,4 +109,5 @@ jobs:
             git config --global pull.rebase false
             git pull origin www
             git push origin HEAD:www
+            git push origin HEAD:main
           fi
