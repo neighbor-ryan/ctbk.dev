@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - www
+  workflow_dispatch:
 jobs:
   build:
     name: Build + deploy www branch to ctbk.dev via GitHub Pages
@@ -18,16 +19,37 @@ jobs:
           cache: 'npm'
           cache-dependency-path: www/package-lock.json
       - name: Install
-        run: |
-          cd www
-          npm install
+        working-directory: www
+        run: npm install
       - name: Build
+        working-directory: www
         run: |
-          cd www
           npm run export
           touch out/.nojekyll
+      - name: Serve Files
+        uses: Eun/http-server-action@v1
+        with:
+          directory: www/out
+          index-files: |
+            ["index.html", "index.htm"]
+      - name: Regenerate screenshots
+        working-directory: www
+        run: node screenshots.js -h 8080
+      - name: Re-export if screenshots changed
+        id: screenshots
+        run: |
+          if ! git diff --quiet --exit-code -- www/public/screenshots; then
+              git add www/public/screenshots
+              git config --global user.name "GitHub Actions"
+              git config --global user.email "github@actions"
+              git commit -m "Update screenshots"
+              git pull origin www
+              git push origin HEAD:www
+              echo "REGENERATED=true" >> $GITHUB_OUTPUT
+          fi
       - name: Deploy to GH Page
         uses: JamesIves/github-pages-deploy-action@4.1.1
+        if: steps.screenshots.outputs.REGENERATED != 'true'
         with:
           branch: ghp
           folder: www/out
