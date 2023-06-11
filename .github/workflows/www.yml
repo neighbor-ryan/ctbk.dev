@@ -38,7 +38,7 @@ jobs:
       - name: Re-export if screenshots changed
         id: screenshots
         run: |
-          if ! git diff --quiet --exit-code -- www/public/screenshots; then
+          if git diff --name-only -- www/public/screenshots | grep -v ctbk-stations; then
               git add www/public/screenshots
               git config --global user.name "GitHub Actions"
               git config --global user.email "github@actions"
