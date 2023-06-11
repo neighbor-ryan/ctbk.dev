@@ -35,7 +35,7 @@ jobs:
       - name: Regenerate screenshots
         working-directory: www
         run: node screenshots.js -h localhost:8080 -l 120000
-      - name: Re-export if screenshots changed
+      - name: Push + re-run, if screenshots changed
         id: screenshots
         run: |
           if git diff --name-only -- www/public/screenshots | grep -v ctbk-stations; then
@@ -44,7 +44,12 @@ jobs:
               git config --global user.email "github@actions"
               git commit -m "Update screenshots"
               git pull origin www
+              echo "Pushing www"
               git push origin HEAD:www
+              echo "Updating main branch"
+              git fetch --unshallow origin main
+              git pull origin main
+              git push origin HEAD:main
               echo "REGENERATED=true" >> $GITHUB_OUTPUT
           fi
       - name: Deploy to GH Page
