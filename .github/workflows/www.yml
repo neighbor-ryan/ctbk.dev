@@ -27,14 +27,14 @@ jobs:
           npm run export
           touch out/.nojekyll
       - name: Serve Files
-        uses: Eun/http-server-action@v1
+        uses: Eun/http-server-action@v1.0.6
         with:
           directory: www/out
           index-files: |
             ["index.html", "index.htm"]
       - name: Regenerate screenshots
         working-directory: www
-        run: node screenshots.js -h 8080
+        run: node screenshots.js -h localhost:8080 -l 120000
       - name: Re-export if screenshots changed
         id: screenshots
         run: |
