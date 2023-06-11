@@ -12,7 +12,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          persist-credentials: false
+          ssh-key: ${{ secrets.WWW_DEPLOY_KEY }}
       - uses: actions/setup-node@v3
         with:
           node-version: 16
