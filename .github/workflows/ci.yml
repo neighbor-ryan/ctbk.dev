@@ -89,25 +89,11 @@ jobs:
           cache: pip
       - run: pip install -e .
       - run: python -m ctbk.ymrgtb_cd -f
+      - name: Update www/public/assets/last_month.json
+        run: |
+          last_month="$(ctbk --s3 aggregated -gymrgtb -acd urls | tail -n1 | grep -Eo '[0-9]+' | tail -n1)"
+          echo "Last month: $last_month"
+          path=www/public/assets/last-month.json
+          echo "$(jq ". = \"$last_month\"" $path)" > $path
       - run: |
-          name=ymrgtb_cd.json
-          json=www/public/assets/$name
-          branch="${GITHUB_REF##*/}"
-          if git diff --quiet --exit-code -- $json && [ "$branch" != "push-www" ]; then
-            echo "No change detected to $name"
-          else
-            git add $json
-            git config --global user.name "GitHub Actions"
-            git config --global user.email "github@actions"
-            if [ "$branch" == "push-www" ]; then
-              echo "branch push-www; committing and pushing"
-              git commit --allow-empty -m '`push-www` GitHub Action'
-            else
-              echo "$name changed; committing and pushing"
-              git commit -m "Update $name"
-            fi
-            git config --global pull.rebase false
-            git pull origin www
-            git push origin HEAD:www
-            git push origin HEAD:main
-          fi
+          python -m ctbk.gha_update -Bpush-www -Pwww -Pmain -u "GitHub Actions" -e github@actions www/public/assets/ymrgtb_cd.json www/public/assets/last-month.json
