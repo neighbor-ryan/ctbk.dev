@@ -47,7 +47,7 @@ console.log("host:", host, "includes:", include);
     const page = await browser.newPage();
 
     const items = Array.from(Object.entries(screens))
-    for (let [ name, { query, width, height, selector, download, loadTimeout, downloadSleep } ] of items) {
+    for (let [ name, { query, width, height, selector, download, loadTimeout, downloadSleep, preScreenshotSleep } ] of items) {
         if (include && !name.match(include)) {
             console.log(`Skipping ${name}`)
             continue
@@ -74,6 +74,9 @@ console.log("host:", host, "includes:", include);
         console.log("setViewport")
         await page.waitForSelector(selector, { timeout: loadTimeout });
         console.log("selector")
+        if (preScreenshotSleep) {
+            await new Promise(r => setTimeout(r, preScreenshotSleep))
+        }
         if (!download) {
             await page.screenshot({path});
         } else {
