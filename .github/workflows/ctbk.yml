@@ -2,20 +2,17 @@ name: List or generate aggregate data using `ctbk aggregate`
 on:
   workflow_dispatch:
     inputs:
-      year:
-        description: "Group by \"year\""
-        type: boolean
-      month:
-        description: "Group by \"month\""
-        type: boolean
-      day:
-        description: "Group by \"day\""
-        type: boolean
+      # Combined a few sets of flags into single `choice` inputs, to avoid "you may only define up to 10 `inputs` for a `workflow_dispatch` event": https://github.com/neighbor-ryan/ctbk.dev/actions/runs/5954742040
+      time:
+        description: "Group by time-period granularity"
+        type: choice
+        options:
+            - year
+            - month
+            - day
+            - hour
       weekday:
         description: "Group by \"weekday\""
-        type: boolean
-      hour:
-        description: "Group by \"hour\""
         type: boolean
       region:
         description: "Group by \"region\""
@@ -35,12 +32,13 @@ on:
       end_station:
         description: "Group by \"end_station\""
         type: boolean
-      count:
-        description: "Aggregate by \"count\""
-        type: boolean
-      duration:
-        description: "Aggregate by \"duration\""
-        type: boolean
+      aggregate_by:
+        description: "Aggregate by \"count\", \"duration\", or both"
+        type: choice
+        options:
+            - Ride count
+            - Duration
+            - Both
       subcommand:
         description: "Subcommand"
         type: choice
@@ -63,19 +61,34 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
         run: |
-          g=
-          g="$g${{ inputs.year && 'y' || '' }}"
-          g="$g${{ inputs.month && 'm' || '' }}"
-          g="$g${{ inputs.day && 'd' || '' }}"
+          # Build "-g" ("Group keys") arg
+          time=${{ inputs.time }}
+          if [ $time == year ]; then
+            g=y
+          elif [ $time == month ]; then
+            g=ym
+          elif [ $time == day ]; then
+            g=ymd
+          elif [ $time == hour ]; then
+            g=ymdh
+          fi
           g="$g${{ inputs.weekday && 'w' || '' }}"
-          g="$g${{ inputs.hour && 'h' || '' }}"
           g="$g${{ inputs.region && 'r' || '' }}"
           g="$g${{ inputs.gender && 'g' || '' }}"
           g="$g${{ inputs.user_type && 't' || '' }}"
           g="$g${{ inputs.rideable_type && 'b' || '' }}"
           g="$g${{ inputs.start_station && 's' || '' }}"
           g="$g${{ inputs.end_station && 'e' || '' }}"
-          a=
-          a="$g${{ inputs.count && 'c' || '' }}"
-          a="$g${{ inputs.duration && 'd' || '' }}"
+
+          # Build "-a" ("Aggregation keys") arg
+          agg_by=${{ inputs.aggregate_by }}
+          if [ $agg_by == "Ride count" ]; then
+            a=c
+          elif [ $agg_by == "Duration" ]; then
+            a=d
+          elif [ $agg_by == "Both" ]; then
+            a=cd
+          fi
+
+          # Run (list URLs, or generate them)
           ctbk --s3 aggregated -d${{ inputs.start }}-${{ inputs.end }} -g$g -a$a ${{ inputs.subcommand }}
