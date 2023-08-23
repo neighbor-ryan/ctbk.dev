@@ -26,25 +26,30 @@ on:
       rideable_type:
         description: "Group by \"rideable_type\""
         type: boolean
-      start_station:
-        description: "Group by \"start_station\""
-        type: boolean
-      end_station:
-        description: "Group by \"end_station\""
-        type: boolean
+      stations:
+        description: "Group by station start or end"
+        type: choice
+        options:
+          - "Start station"
+          - "End station"
+          - "Both"
       aggregate_by:
         description: "Aggregate by \"count\", \"duration\", or both"
         type: choice
         options:
-            - Ride count
-            - Duration
-            - Both
+            - "Ride count"
+            - "Duration"
+            - "Both"
+      date_range:
+        description: "Date range (e.g. \"2022-\", \"202302-202304\"). Default \"-\" is \"all\" (same as \"201306-\")."
+        type: string
+        default: "-"
       subcommand:
         description: "Subcommand"
         type: choice
         options:
-          - urls
-          - create
+          - "List S3 URLs"
+          - "Create S3 URLs"
 jobs:
   dispatch:
     name: List or generate aggregate data using `ctbk aggregate`
@@ -72,23 +77,37 @@ jobs:
           elif [ $time == hour ]; then
             g=ymdh
           fi
-          g="$g${{ inputs.weekday && 'w' || '' }}"
-          g="$g${{ inputs.region && 'r' || '' }}"
-          g="$g${{ inputs.gender && 'g' || '' }}"
-          g="$g${{ inputs.user_type && 't' || '' }}"
-          g="$g${{ inputs.rideable_type && 'b' || '' }}"
-          g="$g${{ inputs.start_station && 's' || '' }}"
-          g="$g${{ inputs.end_station && 'e' || '' }}"
+          g=$g${{ inputs.weekday && 'w' || '' }}
+          g=$g${{ inputs.region && 'r' || '' }}
+          g=$g${{ inputs.gender && 'g' || '' }}
+          g=$g${{ inputs.user_type && 't' || '' }}
+          g=$g${{ inputs.rideable_type && 'b' || '' }}
+          stations=${{ inputs.stations }}
+          if [ $stations == "Start station" ]; then
+            s=s
+          elif [ $stations == "End station" ]; then
+            s=e
+          elif [ $stations == "Both" ]; then
+            s=se
+          fi
+          g=$g$s
 
           # Build "-a" ("Aggregation keys") arg
-          agg_by=${{ inputs.aggregate_by }}
-          if [ $agg_by == "Ride count" ]; then
+          agg_by="${{ inputs.aggregate_by }}"
+          if [ "$agg_by" == "Ride count" ]; then
             a=c
-          elif [ $agg_by == "Duration" ]; then
+          elif [ "$agg_by" == "Duration" ]; then
             a=d
-          elif [ $agg_by == "Both" ]; then
+          elif [ "$agg_by" == "Both" ]; then
             a=cd
           fi
 
+          # Subcommand arg
+          if [ "${{ inputs.subcommand }}" == "List S3 URLs" ]; then
+            subcmd=urls
+          else
+            subcmd=create
+          fi
+
           # Run (list URLs, or generate them)
-          ctbk --s3 aggregated -d${{ inputs.start }}-${{ inputs.end }} -g$g -a$a ${{ inputs.subcommand }}
+          ctbk --s3 aggregated -d${{ inputs.date_range }} -g$g -a$a $subcmd
