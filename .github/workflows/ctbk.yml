@@ -7,10 +7,10 @@ on:
         description: "Group by time-period granularity"
         type: choice
         options:
-            - year
-            - month
-            - day
-            - hour
+            - Year
+            - Month
+            - Day
+            - Hour
       weekday:
         description: "Group by \"weekday\""
         type: boolean
@@ -68,13 +68,13 @@ jobs:
         run: |
           # Build "-g" ("Group keys") arg
           time=${{ inputs.time }}
-          if [ $time == year ]; then
+          if [ $time == Year ]; then
             g=y
-          elif [ $time == month ]; then
+          elif [ $time == Month ]; then
             g=ym
-          elif [ $time == day ]; then
+          elif [ $time == Day ]; then
             g=ymd
-          elif [ $time == hour ]; then
+          elif [ $time == Hour ]; then
             g=ymdh
           fi
           g=$g${{ inputs.weekday && 'w' || '' }}
@@ -82,12 +82,13 @@ jobs:
           g=$g${{ inputs.gender && 'g' || '' }}
           g=$g${{ inputs.user_type && 't' || '' }}
           g=$g${{ inputs.rideable_type && 'b' || '' }}
-          stations=${{ inputs.stations }}
-          if [ $stations == "Start station" ]; then
+
+          stations="${{ inputs.stations }}"
+          if [ "$stations" == "Start station" ]; then
             s=s
-          elif [ $stations == "End station" ]; then
+          elif [ "$stations" == "End station" ]; then
             s=e
-          elif [ $stations == "Both" ]; then
+          elif [ "$stations" == "Both" ]; then
             s=se
           fi
           g=$g$s
