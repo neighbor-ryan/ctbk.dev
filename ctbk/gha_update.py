@@ -8,19 +8,20 @@ from utz import err, run, lines
 
 @click.command()
 @click.option('-b', '--branch', help='Current branch; defaults to $GITHUB_HEAD_REF or $GITHUB_REF_NAME')
-@click.option('-B', '--force-branch', 'force_branches', multiple=True, help='Always commit and push on these branches (even if there were no changes)')
+@click.option('-B', '--force-branch', 'force_branches', multiple=True, help='Always commit and push when run on these branches (even if there were no changes)')
 @click.option('-n', '--dry-run', count=True, help="1x: print pushes, but don't perform them; 2x: also skip performing commits")
 @click.option('-p', '--pull-branch', help='Branch to pull, before attempting to push; defaults to -b/--branch')
 @click.option('-P', '--push-branch', 'push_branches', multiple=True, help='Branches to push to')
 @click.option('-r', '--remote', default='origin')
-@click.option('-u', '--git-user')
-@click.option('-e', '--git-email')
+@click.option('-R', '--pull-rebase', is_flag=True, help='Rebase onto --pull-branch (default: merge)')
+@click.option('-u', '--git-user', help='Set Git user.name config (for commits)')
+@click.option('-e', '--git-email', help='Set Git user.email config (for commits)')
 @click.argument('paths', nargs=-1)
-def main(branch, force_branches, dry_run, pull_branch, push_branches, remote, git_user, git_email, paths):
+def main(branch, force_branches, dry_run, pull_branch, push_branches, remote, pull_rebase, git_user, git_email, paths):
     if git_user or git_email:
         if git_user and git_email:
-            run('git', 'config', '--global', 'user.name', '"GitHub Actions"')
-            run('git', 'config', '--global', 'user.email', '"github@actions"')
+            run('git', 'config', '--global', 'user.name', git_user)
+            run('git', 'config', '--global', 'user.email', git_email)
         else:
             raise ValueError("Pass -u/--git-user and -e/--git-email, or neither")
 
@@ -35,13 +36,13 @@ def main(branch, force_branches, dry_run, pull_branch, push_branches, remote, gi
     staged_paths = lines('git', 'diff', '--name-only', '--cached', '--', *paths)
     if staged_paths or branch in force_branches:
         if not staged_paths:
-            err(f"Branch {branch}; committing (empty) and pushing")
+            err(f"Branch {branch}; committing (empty)")
             run('git', 'commit', '--allow-empty', '-m', f'`{branch}` GitHub Action', dry_run=dry_run > 1)
         else:
-            err(f'{staged_paths} changed; committing and pushing')
+            err(f'Committing changed paths: {staged_paths}')
             run('git', 'commit', '-m', f'Update {", ".join(staged_paths)}', dry_run=dry_run > 1)
 
-        run('git', 'config', '--global', 'pull.rebase', 'false')
+        run('git', 'config', '--global', 'pull.rebase', str(pull_rebase))
         pull_branch = pull_branch or branch
         run('git', 'pull', remote, pull_branch)
         for push_branch in push_branches:

@@ -5,6 +5,7 @@ on:
       - daily
       - push-www
   schedule:
+    # Run in the afternoon, between the 3rd and 14th of each month (the window when each month of data is typically published)
     - cron: "0 17 3-14 * *"
   workflow_dispatch:
 env:
