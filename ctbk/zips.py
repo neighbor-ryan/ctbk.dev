@@ -1,6 +1,6 @@
 from typing import Optional
 
-from utz import cached_property, DefaultDict
+from utz import cached_property, DefaultDict, err
 
 from ctbk.has_root_cli import HasRootCLI
 from ctbk.task import Task
@@ -74,16 +74,17 @@ class TripdataZips(HasRootCLI):
 
         # Default "end": current or previous calendar month
         end1, last1 = m2r2u[-1]
-        missing1 = [ region for region, month in last1.items() if not month.exists() ]
-        if missing1:
+        missing = [ region for region, month in last1.items() if not month.exists() ]
+        present = [ region for region, month in last1.items() if month.exists() ]
+        if missing:
             if len(m2r2u) < 2:
-                raise RuntimeError(f"Missing regions from {end1} ({', ' .join(missing1)})")
+                err(f"Missing regions from {end1} ({', ' .join(missing)})")
             else:
                 end2, last2 = m2r2u[-2]
                 missing2 = [ region for region, month in last2.items() if not month.exists() ]
                 if missing2:
-                    raise RuntimeError(f"Missing regions from {end1} ({', ' .join(missing1)}) and {end2} ({', '.join(missing2)})")
-            end = end2 + 1
+                    err(f"Missing regions from {end1} ({', ' .join(missing)}) and {end2} ({', '.join(missing2)})")
+            _, end = present[-1]
             m2r2u = dict(m2r2u[:-1])
         else:
             m2r2u = dict(m2r2u)
