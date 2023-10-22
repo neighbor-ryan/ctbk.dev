@@ -1,0 +1,5 @@
+outs:
+- md5: ae3cc61b5215b590c9fae997674fffdb
+  size: 2903670
+  hash: md5
+  path: ymdse_cd_201607.parquet

@@ -1,0 +1,5 @@
+outs:
+- md5: 3046afd45a8088d0e49f4e9ef082aeae
+  size: 5676956
+  hash: md5
+  path: ymdse_cd_202010.parquet
