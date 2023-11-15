@@ -32,7 +32,10 @@ class HasURL(ABC):
         return fsspec.filesystem(self.scheme)
 
     def exists(self):
-        return self.fs.exists(self.url)
+        try:
+            return self.fs.exists(self.url)
+        except Exception:
+            raise RuntimeError(f"Error checking existence of URL {self.url}")
 
     @property
     def dirname(self):
