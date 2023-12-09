@@ -707,6 +707,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                     </details>
                 </div>
                 <hr/>
+                {/* Usage info */}
                 <div className={`no-gutters row ${css.row}`}>
                     <div className="col-md-12">
                         <p>Expand the "⚙️" to filter or stack by region, user type, gender, bike type, or date, or toggle aggregation of rides or total ride minutes.</p>

@@ -12,25 +12,25 @@ type MapProps = (Omit<MapContainerProps, "children"> & { children: (RL: typeof R
 const _hooks = require("react-leaflet/hooks");
 
 function MapConsumer(_ref: { children: (map: L.Map) => ReactElement<{}> }) {
-  let { children } = _ref;
-  return children(_hooks.useMap());
+    let { children } = _ref;
+    return children(_hooks.useMap());
 }
 
 const Map = ({ children, className, ...rest }: MapProps) => {
-  let mapClassName = styles.map;
+    let mapClassName = styles.map;
 
-  if ( className ) {
-    mapClassName = `${mapClassName} ${className}`;
-  }
+    if ( className ) {
+        mapClassName = `${mapClassName} ${className}`;
+    }
 
-  const MapContainer = ReactLeaflet.MapContainer
-  return (
-    <MapContainer className={mapClassName} {...rest}>
-      <MapConsumer>{
-        (map: L.Map) => children(ReactLeaflet, map)
-      }</MapConsumer>
-    </MapContainer>
-  )
+    const MapContainer = ReactLeaflet.MapContainer
+    return (
+        <MapContainer className={mapClassName} {...rest}>
+            <MapConsumer>{
+                (map: L.Map) => children(ReactLeaflet, map)
+            }</MapConsumer>
+        </MapContainer>
+    )
 }
 
 export default Map;
