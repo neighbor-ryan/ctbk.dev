@@ -29,16 +29,16 @@ import Link from "next/link";
 import 'react-tooltip/dist/react-tooltip.css'
 
 import {darken} from "../src/colors";
-import {Figure} from "react-plotly.js";
+import { Figure, PlotParams } from "react-plotly.js";
 
 import { useEffect } from "react";
-const Plot = dynamic(() => import("react-plotly.js"), { ssr: false, })
 const Tooltip = dynamic(() => import("react-tooltip").then(m => m.Tooltip), { ssr: false, })
 
 const {pow} = Math
 
 const JSON_PATH = 'public/assets/ymrgtb_cd.json'
 import {LAST_MONTH_PATH} from "../src/paths";
+import PlotWrapper from "@rdub/next-plotly/plot-wrapper";
 
 export async function getStaticProps(context: any) {
     const data = loadSync<Row[]>(JSON_PATH)
@@ -517,8 +517,6 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
 
     const [ initialized, setInitialized ] = useState(false)
     const clickToToggle = false
-    // const width = 768
-    const height = 450
     const src = 'screenshots/plot-fallback.png'
     const [ initializedPlot, setInitializedPlot ] = useState<InitializedPlot | null>(null)
     const [ firstRender, setFirstRender ] = useState<Date>(new Date)
@@ -543,7 +541,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                 .then(m => m.default)
                 .then(
                     Plotly => Plotly.downloadImage(
-                        figure as RootOrData,
+                        figure,
                         {
                             width: graphDiv.offsetWidth,
                             height: graphDiv.offsetHeight,
@@ -556,6 +554,17 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
         },
         [ initializedPlot?.set ]
     )
+
+    const plotParams: PlotParams = {
+        data: traces,
+        useResizeHandler: true,
+        layout: layout,
+        config: {
+            displayModeBar: false,
+            // staticPlot: true,
+            // responsive: true,
+        }
+    }
 
     return (
         <div id="plot" className={css.container}>
@@ -573,63 +582,15 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                     {subtitle && <p className={css.subtitle}>{subtitle}</p>}
                 </div>
                 {/* Main plot: bar graph + rolling avg line(s) */}
-                <div className={css.plotWrapper}>
-                    <div
-                        className={`${css.fallback} ${initialized ? css.hidden : ""}`}
-                        style={{ height: `${height}px`, maxHeight: `${height}px` }}
-                        onClick={() => clickToToggle && setInitialized(true)}
-                    >
-                        <img
-                            alt={title}
-                            src={`${basePath}/${src}`}
-                            width={"100%"}
-                            height={height}
-                            // layout={"fill"}
-                            // fill
-                            // layout="responsive"
-                            // loading="lazy"
-                        />
-                    </div>
-                    {
-                        <Plot
-                            className={css.plotly}
-                            style={{ visibility: initialized ? undefined : "hidden", width: "100%", height: `${height}px` }}
-                            onInitialized={async (figure: Readonly<Figure>, graphDiv: Readonly<HTMLElement>) => {
-                                if (!plotInitialized) {
-                                    // This can still run more than once; true once-only semantics (for storing only a
-                                    // timestamp only the first time this code path is hit) comes from
-                                    // `useEffect(…, [ set ])` above.
-                                    setPlotInitialized({ time: Date.now(), set: true })
-                                }
-
-                                console.log("initialized:", figure, graphDiv)
-                                setInitializedPlot({ figure, graphDiv, set: true })
-                                clickToToggle || setInitialized(true)
-                            }}
-                            onDoubleClick={() => setDateRange('All')}
-                            onRelayout={e => {
-                                if (!('xaxis.range[0]' in e && 'xaxis.range[1]' in e)) return
-                                let [start, end] = [e['xaxis.range[0]'], e['xaxis.range[1]'],].map(s => s ? new Date(s) : undefined)
-                                start = start ? moment(start).subtract(1, 'month').toDate() : start
-                                const dateRange = (!start && !end) ? 'All' : {start, end,}
-                                // console.log("relayout:", e, start, end, dateRange,)
-                                setDateRange(dateRange)
-                            }}
-                            data={traces}
-                            useResizeHandler
-                            layout={layout}
-                            config={{
-                                displayModeBar: false,
-                                // staticPlot: true,
-                                // responsive: true,
-                            }}
-                        />
-                    }
-                </div>
-                {/* DateRange controls */}
+                <PlotWrapper
+                    params={plotParams}
+                    src={src}
+                    alt={title}
+                />
                 <div className={css.row}>
                     <details className={css.controls}>
                         <summary><span className={css.settingsGear}>⚙</span>️</summary>
+                        {/* DateRange controls */}
                         <div className={`${css.dateControls} ${controlCss.control}`}>
                             <label className={controlCss.controlHeader}>Dates</label>
                             {

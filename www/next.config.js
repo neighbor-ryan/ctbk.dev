@@ -16,6 +16,7 @@ const nextConfig = {
     webpack({ optimization, ...webpackConfig }) {
         return { ...webpackConfig, optimization: { ...optimization, minimize } };
     },
+    output: "export",
 }
 
 const withMDX = require('@next/mdx')({

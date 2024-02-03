@@ -1,7 +1,6 @@
 import {ReactElement} from 'react';
 import L from 'leaflet';
 import * as ReactLeaflet from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
 
 import styles from './Map.module.css';
 
@@ -9,11 +8,11 @@ import {MapContainerProps} from "react-leaflet/lib/MapContainer";
 
 type MapProps = (Omit<MapContainerProps, "children"> & { children: (RL: typeof ReactLeaflet, map: L.Map) => ReactElement<{}> })
 
-const _hooks = require("react-leaflet/hooks");
+import { useMap } from "react-leaflet"
 
 function MapConsumer(_ref: { children: (map: L.Map) => ReactElement<{}> }) {
     let { children } = _ref;
-    return children(_hooks.useMap());
+    return children(useMap());
 }
 
 const Map = ({ children, className, ...rest }: MapProps) => {
