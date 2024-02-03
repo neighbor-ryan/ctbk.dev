@@ -1,5 +1,5 @@
 import {DataFrame, Series} from "danfojs";
-import { isSorted } from "next-utils/objs"
+import { isSorted } from "@rdub/base/objs"
 
 const { fromEntries } = Object
 

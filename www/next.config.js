@@ -8,12 +8,10 @@ const minimize = !['false', 'n', 'no', '0'].includes(NEXT_MINIFY)
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    reactStrictMode: true,
     swcMinify: true,
     images: {
         unoptimized: true,
     },
-    transpilePackages: ["next-utils"],
     basePath: NEXT_BASE_PATH,
     webpack({ optimization, ...webpackConfig }) {
         return { ...webpackConfig, optimization: { ...optimization, minimize } };

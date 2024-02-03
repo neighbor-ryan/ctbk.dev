@@ -1,4 +1,4 @@
-import * as Socials from "next-utils/socials"
+import * as Socials from "@rdub/next-base/socials"
 
 export const url = "https://ctbk.dev"
 

@@ -1,5 +1,4 @@
-import { entries, fromEntries } from "next-utils/objs"
-import React from "react";
+import { entries, fromEntries } from "@rdub/base/objs"
 
 export type Region = 'NYC' | 'JC' | 'HOB'
 export const Regions: Region[] = [ 'JC', 'HOB', 'NYC', ]

@@ -1,8 +1,8 @@
 import Head from "../src/head"
 import Map from '../src/components/Map';
 
-import {floatParam, LL, llParam, Param, ParsedParam, parseQueryParams, stringParam} from "next-utils/params";
-import {getSync, loadSync} from "next-utils/load"
+import {floatParam, LL, llParam, Param, ParsedParam, parseQueryParams, stringParam} from "@rdub/next-params/params";
+import {getSync, loadSync} from "@rdub/base/load"
 import * as ReactLeaflet from "react-leaflet";
 import type L from 'leaflet';
 import {Dispatch, useMemo, useState} from 'react';

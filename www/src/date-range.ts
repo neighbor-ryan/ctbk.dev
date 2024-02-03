@@ -1,6 +1,6 @@
 import moment from "moment";
 import _ from "lodash";
-import {Param} from "next-utils/params";
+import {Param} from "@rdub/next-params/params";
 
 export type HandleUnexpectedValue = 'Default' | 'Warn' | 'Throw'
 

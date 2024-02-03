@@ -1,6 +1,5 @@
 import React, {ReactNode} from "react";
 import css from "./controls.module.css"
-import {Checkbox} from "./checkbox";
 
 const { fromEntries: obj } = Object
 

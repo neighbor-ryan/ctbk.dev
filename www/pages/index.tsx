@@ -7,7 +7,7 @@ import React, {ReactNode, useMemo, useState} from 'react';
 import css from "./index.module.css"
 import controlCss from "../src/controls.module.css"
 
-import {Data, Layout} from "plotly.js"
+import { Data, Layout, RootOrData } from "plotly.js"
 
 import {Checkbox} from "../src/checkbox";
 import {Checklist} from "../src/checklist";
@@ -15,12 +15,12 @@ import {DateRange, DateRange2Dates, dateRangeParam} from "../src/date-range";
 import Head from "../src/head"
 import {Radios} from "../src/radios";
 
-import {getBasePath} from "next-utils/basePath"
-import {loadSync} from "next-utils/load"
-import MD from "next-utils/md"
-import {concat, fromEntries, mapValues, o2a,} from "next-utils/objs"
+import {getBasePath} from "@rdub/next-base/basePath"
+import {loadSync} from "@rdub/base/load"
+import MD from "@rdub/next-markdown/md"
+import {concat, fromEntries, mapValues, o2a,} from "@rdub/base/objs"
 import { boolParam, enumMultiParam, enumParam, numberArrayParam, Param, ParsedParam, parseQueryParams,
-} from "next-utils/params";
+} from "@rdub/next-params/params";
 import { Colors, Gender, GenderQueryStrings, GenderRollingAvgCutoff, Genders, Int2Gender, NormalizeRideableType, Region, RegionQueryStrings, Regions, RideableType, RideableTypeChars, RideableTypes, Row, StackBy, StackBys, stackKeyDict, toYM, UnknownRideableCutoff, UserType, UserTypeQueryStrings, UserTypes, YAxes, YAxis, yAxisLabelDict,
 } from "../src/data";
 
@@ -543,7 +543,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                 .then(m => m.default)
                 .then(
                     Plotly => Plotly.downloadImage(
-                        figure,
+                        figure as RootOrData,
                         {
                             width: graphDiv.offsetWidth,
                             height: graphDiv.offsetHeight,
@@ -585,7 +585,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                             width={"100%"}
                             height={height}
                             // layout={"fill"}
-                            // fill  // TODO: Next 13 requires updating <Link> in next-utils/md
+                            // fill
                             // layout="responsive"
                             // loading="lazy"
                         />
@@ -735,14 +735,14 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                         </a>
                         <hr />
                         <h3 id="qc">🚧 Data-quality issues 🚧</h3>
-                        {MD(`
+                        {MD({ content: `
 Several things changed in February 2021 (presumably as part of [the Lyft acquisition](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):
 - "Gender" information is no longer provided:
   - All rides are labeled "unknown" starting February 2021
   - [Here's an example showing the available data](?y=m&s=g&pct=&g=mf&d=1406-2102)
 - A new "Rideable Type" field was added, containing values \`docked_bike\` and \`electric_bike\` 🎉; however, [it currently only shows ebike data from June 2021](?y=m&s=b&rt=ce)
 - The "User Type" values changed ("Annual" → "member", "Daily" → "casual"); I'm using the former/old values here, they seem equivalent.
-                    `)}
+                    ` })}
                         <div className={css.footer}>
                             Code: { icon(     'gh', 'https://github.com/neighbor-ryan/ctbk.dev#readme',    'GitHub logo') }
                             Data: { icon(     's3',         'https://s3.amazonaws.com/ctbk/index.html', 'Amazon S3 logo') }

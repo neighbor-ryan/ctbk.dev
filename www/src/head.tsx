@@ -1,5 +1,5 @@
 import React from "react";
-import {Head as UtilsHead} from "next-utils/head"
+import {Head as UtilsHead} from "@rdub/next-base/head"
 import {DOMAIN, SCREENSHOTS} from "./paths";
 
 export default function Head({ title, description, path, thumbnail }: { title: string, description: string, path?: string, thumbnail: string }) {
