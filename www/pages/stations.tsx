@@ -1,38 +1,26 @@
 import Head from "../src/head"
-import Map from '../src/components/Map';
 
-import {floatParam, LL, llParam, Param, ParsedParam, parseQueryParams, stringParam} from "@rdub/next-params/params";
-import {getSync, loadSync} from "@rdub/base/load"
-import * as ReactLeaflet from "react-leaflet";
-import type L from 'leaflet';
-import {Dispatch, useMemo, useState} from 'react';
+import { floatParam, LL, llParam, Param, ParsedParam, parseQueryParams, stringParam } from "@rdub/next-params/params";
+import { getSync, loadSync } from "@rdub/base/load"
+import { useMemo, useState } from 'react';
+import 'leaflet/dist/leaflet.css';
 
 import css from './stations.module.css'
 import fetch from "node-fetch";
 import _ from "lodash";
-import {LAST_MONTH_PATH} from "../src/paths";
+import { LAST_MONTH_PATH } from "../src/paths";
+import dynamic from "next/dynamic";
+import type { ID, Props, StationPairCounts, Stations } from "../src/stations";
+import type { MapContainerProps } from "@rdub/next-leaflet/container"
+
+const Map = dynamic(() => import("../src/stations"), { ssr: false })
 
 const DEFAULT_CENTER = { lat: 40.758, lng: -73.965, }
 const DEFAULT_ZOOM = 12
 
 const { entries, fromEntries, keys } = Object
-const { sqrt } = Math
-
-type CountRow = {
-    id: string
-    count: number
-}
-
-type StationValue = {
-    name: string
-    lat: number
-    lng: number
-    starts: number
-}
 
 type Idx = string
-type ID = string
-type Stations = { [id: ID]: StationValue }
 
 type YmProps = {
     ym: string
@@ -72,132 +60,6 @@ type ParsedParams = {
     ym: ParsedParam<string>
 }
 
-function getMetersPerPixel(map: L.Map) {
-    const centerLatLng = map.getCenter(); // get map center
-    const pointC = map.latLngToContainerPoint(centerLatLng); // convert to containerpoint (pixels)
-    const pointX: L.PointExpression = [pointC.x + 1, pointC.y]; // add one pixel to x
-    // const pointY: L.PointExpression = [pointC.x, pointC.y + 1]; // add one pixel to y
-
-    // convert containerpoints to latlng's
-    const latLngC = map.containerPointToLatLng(pointC);
-    const latLngX = map.containerPointToLatLng(pointX);
-    // const latLngY = map.containerPointToLatLng(pointY);
-
-    const distanceX = latLngC.distanceTo(latLngX); // calculate distance between c and x (latitude)
-    // const distanceY = latLngC.distanceTo(latLngY); // calculate distance between c and y (longitude)
-
-    // const zoom = map.getZoom()
-    //console.log("distanceX:", distanceX, "distanceY:", distanceY, "center:", centerLatLng, "zoom:", zoom)
-    return distanceX
-}
-
-function MapBody(
-    {TileLayer, Marker, Circle, CircleMarker, Polyline, Pane, Tooltip, useMapEvents, useMap }: typeof ReactLeaflet,
-    { setLL, setZoom, stations, selectedStationId, setSelectedStationId, stationPairCounts, url, attribution }: {
-        setLL: Dispatch<LL>
-        setZoom: Dispatch<number>
-        stations: Stations
-        selectedStationId: string | undefined
-        setSelectedStationId: Dispatch<string | undefined>
-        stationPairCounts: StationPairCounts | null
-        url: string
-        attribution: string
-    }
-) {
-    // Error: No context provided: useLeafletContext() can only be used in a descendant of <MapContainer>
-    const map = useMap()
-    const zoom = map.getZoom()
-    const mPerPx = useMemo(() => getMetersPerPixel(map), [ map, zoom, ])
-    useMapEvents({
-        moveend: () => setLL(map.getCenter()),
-        zoom: () => setZoom(map.getZoom()),
-        click: () => { setSelectedStationId(undefined) },
-    })
-
-    const selectedStation = useMemo(
-        () => selectedStationId ? stations[selectedStationId] : undefined,
-        [ stations, selectedStationId ]
-    )
-
-    const lines = useMemo(
-        () => {
-            if (!selectedStation || !selectedStationId || !stationPairCounts) return null
-            if (!(selectedStationId in stationPairCounts)) {
-                console.log(`${selectedStationId} not found among ${keys(stationPairCounts).length} stations`)
-                return null
-            }
-            const selectedPairCounts = stationPairCounts[selectedStationId]
-            // console.log("selectedPairCounts:", selectedPairCounts)
-            const selectedPairValues = Array.from(Object.values(selectedPairCounts))
-            // console.log("selectedPairValues:", selectedPairValues)
-            const maxDst = Math.max(...selectedPairValues)
-            const src = selectedStation
-            return <Pane name={"lines"} className={css.lines}>{
-                entries(selectedPairCounts).map(([ id, count ]) => {
-                    // if (Count != maxDst) return
-                    if (!(id in stations)) {
-                        console.log(`id ${id} not in stations:`, stations)
-                        return
-                    }
-                    const {name, lat, lng} = stations[id]
-                    return <Polyline key={`${selectedStationId}-${id}-${zoom}`} color={"red"}
-                                     positions={[[src.lat, src.lng], [lat, lng],]}
-                                     weight={Math.max(0.7, count / maxDst * sqrt(src.starts) / mPerPx)} opacity={0.7}>
-                        <Tooltip sticky={true}>
-                            {src.name} → {name}: {count}
-                        </Tooltip>
-                    </Polyline>
-                })
-            }
-            </Pane>
-        },
-        [ stationPairCounts, selectedStationId, mPerPx ]
-    )
-
-    function StationCircle({ id, count, selected }: CountRow & { selected?: boolean }) {
-        if (!(id in stations)) {
-            console.log(`id ${id} not in stations`)
-            return null
-        }
-        const { name, lat, lng } = stations[id]
-        return <Circle key={id} center={{ lat, lng }} color={selected ? "yellow" : "orange"} radius={sqrt(count)}
-                       eventHandlers={{
-                           click: () => {
-                               if (id == selectedStationId) return
-                               console.log("click:", name)
-                               setSelectedStationId(id)
-                           },
-                           mouseover: () => {
-                               if (id == selectedStationId) return
-                               console.log("over:", name)
-                               setSelectedStationId(id)
-                           },
-                           mousedown: () => {
-                               if (id == selectedStationId) return
-                               console.log("down:", name)
-                               setSelectedStationId(id)
-                           },
-                       }}
-        >
-            <Tooltip className={css.tooltip} sticky={true} permanent={id == selectedStationId} pane={"selected"}>
-                <p>{name}: {count}</p>
-            </Tooltip>
-        </Circle>
-    }
-
-    return <>
-        <Pane name={"selected"} className={css.selected}>{
-            selectedStationId && selectedStation &&
-            <StationCircle key={selectedStationId} id={selectedStationId} count={selectedStation.starts} selected={true} />
-        }</Pane>
-        {lines}
-        <Pane name={"circles"} className={css.circles}>{
-            entries(stations).map(([ id, station ]) => <StationCircle key={id} id={id} count={station.starts} />)
-        }</Pane>
-        <TileLayer url={url} attribution={attribution}/>
-    </>
-}
-
 export function ymParam(init: string, push: boolean = true): Param<string> {
     const ymRegex = /^20(\d{4})$/
     const vRegex = /^\d{4}$/
@@ -226,10 +88,6 @@ export function ymParam(init: string, push: boolean = true): Param<string> {
     }
 }
 
-type StationPairCounts = {
-    [k1: string]: { [k2: string]: number }
-}
-
 export default function Home({ defaults }: { defaults: YmProps, }) {
     const params: Params = {
         ll: llParam({ init: DEFAULT_CENTER, places: 3, }),
@@ -238,7 +96,7 @@ export default function Home({ defaults }: { defaults: YmProps, }) {
         ym: ymParam(defaults.ym),
     }
     const {
-        ll: [ { lat, lng }, setLL ],
+        ll: [ center, setCenter ],
         z: [ zoom, setZoom, ],
         ss: [ selectedStationId, setSelectedStationId ],
         ym: [ ym, setYM ],
@@ -296,7 +154,17 @@ export default function Home({ defaults }: { defaults: YmProps, }) {
 
     const title = `Citi Bike rides by station, ${ymString}`
 
-    const { url, attribution } = MAPS['alidade_smooth_dark']
+    const mapProps: MapContainerProps = {
+        center, setCenter,
+        zoom, setZoom,
+        className: css.homeMap,
+    }
+    const mapBodyProps: Props = {
+        stations,
+        selectedStationId,
+        setSelectedStationId,
+        stationPairCounts,
+    }
 
     return (
         <div className={css.container}>
@@ -306,13 +174,8 @@ export default function Home({ defaults }: { defaults: YmProps, }) {
                 path={`stations`}
                 thumbnail={`ctbk-stations`}
             />
-
             <main className={css.main}>
-                <Map className={css.homeMap} center={{ lat, lng, }} zoom={zoom} zoomControl={false} zoomSnap={0.5} zoomDelta={0.5}>{
-                    (RL: typeof ReactLeaflet) => <div>{
-                        MapBody(RL, { setLL, setZoom, stations, selectedStationId, setSelectedStationId, stationPairCounts, url, attribution, })
-                    }</div>
-                }</Map>
+                <Map mapProps={mapProps} bodyProps={mapBodyProps} />
                 {title && <div className={css.title}>{title}</div>}
             </main>
         </div>

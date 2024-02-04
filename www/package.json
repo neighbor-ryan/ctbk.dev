@@ -9,6 +9,7 @@
         "@next/mdx": "^13.2.4",
         "@rdub/base": "^0.1.0",
         "@rdub/next-base": "^0.1.0",
+        "@rdub/next-leaflet": "0.1.0",
         "@rdub/next-markdown": "0.0.2",
         "@rdub/next-params": "^0.0.1",
         "@rdub/next-plotly": "^0.0.3",
@@ -74,7 +75,6 @@
         "export": "next build && next export",
         "serve": "http-server out",
         "start": "next start",
-        "install-remote": "npm-install-remote-only.sh",
         "screenshots": "node screenshots.js"
     },
     "repository": {
