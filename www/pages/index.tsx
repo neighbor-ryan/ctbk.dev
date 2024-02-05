@@ -19,8 +19,7 @@ import {getBasePath} from "@rdub/next-base/basePath"
 import {loadSync} from "@rdub/base/load"
 import MD from "@rdub/next-markdown/md"
 import {concat, fromEntries, mapValues, o2a,} from "@rdub/base/objs"
-import { boolParam, enumMultiParam, enumParam, numberArrayParam, Param, ParsedParam, parseQueryParams,
-} from "@rdub/next-params/params";
+import { boolParam, enumMultiParam, enumParam, numberArrayParam, Param, ParsedParam, parseQueryParams, } from "@rdub/next-params/params";
 import { Colors, Gender, GenderQueryStrings, GenderRollingAvgCutoff, Genders, Int2Gender, NormalizeRideableType, Region, RegionQueryStrings, Regions, RideableType, RideableTypeChars, RideableTypes, Row, StackBy, StackBys, stackKeyDict, toYM, UnknownRideableCutoff, UserType, UserTypeQueryStrings, UserTypes, YAxes, YAxis, yAxisLabelDict,
 } from "../src/data";
 
