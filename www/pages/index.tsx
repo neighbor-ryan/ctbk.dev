@@ -673,7 +673,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                         <p>Expand the "⚙️" to filter or stack by region, user type, gender, bike type, or date, or toggle aggregation of rides or total ride minutes.</p>
                         <h4>Examples</h4>
                         <ul>
-                            <li><Link href={"/?r=jh&s=r"}>JC + Hoboken</Link></li>
+                            <li><Link href={"/?r=jh"}>JC + Hoboken</Link> (<Link href={"/?r=jh&s=r"}>stacked</Link>)</li>
                             <li><Link href={"/?y=m&s=g&pct=&g=mf&d=1406-2102"}>Ride minute %'s, Men vs. Women</Link>, Jun 2014 – January 2021</li>
                             <li><Link href={"/?s=u&pct="}>Annual vs. daily user %'s</Link></li>
                             <li><Link href={"/?y=m&s=b&rt=ce"}>Classic / E-bike ride minutes</Link></li>
