@@ -27,7 +27,7 @@
 [ctbk.dev?d=1406-2102&g=mf&pct&s=g&y=m][ctbk gender pct plot]:
 
 [![](www/public/screenshots/ctbk-ride-minutes-by-gender.png)][ctbk gender pct plot]
-Jun 2014 - January 2021, the window where 12mo rolling avgs are possible
+(Gender labels stopped appearing in the data in February 2021)
 
 ### Ride %'s by User Type <a id="ctbk-rides-by-user"></a>
 [ctbk.dev/?s=u&pct=][ctbk user type pct plot]:
