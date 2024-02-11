@@ -1,6 +1,6 @@
 import { Dispatch, useMemo } from "react"
 import css from "../pages/stations.module.css"
-import { Pane, Polyline, Tooltip, useMap, useMapEvents } from "react-leaflet"
+import { Pane, Polyline, Tooltip, useMap } from "react-leaflet"
 import type { MapContainerProps } from "@rdub/next-leaflet/container"
 import MapContainer from "@rdub/next-leaflet/container"
 import { getMetersPerPixel } from "@rdub/next-leaflet/map/mPerPx"
@@ -46,9 +46,6 @@ export function MapBody(
     const map = useMap()
     const zoom = map.getZoom()
     const mPerPx = useMemo(() => getMetersPerPixel(map), [ map, zoom, ])
-    useMapEvents({
-        click: () => { setSelectedStationId(undefined) },
-    })
 
     const selectedStation = useMemo(
         () => selectedStationId ? stations[selectedStationId] : undefined,

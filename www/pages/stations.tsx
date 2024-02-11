@@ -27,23 +27,12 @@ type YmProps = {
     stations: Stations
 }
 
-export async function getStaticProps(context: any) {
+export async function getStaticProps() {
     const ym = loadSync<string>(LAST_MONTH_PATH)
     const stationsUrl = `https://ctbk.s3.amazonaws.com/aggregated/${ym}/stations.json`
     const stations = await getSync<Stations>(stationsUrl)
     const defaults: YmProps = { ym, stations }
     return { props: { defaults } }
-}
-
-export const MAPS = {
-    openstreetmap: {
-        url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        attribution: "&copy; <a href=&quot;http://osm.org/copyright&quot;>OpenStreetMap</a> contributors",
-    },
-    alidade_smooth_dark: {
-        url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
-        attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors',
-    },
 }
 
 type Params = {
@@ -92,7 +81,7 @@ export default function Home({ defaults }: { defaults: YmProps, }) {
     const params: Params = {
         ll: llParam({ init: DEFAULT_CENTER, places: 3, }),
         z: floatParam(DEFAULT_ZOOM, false),
-        ss: stringParam(),
+        ss: stringParam(false),
         ym: ymParam(defaults.ym),
     }
     const {
@@ -158,6 +147,10 @@ export default function Home({ defaults }: { defaults: YmProps, }) {
         center, setCenter,
         zoom, setZoom,
         className: css.homeMap,
+        onClick: e => {
+            console.log(`clearing selected station ${selectedStationId}`, e)
+            setSelectedStationId(undefined)
+        },
     }
     const mapBodyProps: Props = {
         stations,
