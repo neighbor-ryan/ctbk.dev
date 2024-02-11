@@ -1,4 +1,5 @@
 import { entries, fromEntries } from "@rdub/base/objs"
+import type { DownloadFmt as DownloadFmt0 } from "@rdub/next-plotly/plot-wrapper"
 
 export type Region = 'NYC' | 'JC' | 'HOB'
 export const Regions: Region[] = [ 'JC', 'HOB', 'NYC', ]
@@ -36,6 +37,9 @@ export const StackBys: [StackBy, string][] = [
     ['User Type','u'],
     ['Rideable Type','b'],
 ]
+
+export type DownloadFmt = 'none' | '' | DownloadFmt0
+export const DownloadFmts: DownloadFmt[] = [ 'none', '', 'png', 'jpg', 'jpeg', 'webp', 'svg' ]
 
 export const DEFAULT_COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3', '#FF6692', '#B6E880', '#FF97FF', '#FECB52']
 export const RideableTypeColors: { [r in RideableType]: string } = {

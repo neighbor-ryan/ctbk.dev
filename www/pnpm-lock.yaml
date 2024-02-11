@@ -27,8 +27,8 @@ dependencies:
     specifier: 0.0.3
     version: 0.0.3(next@14.1.0)(react-dom@18.2.0)(react@18.2.0)
   '@rdub/next-plotly':
-    specifier: 0.0.4
-    version: 0.0.4(mapbox-gl@1.13.3)(next@14.1.0)(react-dom@18.2.0)(react@18.2.0)(webpack@5.90.1)
+    specifier: 0.0.5
+    version: 0.0.5(mapbox-gl@1.13.3)(next@14.1.0)(react-dom@18.2.0)(react@18.2.0)(webpack@5.90.1)
   assert:
     specifier: ^2.0.0
     version: 2.1.0
@@ -1008,8 +1008,8 @@ packages:
       react-dom: 18.2.0(react@18.2.0)
     dev: false
 
-  /@rdub/next-plotly@0.0.4(mapbox-gl@1.13.3)(next@14.1.0)(react-dom@18.2.0)(react@18.2.0)(webpack@5.90.1):
-    resolution: {integrity: sha512-5ohFqc5oNoUOWhr2cYXIzQmOxkbsBv2Al9jLsGVfddOImv+SySX49Hf0jhaKJCMeogJm0dt8mOvDSs+Ns5QS3A==}
+  /@rdub/next-plotly@0.0.5(mapbox-gl@1.13.3)(next@14.1.0)(react-dom@18.2.0)(react@18.2.0)(webpack@5.90.1):
+    resolution: {integrity: sha512-iGFSAPAHsYMWqCIFgClAgu9HYBP7cUGTO7qonqrMlPide5XSPvRi0OlQcRoeaiL8cCjeFH47Hq/gv+iu4Hu0Ag==}
     peerDependencies:
       next: ^14
       react: ^18

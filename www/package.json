@@ -12,7 +12,7 @@
         "@rdub/next-leaflet": "0.1.0",
         "@rdub/next-markdown": "0.0.2",
         "@rdub/next-params": "0.0.3",
-        "@rdub/next-plotly": "0.0.4",
+        "@rdub/next-plotly": "0.0.5",
         "assert": "^2.0.0",
         "aws-sdk": "^2.1043.0",
         "bootstrap": "^4.1.3",

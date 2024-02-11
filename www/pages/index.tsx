@@ -21,8 +21,7 @@ import {loadSync} from "@rdub/base/load"
 import MD from "@rdub/next-markdown/md"
 import {concat, fromEntries, mapValues, o2a,} from "@rdub/base/objs"
 import { boolParam, enumMultiParam, enumParam, numberArrayParam, Param, ParsedParam, parseQueryParams, } from "@rdub/next-params/params";
-import { Colors, Gender, GenderQueryStrings, GenderRollingAvgCutoff, Genders, Int2Gender, NormalizeRideableType, Region, RegionQueryStrings, Regions, RideableType, RideableTypeChars, RideableTypes, Row, StackBy, StackBys, stackKeyDict, toYM, UnknownRideableCutoff, UserType, UserTypeQueryStrings, UserTypes, YAxes, YAxis, yAxisLabelDict,
-} from "../src/data";
+import { Colors, DownloadFmt, DownloadFmts, Gender, GenderQueryStrings, GenderRollingAvgCutoff, Genders, Int2Gender, NormalizeRideableType, Region, RegionQueryStrings, Regions, RideableType, RideableTypeChars, RideableTypes, Row, StackBy, StackBys, stackKeyDict, toYM, UnknownRideableCutoff, UserType, UserTypeQueryStrings, UserTypes, YAxes, YAxis, yAxisLabelDict, } from "../src/data";
 
 import dynamic from 'next/dynamic'
 import Link from "next/link";
@@ -38,9 +37,9 @@ const {pow} = Math
 
 const JSON_PATH = 'public/assets/ymrgtb_cd.json'
 import {LAST_MONTH_PATH} from "../src/paths";
-import PlotWrapper from "@rdub/next-plotly/plot-wrapper";
+import PlotWrapper, { Download, dashCase } from "@rdub/next-plotly/plot-wrapper";
 
-export async function getStaticProps(context: any) {
+export async function getStaticProps() {
     const data = loadSync<Row[]>(JSON_PATH)
     const lastMonthStr = loadSync<string>(LAST_MONTH_PATH)
     return { props: { data, lastMonthStr } }
@@ -56,7 +55,7 @@ type Params = {
     rt: Param<RideableType[]>
     d: Param<DateRange>
     avg: Param<number[]>
-    dl: Param<boolean>
+    dl: Param<DownloadFmt>
 }
 
 type ParsedParams = {
@@ -69,7 +68,7 @@ type ParsedParams = {
     rt: ParsedParam<RideableType[]>
     d: ParsedParam<DateRange>
     avg: ParsedParam<number[]>
-    dl: ParsedParam<boolean>
+    dl: ParsedParam<DownloadFmt>
 }
 
 type MonthVal = { m: string, v: number }
@@ -148,14 +147,6 @@ const BikeTypeLabel = (suffix: number | string) =>
         <div>mostly missing / undercounted</div>
     </WarningLabel>
 
-type InitializedPlot = {
-    figure: Readonly<Figure>
-    graphDiv: Readonly<HTMLElement>
-    set: boolean
-}
-
-type PlotInitialized = { time: number, set: boolean }
-
 export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr: string }) {
     const params: Params = {
         y: enumParam('Rides', YAxes),
@@ -167,7 +158,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
         rt: enumMultiParam(RideableTypes, RideableTypeChars, ''),
         d: dateRangeParam(),
         avg: numberArrayParam([ 12 ]),
-        dl: boolParam,
+        dl: enumParam('none', DownloadFmts.map(f => [ f, f ])),
     }
 
     const lastMonthDisplayStr = useMemo(
@@ -191,7 +182,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
         rt: [ rideableTypes, setRideableTypes ],
         d: [ dateRange, setDateRange ],
         avg: [ rollingAvgs, setRollingAvgs ],
-        dl: [ downloadPlotImage, setDownloadPlotImage ],
+        dl: [ downloadFmt ],
     }: ParsedParams = parseQueryParams({ params })
 
     let df = useMemo(
@@ -518,42 +509,6 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
     const [ initialized, setInitialized ] = useState(false)
     const clickToToggle = false
     const src = 'screenshots/plot-fallback.png'
-    const [ initializedPlot, setInitializedPlot ] = useState<InitializedPlot | null>(null)
-    const [ firstRender, setFirstRender ] = useState<Date>(new Date)
-    const [ plotInitialized, setPlotInitialized ] = useState<PlotInitialized | null>(null)
-    useEffect(
-        () => {
-            if (!plotInitialized) return
-            const { time } = plotInitialized
-            const delayMs = time - firstRender?.getTime()
-            console.log(`Plot initialized ${delayMs / 1000}s after initial page render`)
-        },
-        [ plotInitialized?.set ]
-    )
-    useEffect(
-        () => {
-            console.log("plotly effect:", initializedPlot, downloadPlotImage)
-            if (!initializedPlot) return
-            const { figure, graphDiv, set } = initializedPlot
-            if (!set) return
-            if (!downloadPlotImage) return
-            import('plotly.js')
-                .then(m => m.default)
-                .then(
-                    Plotly => Plotly.downloadImage(
-                        figure,
-                        {
-                            width: graphDiv.offsetWidth,
-                            height: graphDiv.offsetHeight,
-                            filename: "plot-fallback",
-                            format: "png",
-                        }
-                    )
-                )
-                .then(img => console.log('downloaded img:', img))
-        },
-        [ initializedPlot?.set ]
-    )
 
     const plotParams: PlotParams = {
         data: traces,
@@ -565,6 +520,19 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
             // responsive: true,
         }
     }
+
+    const download = useMemo(
+        () => {
+            if (downloadFmt === 'none') return undefined
+            let filename = `ctbk ${yAxis}`
+            if (subtitle) filename += ` (${subtitle})`
+            filename = dashCase(filename)
+            const format: DownloadFmt = downloadFmt === '' ? 'png' : downloadFmt
+            const download: Download = { format, filename, }
+            return download
+        },
+        [ downloadFmt ],
+    )
 
     return (
         <div id="plot" className={css.container}>
@@ -586,6 +554,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                     params={plotParams}
                     src={src}
                     alt={title}
+                    download={download}
                 />
                 <div className={css.row}>
                     <details className={css.controls}>
