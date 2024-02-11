@@ -7,7 +7,7 @@ import React, {ReactNode, useMemo, useState} from 'react';
 import css from "./index.module.css"
 import controlCss from "../src/controls.module.css"
 
-import { Data, Layout, RootOrData } from "plotly.js"
+import { Data, Layout } from "plotly.js"
 
 import {Checkbox} from "../src/checkbox";
 import {Checklist} from "../src/checklist";
@@ -16,6 +16,7 @@ import Head from "../src/head"
 import {Radios} from "../src/radios";
 
 import {getBasePath} from "@rdub/next-base/basePath"
+import A from "@rdub/next-base/a"
 import {loadSync} from "@rdub/base/load"
 import MD from "@rdub/next-markdown/md"
 import {concat, fromEntries, mapValues, o2a,} from "@rdub/base/objs"
@@ -679,20 +680,12 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                             <li><Link href={"/?y=m&s=b&rt=ce"}>Classic / E-bike ride minutes</Link></li>
                             <li><Link href={"/"}>Default view (system-wide rides over time)</Link></li>
                         </ul>
-                        <p>This plot should refresh when <a href={"https://www.citibikenyc.com/system-data"} target={"_blank"}>new data is published by Citi Bike</a> (typically around the 2nd week of each month, covering the previous month).</p>
-                        <p><a href={"https://github.com/neighbor-ryan/ctbk.dev"} target={"_blank"}>The GitHub repo</a> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"} target={"_blank"}>planned enhancements</a>.</p>
+                        <p>This plot refreshes when <A href={"https://www.citibikenyc.com/system-data"} target={"_blank"}>new data is published by Citi Bike</A> (typically the 1st or 2nd week of each month, covering the previous month).</p>
+                        <p><A href={"https://github.com/neighbor-ryan/ctbk.dev"} target={"_blank"}>The GitHub repo</A> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"} target={"_blank"}>planned enhancements</a>. Data updates are performed <A href={"https://github.com/neighbor-ryan/ctbk.dev/actions"}>by Github Actions</A>.</p>
                         <hr/>
                         <h3 id={"map"}>Map: Stations + Common Destinations</h3>
                         <p>Check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in {lastMonthDisplayStr}</Link>.</p>
-                        <a href={"./stations"}>
-                            <img
-                                className={css.map}
-                                src={"screenshots/ctbk-stations.png"}
-                                alt={"Map of stations in Jersey City, sized by ridership, and showing connections to other stations"}
-                                // layout={"fill"}
-                                // loading={"lazy"}
-                            />
-                        </a>
+                        <iframe src={"./stations"} className={css.map} />
                         <hr />
                         <h3 id="qc">🚧 Data-quality issues 🚧</h3>
                         {MD({ content: `
