@@ -12,6 +12,7 @@ import { LAST_MONTH_PATH } from "../src/paths";
 import dynamic from "next/dynamic";
 import type { ID, Props, StationPairCounts, Stations } from "../src/stations";
 import type { MapContainerProps } from "@rdub/next-leaflet/container"
+import A from "@rdub/next-base/a";
 
 const Map = dynamic(() => import("../src/stations"), { ssr: false })
 

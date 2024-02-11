@@ -24,7 +24,6 @@ import { boolParam, enumMultiParam, enumParam, numberArrayParam, Param, ParsedPa
 import { Colors, DownloadFmt, DownloadFmts, Gender, GenderQueryStrings, GenderRollingAvgCutoff, Genders, Int2Gender, NormalizeRideableType, Region, RegionQueryStrings, Regions, RideableType, RideableTypeChars, RideableTypes, Row, StackBy, StackBys, stackKeyDict, toYM, UnknownRideableCutoff, UserType, UserTypeQueryStrings, UserTypes, YAxes, YAxis, yAxisLabelDict, } from "../src/data";
 
 import dynamic from 'next/dynamic'
-import Link from "next/link";
 import 'react-tooltip/dist/react-tooltip.css'
 
 import {darken} from "../src/colors";
@@ -643,18 +642,18 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                         <p>Expand the "⚙️" to filter or stack by region, user type, gender, bike type, or date, or toggle aggregation of rides or total ride minutes.</p>
                         <h4>Examples</h4>
                         <ul>
-                            <li><Link href={"/?r=jh"}>JC + Hoboken</Link> (<Link href={"/?r=jh&s=r"}>stacked</Link>)</li>
-                            <li><Link href={"/?y=m&s=g&pct=&g=mf&d=1406-2102"}>Ride minute %'s, Men vs. Women</Link>, Jun 2014 – January 2021</li>
-                            <li><Link href={"/?s=u&pct="}>Annual vs. daily user %'s</Link></li>
-                            <li><Link href={"/?y=m&s=b&rt=ce"}>Classic / E-bike ride minutes</Link></li>
-                            <li><Link href={"/"}>Default view (system-wide rides over time)</Link></li>
+                            <li><A href={"/?r=jh"}>JC + Hoboken</A> (<A href={"/?r=jh&s=r"}>stacked</A>)</li>
+                            <li><A href={"/?y=m&s=g&pct=&g=mf&d=1406-2102"}>Ride minute %'s, Men vs. Women</A>, Jun '14 – Jan '21</li>
+                            <li><A href={"/?s=u&pct="}>Annual vs. daily user %'s</A></li>
+                            <li><A href={"/?y=m&s=b&rt=ce"}>Classic / E-bike ride minutes</A></li>
+                            <li><A href={"/"}>Default view (system-wide rides over time)</A></li>
                         </ul>
                         <p>This plot refreshes when <A href={"https://www.citibikenyc.com/system-data"} target={"_blank"}>new data is published by Citi Bike</A> (typically the 1st or 2nd week of each month, covering the previous month).</p>
                         <p><A href={"https://github.com/neighbor-ryan/ctbk.dev"} target={"_blank"}>The GitHub repo</A> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"} target={"_blank"}>planned enhancements</a>. Data updates are performed <A href={"https://github.com/neighbor-ryan/ctbk.dev/actions"}>by Github Actions</A>.</p>
                         <hr/>
                         <h3 id={"map"}>Map: Stations + Common Destinations</h3>
-                        <p>Check out <Link href={"./stations"}>this map visualization of stations and their ridership counts in {lastMonthDisplayStr}</Link>.</p>
-                        <iframe src={"./stations"} className={css.map} />
+                        <iframe src={"/stations"} className={css.map} />
+                        (<A href={"/stations"}>Full screen version</A>)
                         <hr />
                         <h3 id="qc">🚧 Data-quality issues 🚧</h3>
                         {MD({ content: `
