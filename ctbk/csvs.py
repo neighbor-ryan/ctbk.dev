@@ -1,8 +1,9 @@
 #!/usr/bin/env python
+import gzip
 from abc import ABC
 from contextlib import contextmanager
 from shutil import copyfileobj
-from typing import Optional, Union
+from typing import Optional, Union, Iterator, IO
 from zipfile import ZipFile
 
 import dask.dataframe as dd
@@ -18,7 +19,7 @@ from ctbk.util.ym import dates, YM, Monthy
 from ctbk.zips import TripdataZips, TripdataZip
 from dask.delayed import delayed, Delayed
 from gzip_stream import GZIPCompressedStream
-from utz import cached_property, singleton, Unset
+from utz import cached_property, singleton, Unset, err
 
 DIR = f'{BKT}/csvs'
 
@@ -47,8 +48,20 @@ class TripdataCsv(ReadsTripdataZip, Table):
         return f'{self.dir}/{region_str}{self.ym}-citibike-tripdata.csv.gz'
 
     def extract_csv_from_zip(self):
-        with self.zip_csv_fd() as i, self.fd('wb') as o:
-            copyfileobj(GZIPCompressedStream(i, compression_level=self.COMPRESSION_LEVEL), o)
+        with self.fd('wb') as raw_o:
+            with gzip.open(raw_o, 'wb', compresslevel=self.COMPRESSION_LEVEL) as o:
+                header = None
+                for fdno, i in enumerate(self.zip_csv_fds()):
+                    line = next(i)
+                    if fdno == 0:
+                        header = line
+                        o.write(line)
+                    else:
+                        header2 = line
+                        if header != header2:
+                            raise RuntimeError(f"Header mismatch in {self.src.url} (CSV idx {fdno}): {header} != {header2}")
+                        o.write(b'\n')
+                    copyfileobj(i, o)
 
     def _create(self, read: Union[None, Read] = Unset) -> Union[None, Delayed]:
         read = self.read if read is Unset else read
@@ -60,8 +73,7 @@ class TripdataCsv(ReadsTripdataZip, Table):
         else:
             return self.checkpoint(read=read)
 
-    @contextmanager
-    def zip_csv_fd(self):
+    def zip_csv_fds(self) -> Iterator[IO]:
         """Return a read fd for the single CSV in the source .zip."""
         src = self.src
         with src.fd('rb') as z_in:
@@ -70,15 +82,16 @@ class TripdataCsv(ReadsTripdataZip, Table):
             print(f'{src.url}: zip names: {names}')
 
             csvs = [ f for f in names if f.endswith('.csv') and not f.startswith('_') ]
-            name = singleton(csvs)
-
-            yield z.open(name, 'r')
+            if len(csvs) > 1:
+                err(f"Found {len(csvs)} CSVs in {src.url}: {csvs}")
+            for name in csvs:
+                yield z.open(name, 'r')
 
     def meta(self):
         if self.exists():
             return pd.read_csv(self.url, dtype=str, nrows=0)
         else:
-            with self.zip_csv_fd() as i:
+            with next(self.zip_csv_fds()) as i:
                 return pd.read_csv(i, dtype=str, nrows=0)
 
     def _df(self) -> DataFrame:
