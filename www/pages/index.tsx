@@ -652,6 +652,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
                         <p><A href={"https://github.com/neighbor-ryan/ctbk.dev"} target={"_blank"}>The GitHub repo</A> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"} target={"_blank"}>planned enhancements</a>. Data updates are performed <A href={"https://github.com/neighbor-ryan/ctbk.dev/actions"}>by Github Actions</A>.</p>
                         <hr/>
                         <h3 id={"map"}>Map: Stations + Common Destinations</h3>
+                        <p>Tap a station to see where rides originating there go:</p>
                         <iframe src={"/stations"} className={css.map} />
                         (<A href={"/stations"}>Full screen version</A>)
                         <hr />
