@@ -37,6 +37,8 @@ jobs:
             ["index.html", "index.htm"]
       - name: Install chrome
         run: pnpx puppeteer browsers install chrome
+      - name: Inspect puppeteer cache
+        run: tree -L 3 ~/.cache/puppeteer
       - name: Regenerate screenshots
         working-directory: www
         run: node screenshots.js -h localhost:8080 -l 120000
