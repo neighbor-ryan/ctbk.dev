@@ -23,7 +23,9 @@ jobs:
           cache-dependency-path: www/pnpm-lock.yaml
       - name: Install
         working-directory: www
-        run: pnpm install
+        run: |
+          pnpm install
+          pnpm up puppeteer
       - name: Build
         working-directory: www
         run: |
