@@ -4,7 +4,6 @@ from utz import cached_property, DefaultDict
 
 from ctbk.has_root_cli import HasRootCLI
 from ctbk.task import Task
-from ctbk.tasks import Tasks
 from ctbk.util import GENESIS, S3
 from ctbk.util.region import REGIONS, Region, get_regions, region
 from ctbk.util.ym import dates, Monthy, YM
@@ -35,7 +34,7 @@ class TripdataZip(Task):
 
         extension = 'csv.zip'
         if region == 'NYC':
-            if ym.y < 2017:
+            if ym.y < 2017 or int(ym) == 202404:
                 extension = 'zip'
             url = f'{self.dir}/{ym}-{citibike}-tripdata.{extension}'
         else:
@@ -54,6 +53,7 @@ class TripdataZips(HasRootCLI):
             end: Monthy = None,
             regions: Optional[list[str]] = None,
             roots: Optional[DefaultDict[str]] = None,
+            **kwargs,
     ):
         self.start: YM = YM(start or GENESIS)
         end = end or YM()
@@ -91,7 +91,7 @@ class TripdataZips(HasRootCLI):
         self.m2r2u: dict[YM, dict[Region, TripdataZip]] = m2r2u
         self.end: YM = end
 
-        Tasks.__init__(self, roots=roots)
+        super().__init__(**kwargs, roots=roots)
 
     @cached_property
     def children(self) -> list[TripdataZip]:
