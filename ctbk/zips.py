@@ -34,7 +34,8 @@ class TripdataZip(Task):
 
         extension = 'csv.zip'
         if region == 'NYC':
-            if ym.y < 2017 or int(ym) == 202404:
+            # NYC zips are broken into multiple CSVs starting in 202404, maybe that's why the extension is just ".zip"?
+            if ym.y < 2017 or int(ym) >= 202404:
                 extension = 'zip'
             url = f'{self.dir}/{ym}-{citibike}-tripdata.{extension}'
         else:
