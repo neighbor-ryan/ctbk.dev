@@ -1,0 +1,26 @@
+name: Check Puppeteer install (https://github.com/puppeteer/puppeteer/issues/9533)
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    name:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.WWW_DEPLOY_KEY }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: www/pnpm-lock.yaml
+      - run: pnpm install
+        working-directory: www
+      - run: pnpx puppeteer browsers install chrome
+        working-directory: www
+      - name: Inspect puppeteer cache
+        run: tree -L 3 ~/.cache/puppeteer
