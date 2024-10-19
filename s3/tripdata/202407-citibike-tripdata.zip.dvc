@@ -1,0 +1,5 @@
+outs:
+- md5: b84ab060aed9ac1232c87ebaa9e4d88d
+  size: 223390233
+  hash: md5
+  path: 202407-citibike-tripdata.zip

@@ -1,0 +1,5 @@
+outs:
+- md5: e84686fa629c88f15bbaf791c6db07f8
+  size: 1231367136
+  hash: md5
+  path: 2022-citibike-tripdata.zip

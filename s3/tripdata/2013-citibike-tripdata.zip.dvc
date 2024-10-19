@@ -1,0 +1,5 @@
+outs:
+- md5: d78bef9e272a07a3d6cd6fde4a9239ae
+  size: 329797836
+  hash: md5
+  path: 2013-citibike-tripdata.zip
