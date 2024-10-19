@@ -46,19 +46,19 @@ jobs:
       name: Aggregate counts by start station
       run: ctbk --s3 aggregated -gs -ac create --dask
     secrets: inherit
-  group_counts-start-end:
-    needs: normalized
-    uses: ./.github/workflows/step.yml
-    with:
-      name: Aggregate counts by station-pair
-      run: ctbk --s3 aggregated -gse -ac create --dask
-    secrets: inherit
   group_counts-year-month-region-gender-type-bike-counts-durations:
     needs: normalized
     uses: ./.github/workflows/step.yml
     with:
       name: Aggregate counts by (month, region, gender, user type, rideable type)
       run: ctbk --s3 aggregated -gymrgtb -acd create --dask
+    secrets: inherit
+  group_counts-start-end:
+    needs: normalized
+    uses: ./.github/workflows/step.yml
+    with:
+      name: Aggregate counts by station-pair
+      run: ctbk --s3 aggregated -gse -ac create --dask
     secrets: inherit
   modes:
     needs: [meta_hist-names, meta_hist-latlngs, group_counts-start]
