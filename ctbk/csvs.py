@@ -1,10 +1,12 @@
 #!/usr/bin/env python
+from os.path import basename
+
 import gzip
 from abc import ABC
 from contextlib import contextmanager
 from shutil import copyfileobj
 from typing import Optional, Union, Iterator, IO
-from zipfile import ZipFile
+from zipfile import ZipFile, BadZipFile
 
 import dask.dataframe as dd
 import pandas as pd
@@ -84,8 +86,29 @@ class TripdataCsv(ReadsTripdataZip, Table):
             csvs = [ f for f in names if f.endswith('.csv') and not f.startswith('_') ]
             if len(csvs) > 1:
                 err(f"Found {len(csvs)} CSVs in {src.url}: {csvs}")
-            for name in csvs:
-                yield z.open(name, 'r')
+
+            if not csvs:
+                # 202409-citibike-tripdata.zip contains 5 `.csv.zip`s
+                csv_zip_names = [
+                    f
+                    for f in names
+                    if f.endswith('.csv.zip')
+                       and not f.startswith('_')
+                       and not basename(f).startswith('_')
+                ]
+                for csv_zip_name in csv_zip_names:
+                    with z.open(csv_zip_name, 'r') as csv_zip_fd:
+                        try:
+                            csv_zip = ZipFile(csv_zip_fd)
+                        except BadZipFile:
+                            raise ValueError(f"Failed to open nested zip file {csv_zip_name} inside {src.url}")
+                        csv_zip_names = csv_zip.namelist()
+                        csvs = [ f for f in csv_zip_names if f.endswith('.csv') and not f.startswith('_') ]
+                        for csv in csvs:
+                            yield csv_zip.open(csv, 'r')
+            else:
+                for name in csvs:
+                    yield z.open(name, 'r')
 
     def meta(self):
         if self.exists():
