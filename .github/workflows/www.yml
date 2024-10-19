@@ -21,6 +21,11 @@ jobs:
           node-version: 20
           cache: 'pnpm'
           cache-dependency-path: www/pnpm-lock.yaml
+      - name: Cache Puppeteer
+        uses: actions/cache@v4
+        with:
+          key: puppeteer
+          path: ~/.cache/puppeteer
       - name: Install
         working-directory: www
         run: |
