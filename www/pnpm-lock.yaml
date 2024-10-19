@@ -10,10 +10,10 @@ importers:
     dependencies:
       '@mdx-js/loader':
         specifier: ^2.3.0
-        version: 2.3.0(webpack@5.90.1(webpack-cli@4.10.0))
+        version: 2.3.0(webpack@5.90.1)
       '@next/mdx':
-        specifier: ^13.2.4
-        version: 13.5.6(@mdx-js/loader@2.3.0(webpack@5.90.1(webpack-cli@4.10.0)))
+        specifier: ^13.5.6
+        version: 13.5.6(@mdx-js/loader@2.3.0(webpack@5.90.1))
       '@rdub/base':
         specifier: ^0.1.0
         version: 0.1.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -25,33 +25,33 @@ importers:
         version: 0.1.0(leaflet@1.9.4)(next@14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(react-dom@18.2.0(react@18.2.0))(react-leaflet@4.2.1(leaflet@1.9.4)(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(react@18.2.0)
       '@rdub/next-markdown':
         specifier: 0.0.2
-        version: 0.0.2(@babel/core@7.23.9)(@mdx-js/loader@2.3.0(webpack@5.90.1(webpack-cli@4.10.0)))(@types/react@18.2.52)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        version: 0.0.2(@babel/core@7.23.9)(@mdx-js/loader@2.3.0(webpack@5.90.1))(@types/react@18.2.52)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       '@rdub/next-params':
         specifier: 0.0.3
         version: 0.0.3(next@14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       '@rdub/next-plotly':
         specifier: 0.0.5
-        version: 0.0.5(@types/node@20.12.11)(mapbox-gl@1.13.3)(next@14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(terser@5.27.0)(webpack@5.90.1(webpack-cli@4.10.0))
+        version: 0.0.5(@types/node@20.12.11)(mapbox-gl@1.13.3)(next@14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(terser@5.27.0)(webpack@5.90.1)
       assert:
-        specifier: ^2.0.0
+        specifier: ^2.1.0
         version: 2.1.0
       aws-sdk:
-        specifier: ^2.1043.0
+        specifier: ^2.1550.0
         version: 2.1550.0
       bootstrap:
-        specifier: ^4.1.3
+        specifier: ^4.6.2
         version: 4.6.2(jquery@3.7.1)(popper.js@1.16.1)
       buffer:
         specifier: ^6.0.3
         version: 6.0.3
       d3-color:
-        specifier: '>=3.1.0'
+        specifier: ^3.1.0
         version: 3.1.0
       danfojs:
         specifier: ^1.1.2
         version: 1.1.2(seedrandom@3.0.5)
       jquery:
-        specifier: ^3.6.0
+        specifier: ^3.7.1
         version: 3.7.1
       leaflet:
         specifier: ^1.9.4
@@ -60,13 +60,13 @@ importers:
         specifier: ^4.17.21
         version: 4.17.21
       moment:
-        specifier: ^2.29.1
+        specifier: ^2.30.1
         version: 2.30.1
       next:
-        specifier: ^14
+        specifier: ^14.1.0
         version: 14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       node-fetch:
-        specifier: ^2.6.1
+        specifier: ^2.7.0
         version: 2.7.0
       plotly.js:
         specifier: ^2.29.0
@@ -84,74 +84,74 @@ importers:
         specifier: ^4.2.1
         version: 4.2.1(leaflet@1.9.4)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-markdown:
-        specifier: ^7.1.1
+        specifier: ^7.1.2
         version: 7.1.2(@types/react@18.2.52)(react@18.2.0)
       react-router-dom:
-        specifier: ^6.0.2
+        specifier: ^6.22.0
         version: 6.22.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-tooltip:
-        specifier: ^5.0.0
+        specifier: ^5.26.0
         version: 5.26.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
     devDependencies:
       '@types/chroma-js':
-        specifier: ^2.4.0
+        specifier: ^2.4.3
         version: 2.4.3
       '@types/jquery':
-        specifier: ^3.5.6
+        specifier: ^3.5.29
         version: 3.5.29
       '@types/leaflet':
-        specifier: ^1.8.0
+        specifier: ^1.9.8
         version: 1.9.8
       '@types/lodash':
-        specifier: ^4.14.177
+        specifier: ^4.14.202
         version: 4.14.202
       '@types/node-fetch':
-        specifier: ^2.6.2
+        specifier: ^2.6.11
         version: 2.6.11
       '@types/parquetjs':
-        specifier: ^0.10.3
+        specifier: ^0.10.6
         version: 0.10.6
       '@types/plotly.js':
         specifier: ^2.29.0
         version: 2.29.0
       '@types/react':
-        specifier: ^18.0.25
+        specifier: ^18.2.52
         version: 18.2.52
       '@types/react-dom':
-        specifier: ^18.0.9
+        specifier: ^18.2.18
         version: 18.2.18
       '@types/react-plotly.js':
-        specifier: ^2.5.0
+        specifier: ^2.6.3
         version: 2.6.3
       '@types/use-persisted-state':
-        specifier: ^0.3.0
+        specifier: ^0.3.4
         version: 0.3.4
       '@vanilla-extract/next-plugin':
-        specifier: ^2.1.1
-        version: 2.3.6(@types/node@20.12.11)(next@14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(terser@5.27.0)(webpack@5.90.1(webpack-cli@4.10.0))
+        specifier: ^2.3.6
+        version: 2.3.6(@types/node@20.12.11)(next@14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(terser@5.27.0)(webpack@5.90.1)
       commander:
         specifier: ^2.20.3
         version: 2.20.3
       http-server:
-        specifier: ^14.1.0
+        specifier: ^14.1.1
         version: 14.1.1
       puppeteer:
         specifier: ^22.8.0
         version: 22.8.0(typescript@4.9.5)
       source-map-loader:
-        specifier: ^3.0.0
-        version: 3.0.2(webpack@5.90.1(webpack-cli@4.10.0))
+        specifier: ^3.0.2
+        version: 3.0.2(webpack@5.90.1)
       ts-loader:
-        specifier: ^9.1.2
-        version: 9.5.1(typescript@4.9.5)(webpack@5.90.1(webpack-cli@4.10.0))
+        specifier: ^9.5.1
+        version: 9.5.1(typescript@4.9.5)(webpack@5.90.1)
       typescript:
-        specifier: ^4.2.4
+        specifier: ^4.9.5
         version: 4.9.5
       webpack:
-        specifier: ^5.36.2
+        specifier: ^5.90.1
         version: 5.90.1(webpack-cli@4.10.0)
       webpack-cli:
-        specifier: ^4.7.0
+        specifier: ^4.10.0
         version: 4.10.0(webpack@5.90.1)
 
 packages:
@@ -1232,8 +1232,8 @@ packages:
     resolution: {integrity: sha512-P8BjAsXvZS+VIDUI11hHCQEv74YT67YUi5JJFNWIqL235sBmjX4+qx9Muvls5ivyNENctx46xQLQ3aTuE7ssaQ==}
     engines: {node: '>=6'}
 
-  caniuse-lite@1.0.30001583:
-    resolution: {integrity: sha512-acWTYaha8xfhA/Du/z4sNZjHUWjkiuoAi2LM+T/aL+kemKQgPT1xBb/YKjlQ0Qo8gvbHsGNplrEJ+9G3gL7i4Q==}
+  caniuse-lite@1.0.30001669:
+    resolution: {integrity: sha512-DlWzFDJqstqtIVx1zeSpIMLjunf5SmwOw0N2Ck/QSQdS8PLS4+9HrLaYei4w8BIAL7IB/UEDu889d8vhCTPA0w==}
 
   canvas-fit@1.5.0:
     resolution: {integrity: sha512-onIcjRpz69/Hx5bB5HGbYKUF2uC6QT6Gp+pfpGm3A7mPfcluSLV5v4Zu+oflDUwLdUw0rLIBhUbi0v8hM4FJQQ==}
@@ -2890,6 +2890,10 @@ packages:
     resolution: {integrity: sha512-ClrV7pNOn7rtmoQVF4TS1vyU0WhYRnP92fzbfF75jAIwpnzdJXf8iTd4CMEqO4yUenH6NDqLiwjqlh6QgZzgLQ==}
     hasBin: true
 
+  pbf@3.3.0:
+    resolution: {integrity: sha512-XDF38WCH3z5OV/OVa8GKUNtLAyneuzbCisx7QUCF8Q6Nutx0WnJrQe5O+kOtBlLfRNUws98Y58Lblp+NJG5T4Q==}
+    hasBin: true
+
   pend@1.2.0:
     resolution: {integrity: sha512-F3asv42UuXchdzt+xXqfW1OGlVBe+mxa2mqI0pg5yAHZPvFmY3Y6drSf/GQ1A86WgWEN9Kzh/WrgKa6iGcHXLg==}
 
@@ -4210,7 +4214,7 @@ snapshots:
 
   '@mapbox/whoots-js@3.1.0': {}
 
-  '@mdx-js/loader@2.3.0(webpack@5.90.1(webpack-cli@4.10.0))':
+  '@mdx-js/loader@2.3.0(webpack@5.90.1)':
     dependencies:
       '@mdx-js/mdx': 2.3.0
       source-map: 0.7.4
@@ -4242,17 +4246,17 @@ snapshots:
 
   '@next/env@14.1.0': {}
 
-  '@next/mdx@13.5.6(@mdx-js/loader@2.3.0(webpack@5.90.1(webpack-cli@4.10.0)))':
+  '@next/mdx@13.5.6(@mdx-js/loader@2.3.0(webpack@5.90.1))':
     dependencies:
       source-map: 0.7.4
     optionalDependencies:
-      '@mdx-js/loader': 2.3.0(webpack@5.90.1(webpack-cli@4.10.0))
+      '@mdx-js/loader': 2.3.0(webpack@5.90.1)
 
-  '@next/mdx@14.1.0(@mdx-js/loader@2.3.0(webpack@5.90.1(webpack-cli@4.10.0)))':
+  '@next/mdx@14.1.0(@mdx-js/loader@2.3.0(webpack@5.90.1))':
     dependencies:
       source-map: 0.7.4
     optionalDependencies:
-      '@mdx-js/loader': 2.3.0(webpack@5.90.1(webpack-cli@4.10.0))
+      '@mdx-js/loader': 2.3.0(webpack@5.90.1)
 
   '@next/swc-darwin-arm64@14.1.0':
     optional: true
@@ -4389,9 +4393,9 @@ snapshots:
       react-dom: 18.2.0(react@18.2.0)
       react-leaflet: 4.2.1(leaflet@1.9.4)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
 
-  '@rdub/next-markdown@0.0.2(@babel/core@7.23.9)(@mdx-js/loader@2.3.0(webpack@5.90.1(webpack-cli@4.10.0)))(@types/react@18.2.52)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
+  '@rdub/next-markdown@0.0.2(@babel/core@7.23.9)(@mdx-js/loader@2.3.0(webpack@5.90.1))(@types/react@18.2.52)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@next/mdx': 14.1.0(@mdx-js/loader@2.3.0(webpack@5.90.1(webpack-cli@4.10.0)))
+      '@next/mdx': 14.1.0(@mdx-js/loader@2.3.0(webpack@5.90.1))
       '@rdub/next-base': 0.0.1(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       '@vanilla-extract/css': 1.14.1
       next: 14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -4420,12 +4424,12 @@ snapshots:
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
 
-  '@rdub/next-plotly@0.0.5(@types/node@20.12.11)(mapbox-gl@1.13.3)(next@14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(terser@5.27.0)(webpack@5.90.1(webpack-cli@4.10.0))':
+  '@rdub/next-plotly@0.0.5(@types/node@20.12.11)(mapbox-gl@1.13.3)(next@14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(terser@5.27.0)(webpack@5.90.1)':
     dependencies:
       '@rdub/base': 0.1.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       '@rdub/next-base': 0.1.0(next@14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       '@vanilla-extract/css': 1.14.1
-      '@vanilla-extract/next-plugin': 2.3.6(@types/node@20.12.11)(next@14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(terser@5.27.0)(webpack@5.90.1(webpack-cli@4.10.0))
+      '@vanilla-extract/next-plugin': 2.3.6(@types/node@20.12.11)(next@14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(terser@5.27.0)(webpack@5.90.1)
       next: 14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       plotly.js: 2.29.0(mapbox-gl@1.13.3)
       react: 18.2.0
@@ -4760,9 +4764,9 @@ snapshots:
       - supports-color
       - terser
 
-  '@vanilla-extract/next-plugin@2.3.6(@types/node@20.12.11)(next@14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(terser@5.27.0)(webpack@5.90.1(webpack-cli@4.10.0))':
+  '@vanilla-extract/next-plugin@2.3.6(@types/node@20.12.11)(next@14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(terser@5.27.0)(webpack@5.90.1)':
     dependencies:
-      '@vanilla-extract/webpack-plugin': 2.3.5(@types/node@20.12.11)(terser@5.27.0)(webpack@5.90.1(webpack-cli@4.10.0))
+      '@vanilla-extract/webpack-plugin': 2.3.5(@types/node@20.12.11)(terser@5.27.0)(webpack@5.90.1)
       next: 14.1.0(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
     transitivePeerDependencies:
       - '@types/node'
@@ -4777,7 +4781,7 @@ snapshots:
 
   '@vanilla-extract/private@1.0.3': {}
 
-  '@vanilla-extract/webpack-plugin@2.3.5(@types/node@20.12.11)(terser@5.27.0)(webpack@5.90.1(webpack-cli@4.10.0))':
+  '@vanilla-extract/webpack-plugin@2.3.5(@types/node@20.12.11)(terser@5.27.0)(webpack@5.90.1)':
     dependencies:
       '@vanilla-extract/integration': 6.5.0(@types/node@20.12.11)(terser@5.27.0)
       chalk: 4.1.2
@@ -4872,17 +4876,17 @@ snapshots:
 
   '@webgpu/types@0.1.16': {}
 
-  '@webpack-cli/configtest@1.2.0(webpack-cli@4.10.0(webpack@5.90.1))(webpack@5.90.1(webpack-cli@4.10.0))':
+  '@webpack-cli/configtest@1.2.0(webpack-cli@4.10.0)(webpack@5.90.1)':
     dependencies:
       webpack: 5.90.1(webpack-cli@4.10.0)
       webpack-cli: 4.10.0(webpack@5.90.1)
 
-  '@webpack-cli/info@1.5.0(webpack-cli@4.10.0(webpack@5.90.1))':
+  '@webpack-cli/info@1.5.0(webpack-cli@4.10.0)':
     dependencies:
       envinfo: 7.11.1
       webpack-cli: 4.10.0(webpack@5.90.1)
 
-  '@webpack-cli/serve@1.7.0(webpack-cli@4.10.0(webpack@5.90.1))':
+  '@webpack-cli/serve@1.7.0(webpack-cli@4.10.0)':
     dependencies:
       webpack-cli: 4.10.0(webpack@5.90.1)
 
@@ -5080,7 +5084,7 @@ snapshots:
 
   browserslist@4.22.3:
     dependencies:
-      caniuse-lite: 1.0.30001583
+      caniuse-lite: 1.0.30001669
       electron-to-chromium: 1.4.656
       node-releases: 2.0.14
       update-browserslist-db: 1.0.13(browserslist@4.22.3)
@@ -5119,7 +5123,7 @@ snapshots:
 
   callsites@3.1.0: {}
 
-  caniuse-lite@1.0.30001583: {}
+  caniuse-lite@1.0.30001669: {}
 
   canvas-fit@1.5.0:
     dependencies:
@@ -6373,7 +6377,7 @@ snapshots:
       gl-matrix: 3.4.3
       grid-index: 1.1.0
       murmurhash-js: 1.0.0
-      pbf: 3.2.1
+      pbf: 3.3.0
       potpack: 1.0.2
       quickselect: 2.0.0
       rw: 1.3.3
@@ -7153,7 +7157,7 @@ snapshots:
       '@next/env': 14.1.0
       '@swc/helpers': 0.5.2
       busboy: 1.6.0
-      caniuse-lite: 1.0.30001583
+      caniuse-lite: 1.0.30001669
       graceful-fs: 4.2.11
       postcss: 8.4.31
       react: 18.2.0
@@ -7318,6 +7322,11 @@ snapshots:
   pathe@1.1.2: {}
 
   pbf@3.2.1:
+    dependencies:
+      ieee754: 1.2.1
+      resolve-protobuf-schema: 2.1.0
+
+  pbf@3.3.0:
     dependencies:
       ieee754: 1.2.1
       resolve-protobuf-schema: 2.1.0
@@ -7912,7 +7921,7 @@ snapshots:
 
   source-map-js@1.0.2: {}
 
-  source-map-loader@3.0.2(webpack@5.90.1(webpack-cli@4.10.0)):
+  source-map-loader@3.0.2(webpack@5.90.1):
     dependencies:
       abab: 2.0.6
       iconv-lite: 0.6.3
@@ -8075,7 +8084,7 @@ snapshots:
       fast-fifo: 1.3.2
       streamx: 2.16.1
 
-  terser-webpack-plugin@5.3.10(webpack@5.90.1(webpack-cli@4.10.0)):
+  terser-webpack-plugin@5.3.10(webpack@5.90.1):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.22
       jest-worker: 27.5.1
@@ -8142,7 +8151,7 @@ snapshots:
 
   trough@2.1.0: {}
 
-  ts-loader@9.5.1(typescript@4.9.5)(webpack@5.90.1(webpack-cli@4.10.0)):
+  ts-loader@9.5.1(typescript@4.9.5)(webpack@5.90.1):
     dependencies:
       chalk: 4.1.2
       enhanced-resolve: 5.15.0
@@ -8412,9 +8421,9 @@ snapshots:
   webpack-cli@4.10.0(webpack@5.90.1):
     dependencies:
       '@discoveryjs/json-ext': 0.5.7
-      '@webpack-cli/configtest': 1.2.0(webpack-cli@4.10.0(webpack@5.90.1))(webpack@5.90.1(webpack-cli@4.10.0))
-      '@webpack-cli/info': 1.5.0(webpack-cli@4.10.0(webpack@5.90.1))
-      '@webpack-cli/serve': 1.7.0(webpack-cli@4.10.0(webpack@5.90.1))
+      '@webpack-cli/configtest': 1.2.0(webpack-cli@4.10.0)(webpack@5.90.1)
+      '@webpack-cli/info': 1.5.0(webpack-cli@4.10.0)
+      '@webpack-cli/serve': 1.7.0(webpack-cli@4.10.0)
       colorette: 2.0.20
       commander: 7.2.0
       cross-spawn: 7.0.3
@@ -8456,7 +8465,7 @@ snapshots:
       neo-async: 2.6.2
       schema-utils: 3.3.0
       tapable: 2.2.1
-      terser-webpack-plugin: 5.3.10(webpack@5.90.1(webpack-cli@4.10.0))
+      terser-webpack-plugin: 5.3.10(webpack@5.90.1)
       watchpack: 2.4.0
       webpack-sources: 3.2.3
     optionalDependencies:
