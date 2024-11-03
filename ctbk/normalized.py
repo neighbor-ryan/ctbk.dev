@@ -38,8 +38,8 @@ fields = {
 }
 # All fields are ingested as strings by default; select overrides here:
 dtypes = {
-    'Start Time': 'datetime64[ns]',
-    'Stop Time': 'datetime64[ns]',
+    'Start Time': 'datetime64[us]',
+    'Stop Time': 'datetime64[us]',
     'Start Station Latitude': float,
     'Start Station Longitude': float,
     'End Station Latitude': float,
