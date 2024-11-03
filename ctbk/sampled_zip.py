@@ -76,7 +76,7 @@ class SampledZips(HasRootCLI):
     @cached_property
     def children(self) -> list[SampledZip]:
         return [
-            self.zip(ym=zip.ym, region=zip.region)
+            self.zip(ym=zip.yym, region=zip.region)
             for zip in self.src.children
         ]
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import calendar
 import gzip
 from abc import ABC
 from os.path import basename
@@ -76,12 +77,33 @@ class TripdataCsv(ReadsTripdataZip, Table):
     def zip_csv_fds(self) -> Iterator[IO]:
         """Return a read fd for the single CSV in the source .zip."""
         src = self.src
+        ym = self.ym
+        zip_yym = int(self.src.yym)
         with src.fd('rb') as z_in:
             z = ZipFile(z_in)
             names = z.namelist()
-            print(f'{src.url}: zip names: {names}')
+            err(f'{src.url}: zip names: {names}')
 
-            csvs = [ f for f in names if f.endswith('.csv') and not f.startswith('_') ]
+            if zip_yym < 2024:
+                dir0 = f'{zip_yym}-citibike-tripdata'
+                if zip_yym >= 2020:
+                    inner_zip_name = f'{dir0}/{ym}-citibike-tripdata.zip'
+                    with z.open(inner_zip_name, 'r') as inner_zip_fd:
+                        inner_zip = ZipFile(inner_zip_fd)
+                        csvs = list(sorted([ f for f in inner_zip.namelist() if f.endswith('.csv') and not f.startswith('_') ]))
+                        err(f"{ym}: loaded CSVs from annual inner zip: {csvs}")
+                        for csv in csvs:
+                            yield inner_zip.open(csv, 'r')
+                        return
+                else:
+                    month = ym.m
+                    month_name = calendar.month_name[month]
+                    dir1 = f'{month}_{month_name}'
+                    prefix = f'{dir0}/{dir1}/{ym}-citibike-tripdata{".csv" if ym.y == 2017 else ""}_'
+                    csvs = list(sorted([ f for f in names if f.startswith(prefix) and f.endswith('.csv') ]))
+                    err(f"{ym}: loaded CSVs from annual zip: {csvs}")
+            else:
+                csvs = list(sorted([ f for f in names if f.endswith('.csv') and not f.startswith('_') ]))
             if len(csvs) > 1:
                 err(f"Found {len(csvs)} CSVs in {src.url}: {csvs}")
 
@@ -101,7 +123,7 @@ class TripdataCsv(ReadsTripdataZip, Table):
                         except BadZipFile:
                             raise ValueError(f"Failed to open nested zip file {csv_zip_name} inside {src.url}")
                         csv_zip_names = csv_zip.namelist()
-                        csvs = [ f for f in csv_zip_names if f.endswith('.csv') and not f.startswith('_') ]
+                        csvs = list(sorted([ f for f in csv_zip_names if f.endswith('.csv') and not f.startswith('_') ]))
                         for csv in csvs:
                             yield csv_zip.open(csv, 'r')
             else:

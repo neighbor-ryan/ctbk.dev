@@ -15,32 +15,38 @@ class TripdataZip(Task):
     DIR = DIR
     NAMES = ['zip']
 
-    def __init__(self, ym, region, roots: Optional[DefaultDict[str]] = None):
+    def __init__(
+        self,
+        ym: YM,
+        region: Region,
+        roots: Optional[DefaultDict[str]] = None,
+    ):
         if region not in REGIONS:
             raise ValueError(f"Unrecognized region: {region}")
-        self.ym = YM(ym)
+        self.ym = ym
+        self.yym = ym.y if region == 'NYC' and ym.y < 2024 else ym
         self.region = region
         roots = roots or DefaultDict(configs={ self.NAMES[0]: S3 })
         Task.__init__(self, roots=roots)
 
     @cached_property
     def url(self):
-        ym = self.ym
+        ymi = int(self.yym)
         region = self.region
 
         # Typos in 202206, 202207 and JC-202207
-        citbike_typo_months = [ (202206, 'NYC'), (202207, 'NYC'), (202207, 'JC'), ]
-        citibike = 'citbike' if (int(ym), region) in citbike_typo_months else 'citibike'
+        citbike_typo_months = [ (202207, 'JC'), ]
+        citibike = 'citbike' if (ymi, region) in citbike_typo_months else 'citibike'
 
         extension = 'csv.zip'
         if region == 'NYC':
             # NYC zips are broken into multiple CSVs starting in 202404, maybe that's why the extension is just ".zip"?
-            if ym.y < 2017 or int(ym) >= 202404:
+            if ymi < 2024 or ymi > 202404:
                 extension = 'zip'
-            url = f'{self.dir}/{ym}-{citibike}-tripdata.{extension}'
+            url = f'{self.dir}/{ymi}-{citibike}-tripdata.{extension}'
         else:
-            sep = ' ' if int(self.ym) == 201708 else '-'
-            url = f'{self.dir}/{region}-{ym}{sep}{citibike}-tripdata.{extension}'
+            sep = ' ' if ymi == 201708 else '-'
+            url = f'{self.dir}/{region}-{ymi}{sep}{citibike}-tripdata.{extension}'
         return url
 
 
