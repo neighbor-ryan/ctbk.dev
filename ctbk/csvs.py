@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import calendar
 import gzip
+
 from abc import ABC
 from os.path import basename
 from shutil import copyfileobj
@@ -18,6 +19,7 @@ from ctbk.table import Table
 from ctbk.task import Task
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
+from ctbk.util.gzip import DeterministicGzipFile
 from ctbk.util.read import Read
 from ctbk.util.region import REGIONS, Region, region
 from ctbk.zips import TripdataZips, TripdataZip
@@ -50,7 +52,11 @@ class TripdataCsv(ReadsTripdataZip, Table):
 
     def extract_csv_from_zip(self):
         with self.fd('wb') as raw_o:
-            with gzip.open(raw_o, 'wb', compresslevel=self.COMPRESSION_LEVEL) as o:
+            with DeterministicGzipFile(
+                fileobj=raw_o,
+                mode='wb',
+                compresslevel=self.COMPRESSION_LEVEL
+            ) as o:
                 header = None
                 for fdno, i in enumerate(self.zip_csv_fds()):
                     line = next(i)
