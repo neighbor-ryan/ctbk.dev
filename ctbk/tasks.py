@@ -48,7 +48,7 @@ class MonthTables(MonthTasks, ABC):
 
     @cached_property
     def children(self) -> list[Table]:
-        # TODO: is this performing computations serially in Dask mode (when it should be delayed and later parallelized?)
+        # TODO: is this performing computations serially in Dask mode (when it should be delayed and later parallelized)?
         return [
             self.month(ym)
             for ym in self.yms

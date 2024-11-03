@@ -48,12 +48,12 @@ def value_counts(df: DataFrame) -> pd.Series:
 
 
 def checkpoint_df(
-        df: pd.DataFrame,
-        url: str,
-        read: Optional[Read] = Disk,
-        fmt: Literal['pqt', 'csv', 'json'] = 'pqt',
-        read_kwargs: Optional[dict] = None,
-        write_kwargs: Optional[dict] = None,
+    df: pd.DataFrame,
+    url: str,
+    read: Optional[Read] = Disk,
+    fmt: Literal['pqt', 'csv', 'json'] = 'pqt',
+    read_kwargs: Optional[dict] = None,
+    write_kwargs: Optional[dict] = None,
 ) -> Union[None, pd.DataFrame]:
     write_kwargs = write_kwargs or {}
     if callable(write_kwargs):

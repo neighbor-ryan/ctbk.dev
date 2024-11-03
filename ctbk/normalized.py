@@ -171,6 +171,10 @@ class NormalizedMonth(MonthTable):
     DIR = DIR
     NAMES = [ 'normalized', 'norm', 'n', ]
 
+    def __init__(self, ym: Monthy, /, engine: int | None = None, **kwargs):
+        self.engine = 'fastparquet' if engine == 1 else 'pyarrow' if engine == 2 else 'auto'
+        super().__init__(ym, **kwargs)
+
     def normalized_region(self, region) -> DataFrame:
         ym = self.ym
         csv = TripdataCsv(ym=ym, region=region, **self.kwargs)
@@ -208,7 +212,7 @@ class NormalizedMonth(MonthTable):
 
     @property
     def checkpoint_kwargs(self):
-        return dict(write_kwargs=dict(index=False))
+        return dict(write_kwargs=dict(index=False, engine=self.engine))
 
     def _df(self) -> DataFrame:
         return self.concat([
@@ -222,7 +226,7 @@ class NormalizedMonths(MonthTables, HasRootCLI):
     CHILD_CLS = NormalizedMonth
 
     def month(self, ym: Monthy) -> NormalizedMonth:
-        return NormalizedMonth(ym, **self.kwargs)
+        return NormalizedMonth(ym, **self.kwargs, **self.extra)
 
 
 NormalizedMonths.cli(

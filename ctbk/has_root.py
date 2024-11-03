@@ -72,11 +72,12 @@ class HasRoot:
         return cls.NAMES
 
     def __init__(
-            self,
-            roots: Optional[DefaultDict[str]] = None,
-            reads: Optional[DefaultDict[Read]] = None,
-            writes: Optional[DefaultDict[Write]] = None,
-            dask: bool = False,
+        self,
+        roots: Optional[DefaultDict[str]] = None,
+        reads: Optional[DefaultDict[Read]] = None,
+        writes: Optional[DefaultDict[Write]] = None,
+        dask: bool = False,
+        **extra,
     ):
         names = self.NAMES or []
 
@@ -95,6 +96,7 @@ class HasRoot:
             raise RuntimeError(f"{self}.DIR not defined")
         self.dir = f'{root}/{self.DIR}' if root else self.DIR
         self.dask = dask
+        self.extra = extra
         super().__init__()
 
     @property

@@ -59,6 +59,7 @@ class HasRootCLI(Tasks, HasRoot, ABC):
         cls,
         group: click.Group,
         cmd_decos: list = None,
+        create_decos: list = None,
         group_cls: type[click.Group] = None,
         urls=True,
         create=True,
@@ -84,6 +85,7 @@ class HasRootCLI(Tasks, HasRoot, ABC):
 
         if create:
             @cmd(help="Create selected datasets")
+            @decos(create_decos or [])
             @dask
             def create(ctx, dask, **kwargs):
                 o = ctx.obj
@@ -118,6 +120,7 @@ class HasRootCLI(Tasks, HasRoot, ABC):
         help: str,
         decos: Optional[list] = None,
         cmd_decos: Optional[list] = None,
+        create_decos: Optional[list] = None,
         **kwargs
     ) -> Group:
         command_cls = cls.command_cls()
@@ -131,7 +134,12 @@ class HasRootCLI(Tasks, HasRoot, ABC):
         def group(ctx, **kwargs):
             ctx.obj = dict(**ctx.obj, **kwargs)
 
-        cls.init_cli(group, cmd_decos=cmd_decos, **kwargs)
+        cls.init_cli(
+            group,
+            cmd_decos=cmd_decos,
+            create_decos=create_decos,
+            **kwargs,
+        )
         return group
 
     @classmethod
