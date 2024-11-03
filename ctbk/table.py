@@ -1,4 +1,5 @@
 from abc import ABC
+from functools import cache
 from os.path import dirname, exists
 from typing import Union
 
@@ -22,7 +23,7 @@ class Table(Task, ABC):
     def _read(self) -> DataFrame:
         return self.dpd.read_parquet(self.url)
 
-    @cached_property
+    @cache
     def df(self) -> DataFrame:
         if self.read is None:
             raise NotImplementedError(f"{self.url}: can't load df, self.read is None")

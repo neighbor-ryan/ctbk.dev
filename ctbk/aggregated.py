@@ -85,7 +85,7 @@ class AggregatedMonth(MonthTable):
 
     def _df(self) -> DataFrame:
         src = NormalizedMonth(self.ym, **self.kwargs)
-        df = src.df
+        df = src.df()
         group_by_keys = dict(self.group_by_keys)
         aggregate_by_keys = dict(self.aggregate_by_keys)
         group_by_cols = []

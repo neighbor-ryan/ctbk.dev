@@ -302,7 +302,7 @@ class TripdataCsvs(HasRootCLI):
     def m2df(self):
         return {
             m: self.concat([
-                csv.df
+                csv.df()
                 for r, csv in r2csv.items()
             ])
             for m, r2csv in self.m2r2csv.items()
@@ -311,7 +311,7 @@ class TripdataCsvs(HasRootCLI):
     @cached_property
     def df(self):
         if self.dask:
-            return self.concat([ child.df for child in self.children ])
+            return self.concat([ child.df() for child in self.children ])
         else:
             raise NotImplementedError("Unified DataFrame is large, you probably want .dd instead (.dd.compute() if you must)")
 

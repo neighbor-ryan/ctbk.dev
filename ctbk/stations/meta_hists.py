@@ -55,7 +55,7 @@ class StationMetaHist(MonthTable):
 
     def _df(self) -> DataFrame:
         src = NormalizedMonth(self.ym, **self.kwargs)
-        df = src.df
+        df = src.df()
         # Assign each ride to its start YM, ignore the end time (except for the "duration" sum_key)
         df = df.rename(columns={
             'Start Year': 'year',

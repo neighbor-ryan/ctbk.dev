@@ -28,7 +28,7 @@ class StationPairsJson(MonthTable):
         id2idx = mmj.id2idx
 
         se_am = AggregatedMonth(self.ym, 'se', 'c', **self.kwargs)
-        se = se_am.df
+        se = se_am.df()
 
         se_ids = (
             se

@@ -1,4 +1,6 @@
 from abc import ABC
+from functools import cache
+
 from typing import Union
 
 from dask import delayed
@@ -54,18 +56,18 @@ class MonthTables(MonthTasks, ABC):
 
     def month_df(self, ym: Monthy, add_ym=False) -> DataFrame:
         month = self.month(ym)
-        df = month.df
+        df = month.df()
         if add_ym:
             df['ym'] = ym
         return df
 
-    @cached_property
+    @cache
     def dfs(self) -> list[DataFrame]:
         return [
             self.month_df(ym, add_ym=True)
             for ym in self.yms
         ]
 
-    @cached_property
+    @cache
     def df(self):
-        return self.concat(self.dfs)
+        return self.concat(self.dfs())

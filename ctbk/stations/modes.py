@@ -141,7 +141,7 @@ class ModesMonthJson(MonthTable):
 
     @cached_property
     def idx2id(self):
-        stations = self.df.reset_index()
+        stations = self.df().reset_index()
         if self.dask:
             stations = stations.rename(columns={'index': 'id'})
         stations.index.name = 'idx'
@@ -158,19 +158,19 @@ class ModesMonthJson(MonthTable):
     def _df(self) -> DataFrame:
         dask = self.dask
         smh_in = StationMetaHist(self.ym, 'in', **self.kwargs)
-        df_in = smh_in.df.set_index('id')
+        df_in = smh_in.df().set_index('id')
         name_groups = df_in.groupby('id')
         names = name_groups.apply(self.compute_mode, **meta('name', dask)).rename('name')
 
         smh_il = StationMetaHist(self.ym, 'il', **self.kwargs)
-        df_il = smh_il.df.set_index('id')
+        df_il = smh_il.df().set_index('id')
         ll_groups = df_il.groupby('id')
         lls = ll_groups.apply(self.ll_mean, **meta({ 'lat': float, 'lng': float }, dask))
         stations = sxs(names, lls).reset_index()
         stations.index.name = 'idx'
 
         sc_am = AggregatedMonth(self.ym, 's', 'c', **self.kwargs)
-        sc_df = sc_am.df
+        sc_df = sc_am.df()
         starts = (
             sc_df
             .rename(columns={

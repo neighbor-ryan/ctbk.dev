@@ -171,7 +171,7 @@ class NormalizedMonth(MonthTable):
     def normalized_region(self, region) -> DataFrame:
         ym = self.ym
         csv = TripdataCsv(ym=ym, region=region, **self.kwargs)
-        df = csv.df
+        df = csv.df()
         df = normalize_fields(df, csv.url, region=region)
         def fsck_ym(df: pd.DataFrame):
             start, end = ym.dates
