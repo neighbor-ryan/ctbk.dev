@@ -50,6 +50,8 @@ dtypes = {
 def normalize_field(f): return sub(r'[\s/]', '', f.lower())
 normalize_fields_map = { normalize_field(f): f for f in fields }
 
+normalize_fields_map['bikeid'] = 'Bike ID'
+
 # New columns from 202102
 normalize_fields_map['ride_id'] = 'Ride ID'
 normalize_fields_map['rideable_type'] = 'Rideable Type'
@@ -77,11 +79,12 @@ RGXS: dict[str, list[Pattern]] = {
             r'MTL-ECO5-LAB',         # 202209
             r'Shop Morgan',          # 202209
         ],
-        'JC': [r'JC\d{3}'],
+        'JC': [r'JC\d{3}', 'Liberty State Park'],
         'HB': [r'HB\d{3}'],
         'SYS': [
-            r'(?:SYS\d{3}|Lab - NYC)',
+            r'(?:SYSY?\d{3}|Lab - NYC)',
             r'JCSYS',
+            r'X-MTL-AOS-5\.1',
         ],
         NONE: NONE,
     }.items()
@@ -175,24 +178,33 @@ class NormalizedMonth(MonthTable):
         df = normalize_fields(df, csv.url, region=region)
         def fsck_ym(df: pd.DataFrame):
             start, end = ym.dates
-            date: pd.Series = df['Start Time'].dt.date
-            wrong_yms = (date < start) | (date >= end)
+            ride_start = df['Start Time'].dt.date
+            ride_end = df['Stop Time'].dt.date
+            bad_start = (ride_start < start) | (ride_start >= end)
+            bad_end = (ride_end < start) | (ride_end >= end)
+            wrong_yms = bad_start & bad_end
             num_wrong_yms = wrong_yms.sum()
             if num_wrong_yms:
                 wrong_dates_hist = (
-                    date
+                    pd.concat([ ride_start, ride_end ], axis=1)
                     [wrong_yms]
                     .value_counts()
                     .sort_index()
                 )
                 err(f'{num_wrong_yms} rides not in {ym}:\n{wrong_dates_hist}')
-            return df[~wrong_yms]
+                df = df[~wrong_yms]
+            return df
 
         if self.dask:
             df = df.map_partitions(fsck_ym, meta=df._meta)
         else:
             df = fsck_ym(df)
-        return df
+        sort_keys = ['Start Time', 'Stop Time']
+        if 'Ride ID' in df:
+            sort_keys.append('Ride ID')
+        elif 'Bike ID' in df:
+            sort_keys.append('Bike ID')
+        return df.sort_values(sort_keys)
 
     @property
     def checkpoint_kwargs(self):
