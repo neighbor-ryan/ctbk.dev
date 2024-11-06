@@ -1,17 +1,19 @@
 #!/usr/bin/env python
 import calendar
 import gzip
-
 from abc import ABC
-from os.path import basename
-from shutil import copyfileobj
-from typing import Optional, Union, Iterator, IO
+from os.path import basename, join
+from shutil import copyfileobj, move
+from tempfile import TemporaryDirectory
+from typing import Optional, Union, Iterator, IO, Tuple
 from zipfile import ZipFile, BadZipFile
 
 import dask.dataframe as dd
 import pandas as pd
+from click import argument, option
 from dask.delayed import delayed, Delayed
-from utz import cached_property, Unset, err
+from utz import cached_property, Unset, err, singleton
+from utz.gzip import DeterministicGzipFile, deterministic_gzip_open
 from utz.ym import YM
 
 from ctbk.has_root_cli import HasRootCLI, dates
@@ -19,7 +21,6 @@ from ctbk.table import Table
 from ctbk.task import Task
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
-from ctbk.util.gzip import DeterministicGzipFile
 from ctbk.util.read import Read
 from ctbk.util.region import REGIONS, Region, region
 from ctbk.zips import TripdataZips, TripdataZip
@@ -40,23 +41,100 @@ class ReadsTripdataZip(Task, ABC):
         return TripdataZip(ym=self.ym, region=self.region, roots=self.roots)
 
 
+DEFAULT_COMPRESSION_LEVEL = 9
+READ_DTYPES = {
+    **{
+        c: str
+        for c in [
+            'start station id', 'end station id',
+            'Start Station ID', 'End Station ID',
+            'start_station_id', 'end_station_id',
+        ]
+    },
+    'birth year': 'Int16',
+    'Birth Year': 'Int16',
+    'gender': 'Int8',
+    'Gender': 'Int8',
+}
+READ_KWARGS = dict(
+    dtype=READ_DTYPES,
+    na_values=r'\N',
+)
+
+
 class TripdataCsv(ReadsTripdataZip, Table):
     DIR = DIR
     NAMES = [ 'csv', 'c', ]
-    COMPRESSION_LEVEL = 9
+
+    @property
+    def region_str(self) -> str:
+        return 'JC-' if self.region == 'JC' else ''
+
+    @property
+    def name(self):
+        return f'{self.region_str}{self.ym}'
+
+    @property
+    def basename(self) -> str:
+        return f'{self.name}-citibike-tripdata.csv.gz'
 
     @cached_property
-    def url(self):
-        region_str = 'JC-' if self.region == 'JC' else ''
-        return f'{self.dir}/{region_str}{self.ym}-citibike-tripdata.csv.gz'
+    def url(self) -> str:
+        return f'{self.dir}/{self.basename}'
+
+    @classmethod
+    def open_path(cls, path: str, mode: str, compression_level: int = DEFAULT_COMPRESSION_LEVEL):
+        if path.endswith('.gz'):
+            if mode.startswith("r"):
+                return gzip.open(path, mode)
+            elif mode.startswith("w"):
+                return deterministic_gzip_open(
+                    path=path,
+                    mode=mode,
+                    compression_level=compression_level,
+                )
+            else:
+                raise ValueError(f"Unsupported mode: {mode}")
+        else:
+            return open(path, mode)
+
+
+    @classmethod
+    def sort_and_write(cls, name, in_path, out_fd):
+        df = pd.read_csv(in_path, **READ_KWARGS)
+        df.index.name = "lineno"
+        df = df.reset_index()
+        path_cols = TripdataCsv.infer_sort_cols(df)
+        err(f"{name}: inferred default columns: {', '.join(path_cols)}")
+
+        df = df.sort_values(path_cols)
+        linenos = df.lineno.tolist()
+
+        with (
+            cls.open_path(in_path, 'rb') as input_file,
+            out_fd as output_file
+        ):
+            header, *lines = list(input_file)
+            output_file.write(header)
+            nonempty_lines = []
+            empty_line_idxs = []
+            for idx, line in enumerate(lines):
+                if line == b'\n':
+                    empty_line_idxs.append(idx)
+                else:
+                    nonempty_lines.append(line)
+            lines = nonempty_lines
+            if empty_line_idxs:
+                err(f"{name}: removed {len(empty_line_idxs)} empty lines: {', '.join(map(str, empty_line_idxs))}")
+            if len(lines) != len(df):
+                raise ValueError(f"{name}: {len(lines)} lines != {len(df)} DF size")
+            for lineno in linenos:
+                output_file.write(lines[lineno])
 
     def extract_csv_from_zip(self):
-        with self.fd('wb') as raw_o:
-            with DeterministicGzipFile(
-                fileobj=raw_o,
-                mode='wb',
-                compresslevel=self.COMPRESSION_LEVEL
-            ) as o:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = join(tmpdir, f'{self.name}.csv')
+            with open(tmp_path, 'wb') as o:
                 header = None
                 for fdno, i in enumerate(self.zip_csv_fds()):
                     line = next(i)
@@ -69,6 +147,17 @@ class TripdataCsv(ReadsTripdataZip, Table):
                             raise RuntimeError(f"Header mismatch in {self.src.url} (CSV idx {fdno}): {header} != {header2}")
                         o.write(b'\n')
                     copyfileobj(i, o)
+
+            with self.fd('wb') as raw_o:
+                self.sort_and_write(
+                    self.name,
+                    tmp_path,
+                    DeterministicGzipFile(
+                        fileobj=raw_o,
+                        mode='wb',
+                        compresslevel=DEFAULT_COMPRESSION_LEVEL
+                    )
+                )
 
     def _create(self, read: Union[None, Read] = Unset) -> Union[None, Delayed]:
         read = self.read if read is Unset else read
@@ -138,22 +227,38 @@ class TripdataCsv(ReadsTripdataZip, Table):
 
     def meta(self):
         if self.exists():
-            return pd.read_csv(self.url, dtype=str, nrows=0)
+            return pd.read_csv(self.url, **READ_KWARGS, nrows=0)
         else:
             with next(self.zip_csv_fds()) as i:
-                return pd.read_csv(i, dtype=str, nrows=0)
+                return pd.read_csv(i, **READ_KWARGS, nrows=0)
 
     def _df(self) -> DataFrame:
         if self.dask:
             def create_and_read(created):
-                return pd.read_csv(self.url, dtype=str)
+                return pd.read_csv(self.url, **READ_KWARGS)
 
             meta = self.meta()
             df = dd.from_delayed([ delayed(create_and_read)(self._create(read=None)) ], meta=meta)
         else:
             self._create(read=None)
-            df = pd.read_csv(self.url, dtype=str)
+            df = pd.read_csv(self.url, **READ_KWARGS)
         return df
+
+    @classmethod
+    def infer_sort_cols(cls, df) -> list[str]:
+        """Infer default columns to sort by.
+
+        NY    201306-201610:  "starttime",  "stoptime",  "bikeid"
+           NJ 201509-201704: "Start Time", "Stop Time", "Bike ID"
+        NY NJ 201610-201704: "Start Time", "Stop Time", "Bike ID"
+        NY NJ 201704-202102:  "starttime",  "stoptime",  "bikeid"
+        NY NJ 202102-202411: "started_at",  "ended_at", "ride_id"
+        """
+        start_time_col = singleton([ c for c in [ 'Start Time', 'starttime', 'started_at' ] if c in df.columns ])
+        stop_time_col = singleton([ c for c in [ 'Stop Time', 'stoptime', 'ended_at' ] if c in df.columns ])
+        id_col = singleton([ c for c in [ 'Bike ID', 'bikeid', 'ride_id' ] if c in df.columns ])
+        path_cols = [ start_time_col, stop_time_col, id_col ]
+        return path_cols
 
     @property
     def checkpoint_kwargs(self):
@@ -163,7 +268,7 @@ class TripdataCsv(ReadsTripdataZip, Table):
         if self.dask:
             return dd.read_csv(self.url, dtype=str, blocksize=None)
         else:
-            return pd.read_csv(self.url, dtype=str)
+            return pd.read_csv(self.url, **READ_KWARGS)
 
 
 class TripdataCsvs(HasRootCLI):
@@ -215,3 +320,26 @@ cli = TripdataCsvs.cli(
     help=f"Extract CSVs from \"tripdata\" .zip files. Writes to <root>/{DIR}.",
     cmd_decos=[dates, region],
 )
+
+@cli.command('sort')
+@option('-n', '--dry-run', is_flag=True, help="Don't write files, just print what would be done")
+@option('-z', '--compression-level', type=int, default=DEFAULT_COMPRESSION_LEVEL, help="Gzip compression level")
+@argument('paths', nargs=-1)
+def sort(
+    dry_run: bool,
+    compression_level: int,
+    paths: Tuple[str, ...],
+):
+    """Sort one or more `.csv{,.gz}`'s in-place, remove empty lines"""
+    for path in paths:
+        if dry_run:
+            continue
+
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = join(tmpdir, basename(path))
+            TripdataCsv.sort_and_write(
+                basename(path),
+                path,
+                TripdataCsv.open_path(tmp_path, 'wb', compression_level=compression_level),
+            )
+            move(tmp_path, path)
