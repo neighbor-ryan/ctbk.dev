@@ -2,14 +2,15 @@ from dataclasses import dataclass
 from functools import wraps
 from typing import Union
 
-from ctbk.has_root_cli import HasRootCLI
+from utz.ym import Monthy
+
+from ctbk.has_root_cli import HasRootCLI, dates
 from ctbk.month_table import MonthTable
 from ctbk.normalized import NormalizedMonth
 from ctbk.tasks import MonthTables
 from ctbk.util import keys
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
-from ctbk.util.ym import dates, Monthy
 
 DIR = f'{BKT}/stations/meta_hists'
 
@@ -160,5 +161,5 @@ def cmd(fn):
 
 StationMetaHists.cli(
     help=f"Aggregate station name, lat/lng info from ride start and end fields. Writes to <root>/{DIR}/KEYS_YYYYMM.parquet.",
-    decos=[dates, cmd],
+    cmd_decos=[dates, cmd],
 )

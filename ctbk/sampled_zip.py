@@ -5,13 +5,13 @@ from zipfile import ZipFile, ZIP_LZMA
 
 from dask import delayed
 from utz import cached_property, Unset
+from utz.ym import YM
 
 from ctbk.csvs import ReadsTripdataZip
-from ctbk.has_root_cli import HasRootCLI
+from ctbk.has_root_cli import HasRootCLI, dates
 from ctbk.util.constants import BKT
 from ctbk.util.read import Read
 from ctbk.util.region import region
-from ctbk.util.ym import dates, Monthy, YM
 from ctbk.zips import TripdataZips
 
 DIR = f'{BKT}/sampled/tripdata'
@@ -63,10 +63,9 @@ class SampledZips(HasRootCLI):
     DIR = DIR
     CHILD_CLS = SampledZip
 
-    def __init__(self, start: Monthy = None, end: Monthy = None, nrows=DEFAULT_NROWS, regions: Optional[list[str]] = None, **kwargs):
-        src = self.src = TripdataZips(start=start, end=end, regions=regions, roots=kwargs.get('roots'))
-        self.start: YM = src.start
-        self.end: YM = src.end
+    def __init__(self, yms: list[YM], nrows=DEFAULT_NROWS, regions: Optional[list[str]] = None, **kwargs):
+        self.yms = yms
+        src = self.src = TripdataZips(yms=yms, regions=regions, roots=kwargs.get('roots'))
         self.regions = src.regions
         self.nrows = nrows
         super().__init__(**kwargs)

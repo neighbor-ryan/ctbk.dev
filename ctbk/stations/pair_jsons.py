@@ -4,15 +4,15 @@ from typing import Union
 import pandas as pd
 from dask.delayed import Delayed
 from utz import Unset
+from utz.ym import Monthy
 
 from ctbk.aggregated import AggregatedMonth, DIR
-from ctbk.has_root_cli import HasRootCLI
+from ctbk.has_root_cli import HasRootCLI, dates
 from ctbk.month_table import MonthTable
 from ctbk.stations.modes import ModesMonthJson
 from ctbk.tasks import MonthTables
 from ctbk.util.df import DataFrame
 from ctbk.util.read import Read
-from ctbk.util.ym import dates, Monthy
 
 
 class StationPairsJson(MonthTable):
@@ -92,5 +92,5 @@ class StationPairsJsons(HasRootCLI, MonthTables):
 
 StationPairsJsons.cli(
     help=f"Write station-pair ride_counts keyed by StationModes' JSON indices. Writes to <root>/{DIR}/YYYYMM/se_c.json.",
-    decos=[dates],
+    cmd_decos=[dates],
 )

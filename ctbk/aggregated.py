@@ -2,14 +2,14 @@ from dataclasses import dataclass
 from functools import wraps
 from typing import Union
 
-import utz
 from utz import decos
+from utz.ym import Monthy
 
-from ctbk.has_root_cli import HasRootCLI
+from ctbk.has_root_cli import HasRootCLI, dates
 from ctbk.month_table import MonthTable
 from ctbk.normalized import NormalizedMonth
 from ctbk.tasks import MonthTables
-from ctbk.util import dates, Monthy, keys
+from ctbk.util import keys
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
 
@@ -69,11 +69,11 @@ class AggregatedMonth(MonthTable):
     NAMES = [ 'aggregated', 'agg', 'a', ]
 
     def __init__(
-            self,
-            ym: Monthy,
-            group_by_keys: Union[str, GroupByKeys, dict],
-            aggregate_by_keys: Union[str, AggregateByKeys, dict],
-            **kwargs
+        self,
+        ym: Monthy,
+        group_by_keys: Union[str, GroupByKeys, dict],
+        aggregate_by_keys: Union[str, AggregateByKeys, dict],
+        **kwargs
     ):
         self.group_by_keys = GroupByKeys.load(group_by_keys)
         self.aggregate_by_keys = AggregateByKeys.load(aggregate_by_keys)
@@ -183,5 +183,5 @@ def cmd(fn):
 
 AggregatedMonths.cli(
     help=f"Aggregate normalized ride entries by various columns, summing ride counts or durations. Writes to <root>/{DIR}/KEYS_YYYYMM.parquet.",
-    decos=[dates, cmd],
+    cmd_decos=[dates, cmd],
 )

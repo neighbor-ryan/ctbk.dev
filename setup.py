@@ -8,6 +8,7 @@ setup(
     entry_points={
         'console_scripts': [
             'ctbk = ctbk.cli.main:main',
+            'yms = ctbk.cli.yms:yms',
         ]
     }
 )

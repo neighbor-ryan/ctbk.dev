@@ -1,12 +1,13 @@
 from abc import ABC
-from dask import delayed
 from typing import Union
+
+from dask import delayed
 from utz import cached_property, Unset
+from utz.ym import YM, Monthy
 
 from ctbk.has_root import HasRoot
 from ctbk.table import Table
 from ctbk.task import Task
-from ctbk.util import YM, Monthy
 from ctbk.util.df import DataFrame
 from ctbk.util.read import Read
 
@@ -24,14 +25,8 @@ class Tasks(HasRoot, ABC):
 
 
 class MonthTasks(Tasks, ABC):
-    def __init__(self, start: Monthy, end: Monthy, **kwargs):
-        self.start: YM = YM(start)
-        if not end:
-            from ctbk import TripdataZips
-            zips = TripdataZips(start=start, end=end, roots=kwargs.get('roots'))
-            self.end = zips.end
-        else:
-            self.end: YM = YM(end)
+    def __init__(self, yms: list[YM], **kwargs):
+        self.yms = yms
         super().__init__(**kwargs)
 
     def month(self, ym: Monthy) -> Task:
@@ -41,7 +36,7 @@ class MonthTasks(Tasks, ABC):
     def children(self) -> list[Task]:
         return [
             self.month(ym)
-            for ym in self.start.until(self.end)
+            for ym in self.yms
         ]
 
 
@@ -54,7 +49,7 @@ class MonthTables(MonthTasks, ABC):
         # TODO: is this performing computations serially in Dask mode (when it should be delayed and later parallelized?)
         return [
             self.month(ym)
-            for ym in self.start.until(self.end)
+            for ym in self.yms
         ]
 
     def month_df(self, ym: Monthy, add_ym=False) -> DataFrame:
@@ -68,7 +63,7 @@ class MonthTables(MonthTasks, ABC):
     def dfs(self) -> list[DataFrame]:
         return [
             self.month_df(ym, add_ym=True)
-            for ym in self.start.until(self.end)
+            for ym in self.yms
         ]
 
     @cached_property

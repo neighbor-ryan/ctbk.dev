@@ -1,12 +1,12 @@
 from typing import Optional
 
 from utz import cached_property, DefaultDict
+from utz.ym import YM
 
-from ctbk.has_root_cli import HasRootCLI
+from ctbk.has_root_cli import HasRootCLI, dates
 from ctbk.task import Task
-from ctbk.util import GENESIS, S3
+from ctbk.util import S3
 from ctbk.util.region import REGIONS, Region, get_regions, region
-from ctbk.util.ym import dates, Monthy, YM
 
 DIR = 'tripdata'
 
@@ -49,15 +49,13 @@ class TripdataZips(HasRootCLI):
     CHILD_CLS = TripdataZip
 
     def __init__(
-            self,
-            start: Monthy = None,
-            end: Monthy = None,
-            regions: Optional[list[str]] = None,
-            roots: Optional[DefaultDict[str]] = None,
-            **kwargs,
+        self,
+        yms: list[YM],
+        regions: Optional[list[str]] = None,
+        roots: Optional[DefaultDict[str]] = None,
+        **kwargs,
     ):
-        self.start: YM = YM(start or GENESIS)
-        end = end or YM()
+        self.yms = yms
         self.regions = regions or REGIONS
 
         # "month" to "region" to "url" map
@@ -70,10 +68,11 @@ class TripdataZips(HasRootCLI):
                     if region in get_regions(ym)
                 }
             )
-            for ym in self.start.until(end)
+            for ym in self.yms
         ]
 
         # Default "end": current or previous calendar month
+        end = max(yms) + 1
         end1, last1 = m2r2u[-1]
         missing1 = [ region for region, month in last1.items() if not month.exists() ]
         if missing1:
@@ -105,7 +104,7 @@ class TripdataZips(HasRootCLI):
 
 TripdataZips.cli(
     help="Read .csv.zip files from s3://tripdata",
-    decos=[dates, region],
+    cmd_decos=[dates, region],
     create=False,
     dag=False,
 )

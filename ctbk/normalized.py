@@ -4,17 +4,18 @@ from typing import Pattern
 
 import dask.dataframe as dd
 import pandas as pd
+from click import option
 from numpy import nan
 from utz import err
+from utz.ym import Monthy
 
-from ctbk.csvs import TripdataCsv, TripdataCsvs
-from ctbk.has_root_cli import HasRootCLI
+from ctbk.csvs import TripdataCsv
+from ctbk.has_root_cli import HasRootCLI, dates
 from ctbk.month_table import MonthTable
 from ctbk.tasks import MonthTables
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
 from ctbk.util.region import Region, get_regions
-from ctbk.util.ym import dates, Monthy
 
 DIR = f'{BKT}/normalized'
 
@@ -214,5 +215,8 @@ class NormalizedMonths(MonthTables, HasRootCLI):
 
 NormalizedMonths.cli(
     help=f"Normalize \"tripdata\" CSVs (combine regions for each month, harmonize column names, etc. Writes to <root>/{DIR}/YYYYMM.parquet.",
-    decos=[dates],
+    cmd_decos=[dates],
+    create_decos=[
+        option('-e', '--engine', count=True, help='1x: fastparquet, 2x: pyarrow'),
+    ]
 )

@@ -1,27 +1,25 @@
 #!/usr/bin/env python
-from os.path import basename
-
 import gzip
 from abc import ABC
-from contextlib import contextmanager
+from os.path import basename
 from shutil import copyfileobj
 from typing import Optional, Union, Iterator, IO
 from zipfile import ZipFile, BadZipFile
 
 import dask.dataframe as dd
 import pandas as pd
-from ctbk.has_root_cli import HasRootCLI
+from dask.delayed import delayed, Delayed
+from utz import cached_property, Unset, err
+from utz.ym import YM
+
+from ctbk.has_root_cli import HasRootCLI, dates
 from ctbk.table import Table
 from ctbk.task import Task
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
 from ctbk.util.read import Read
 from ctbk.util.region import REGIONS, Region, region
-from ctbk.util.ym import dates, YM, Monthy
 from ctbk.zips import TripdataZips, TripdataZip
-from dask.delayed import delayed, Delayed
-from gzip_stream import GZIPCompressedStream
-from utz import cached_property, singleton, Unset, err
 
 DIR = f'{BKT}/csvs'
 
@@ -144,10 +142,9 @@ class TripdataCsvs(HasRootCLI):
     DIR = DIR
     CHILD_CLS = TripdataCsv
 
-    def __init__(self, start: Monthy = None, end: Monthy = None, regions: Optional[list[str]] = None, **kwargs):
-        src = self.src = TripdataZips(start=start, end=end, regions=regions, roots=kwargs.get('roots'))
-        self.start: YM = src.start
-        self.end: YM = src.end
+    def __init__(self, yms: list[YM], regions: Optional[list[str]] = None, **kwargs):
+        self.src = TripdataZips(yms=yms, regions=regions, roots=kwargs.get('roots'))
+        self.yms = yms
         self.regions = regions or REGIONS
         super().__init__(**kwargs)
 
@@ -188,5 +185,5 @@ class TripdataCsvs(HasRootCLI):
 
 cli = TripdataCsvs.cli(
     help=f"Extract CSVs from \"tripdata\" .zip files. Writes to <root>/{DIR}.",
-    decos=[ dates, region ],
+    cmd_decos=[dates, region],
 )

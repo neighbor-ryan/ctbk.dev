@@ -3,15 +3,15 @@ from functools import wraps
 from typing import Literal, Tuple
 
 from click import option, Choice
+from utz.ym import Monthy, YM
 
-from ctbk.util.ym import Monthy, YM
+from ctbk.util.ym import NJ_GENESIS
 
 Region = Literal[ 'NYC', 'JC', ]
 REGIONS: Tuple[Region, ...] = typing.get_args(Region)
 
-
 def get_regions(ym: Monthy):
-    if YM(ym) >= YM(201509):
+    if YM(ym) >= NJ_GENESIS:
         return ['NYC', 'JC']
     else:
         return ['NYC']

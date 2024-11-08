@@ -1,16 +1,45 @@
 from abc import ABC
+from functools import wraps
 from typing import Optional
 
 import click
 import utz
-from click import argument, option, pass_context, Choice
-from utz import err, process, decos
+from click import argument, option, pass_context, Choice, Group
+from utz import err, process, decos, YM, DefaultDict
 from utz.case import dash_case
 
 from ctbk.cli.base import ctbk, dask, StableCommandOrder
 from ctbk.has_root import HasRoot
 from ctbk.task import Task
 from ctbk.tasks import Tasks
+from ctbk.util import GENESIS
+from ctbk.util.ym import parse_ym_ranges_str
+
+_default_end = None
+def default_end(roots: Optional[DefaultDict[str]]):
+    """Infer the last available month of data by checking which Tripdata Zips are present."""
+    global _default_end
+    if not _default_end:
+        from ctbk import TripdataZips
+
+        yms = list(GENESIS.until(YM()))
+        zips = TripdataZips(yms=yms, roots=roots)
+        _default_end = zips.end
+    return _default_end
+
+
+def dates(fn):
+    @option('-d', '--dates', 'ym_ranges_str', help="Start and end dates in the format 'YYYY-MM'")
+    @wraps(fn)
+    def _fn(*args, ym_ranges_str: str | None, **kwargs):
+        yms = parse_ym_ranges_str(
+            ym_ranges_str,
+            default_start=GENESIS,
+            default_end=lambda: default_end(roots=kwargs.get('roots') or kwargs.get('root')),
+        )
+        return fn(*args, yms=yms, **kwargs)
+
+    return _fn
 
 
 class HasRootCLI(Tasks, HasRoot, ABC):
@@ -25,21 +54,15 @@ class HasRootCLI(Tasks, HasRoot, ABC):
     def name(cls):
         return cls.names()[0]
 
-    # def month(self, ym: Monthy) -> type[Task]:
-    #     return NormalizedMonth(ym, **self.kwargs)
-
-    # def children(self):
-    #     pass
-
     @classmethod
     def init_cli(
-            cls,
-            group: click.Group,
-            cmd_decos: list = None,
-            group_cls: type[click.Group] = None,
-            urls=True,
-            create=True,
-            dag=True,
+        cls,
+        group: click.Group,
+        cmd_decos: list = None,
+        group_cls: type[click.Group] = None,
+        urls=True,
+        create=True,
+        dag=True,
     ):
         cmd_decos = cmd_decos or []
 
@@ -91,12 +114,12 @@ class HasRootCLI(Tasks, HasRoot, ABC):
 
     @classmethod
     def cli(
-            cls,
-            help: str,
-            decos: Optional[list] = None,
-            cmd_decos: Optional[list] = None,
-            **kwargs
-    ) -> click.Group:
+        cls,
+        help: str,
+        decos: Optional[list] = None,
+        cmd_decos: Optional[list] = None,
+        **kwargs
+    ) -> Group:
         command_cls = cls.command_cls()
         decos = decos or []
 

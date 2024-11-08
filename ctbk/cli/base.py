@@ -2,11 +2,12 @@ import typing as t
 
 import click
 from click import pass_context, option, group, Context, Command
+from typing import Tuple
 from utz import o, DefaultDict, err, is_subsequence
 
 from ctbk.has_root import DEFAULT_ROOTS
 from ctbk.util import write, read
-from ctbk.util.constants import S3, DEFAULT_ROOT
+from ctbk.util.constants import S3
 from ctbk.util.read import Disk
 from ctbk.util.write import IfAbsent
 
@@ -74,6 +75,20 @@ class Ctbk(StableCommandOrder):
         return super().get_help(ctx)
 
 
+def load_roots(roots: Tuple[str, ...]):
+    if roots:
+        roots = DefaultDict.load(roots)
+        return DefaultDict(
+            configs={ **DEFAULT_ROOTS.configs, **roots.configs },
+            default=roots.default or DEFAULT_ROOTS.default,
+        )
+    else:
+        return DEFAULT_ROOTS
+
+
+roots_opt = option('-t', '--root', 'roots', multiple=True, help='Path- or URL-prefixes for `HasRoot` subclasses to write to and read from. `<alias>=<value>` to set specific classes by alias, just `<value>` to set a global default. `<value>`s are `memory`, `disk`, and their aliases, indicating whether to return disk-round-tripped versions of newly-computed datasets.')
+
+
 @group('ctbk', cls=Ctbk, help="""
 CLI for generating ctbk.dev datasets (derived from Citi Bike public data in `s3://`).
 
@@ -127,21 +142,14 @@ CLI for generating ctbk.dev datasets (derived from Citi Bike public data in `s3:
 """)
 @pass_context
 @option('-r', '--read', 'reads', multiple=True, help='Set "read" behavior for `HasRoot` subclasses, `<alias>=<value>` to set specific classes by alias, just `<value>` to set a global default. `<value>`s are `memory`, `disk`, and their aliases, indicating whether to return disk-round-tripped versions of newly-computed datasets.')
-@option('-t', '--root', 'roots', multiple=True, help='Path- or URL-prefixes for `HasRoot` subclasses to write to and read from. `<alias>=<value>` to set specific classes by alias, just `<value>` to set a global default. `<value>`s are `memory`, `disk`, and their aliases, indicating whether to return disk-round-tripped versions of newly-computed datasets.')
+@roots_opt
 @option('-w', '--write', 'writes', multiple=True, help='Set "write" behavior for `HasRoot` subclasses, `<alias>=<value>` to set specific classes by alias, just `<value>` to set a global default. `<value>`s are `never`, `ifabsent`, `always`, and their aliases, indicating how to handle each dataset type already existing on disk (under its `root`) vs. not.')
 @option('--s3', is_flag=True, help="Alias for `--root s3:/`, pointing all classes' \"root\" dirs at S3")
 def ctbk(ctx, reads, roots, writes, s3):
     if s3:
         roots = [S3] + (list(roots) or [])
 
-    if roots:
-        roots = DefaultDict.load(roots)
-        roots = DefaultDict(
-            configs={ **DEFAULT_ROOTS.configs, **roots.configs },
-            default=roots.default or DEFAULT_ROOTS.default,
-        )
-    else:
-        roots = DEFAULT_ROOTS
+    roots = load_roots(roots)
     reads = DefaultDict.load(reads, name2value=read.parse, fallback=Disk)
     writes = DefaultDict.load(writes, name2value=write.parse, fallback=IfAbsent)
     ctx.obj = o(roots=roots, reads=reads, writes=writes)

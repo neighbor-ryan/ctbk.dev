@@ -1,16 +1,16 @@
 from abc import ABC
 from os.path import exists
-from typing import Generator
 
 import dask.dataframe as dd
 import pandas as pd
 from click import command, argument, option
-from utz import err
+from utz import err, DefaultDict
+from utz.ym import Monthy, YM
 
-from ctbk.cli.base import dask
+from ctbk.cli.base import dask, load_roots
+from ctbk.has_root_cli import dates
 from ctbk.util import S3
 from ctbk.util.df import DataFrame
-from ctbk.util.ym import dates, YM, Monthy
 
 
 class MonthAggTable(ABC):
@@ -18,7 +18,14 @@ class MonthAggTable(ABC):
     SRC = None
     OUT = None
 
-    def __init__(self, start, end, root=None, overwrite=False, dask=False, out=None):
+    def __init__(
+        self,
+        yms: list[YM],
+        root: DefaultDict,
+        overwrite: bool = False,
+        dask: bool = False,
+        out: str | None = None,
+    ):
         self.root = root or self.ROOT
         if not self.SRC:
             raise RuntimeError(f"Set {self.__class__.__name__}.SRC")
@@ -28,14 +35,7 @@ class MonthAggTable(ABC):
         self.dask = dask
         self.out = out or self.OUT
         self.dpd = dd if dask else pd
-
-        self.start = start
-        if end:
-            self.end = end
-        else:
-            from ctbk import TripdataZips
-            zips = TripdataZips(start=start, end=end)
-            self.end = zips.end
+        self.yms = yms
 
     def url(self, ym: Monthy) -> str:
         return f'{self.dir}/{ym}.parquet'
@@ -47,18 +47,13 @@ class MonthAggTable(ABC):
         url = self.url(ym)
         try:
             df = self.dpd.read_parquet(url)
-        except FileNotFoundError as e:
-            err(f'FileNotFoundError: {url}')
-            raise
+        except FileNotFoundError:
+            raise FileNotFoundError(url)
         return df
 
     @property
-    def months(self) -> Generator['YM', None, None]:
-        return self.start.until(self.end)
-
-    @property
     def dfs(self) -> list[DataFrame]:
-        return [ self.load(ym) for ym in self.months ]
+        return [ self.load(ym) for ym in self.yms ]
 
     def mapped_dfs(self) -> list[DataFrame]:
         return [ self.map(df) for df in self.dfs ]
@@ -95,8 +90,8 @@ class MonthAggTable(ABC):
 
     @classmethod
     def main(cls):
-        @command()
-        @option('-r', '--root')
+        @command
+        @option('-r', '--root', callback=lambda ctx, param, v: load_roots((v,)))
         @option('-f', '--overwrite', is_flag=True)
         @argument('out', required=False)
         @dates
