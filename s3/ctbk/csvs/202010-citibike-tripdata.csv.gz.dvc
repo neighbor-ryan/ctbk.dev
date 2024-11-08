@@ -1,5 +1,5 @@
 outs:
-- md5: db59b62ed49b6208e9dba113335610b6
-  size: 99407546
+- md5: 5c472306f3cc2a7bd22815cecb3c87d2
+  size: 98721754
   hash: md5
   path: 202010-citibike-tripdata.csv.gz
