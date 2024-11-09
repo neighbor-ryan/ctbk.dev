@@ -3,3 +3,5 @@
     autostage = true
 ['remote "s3"']
     url = s3://ctbk/.dvc
+['remote "e"']
+    url = ssh://e/home/ubuntu/ctbk/.dvc/cache
