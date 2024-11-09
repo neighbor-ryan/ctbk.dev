@@ -165,7 +165,7 @@ def add_region(df: DataFrame, src: str, region: Region) -> DataFrame:
 
 class NormalizedMonth(MonthTable):
     DIR = DIR
-    NAMES = [ 'normalized', 'norm', ]
+    NAMES = [ 'normalized', 'norm', 'n', ]
 
     def normalized_region(self, region) -> DataFrame:
         ym = self.ym

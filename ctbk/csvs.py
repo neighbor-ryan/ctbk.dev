@@ -41,7 +41,7 @@ class ReadsTripdataZip(Task, ABC):
 
 class TripdataCsv(ReadsTripdataZip, Table):
     DIR = DIR
-    NAMES = ['csv']
+    NAMES = [ 'csv', 'c', ]
     COMPRESSION_LEVEL = 9
 
     @cached_property

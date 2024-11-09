@@ -66,7 +66,7 @@ class AggregateByKeys(keys.AggregateByKeys):
 
 class AggregatedMonth(MonthTable):
     DIR = DIR
-    NAMES = [ 'aggregated', 'agg', ]
+    NAMES = [ 'aggregated', 'agg', 'a', ]
 
     def __init__(
             self,
