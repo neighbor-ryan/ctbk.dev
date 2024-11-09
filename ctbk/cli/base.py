@@ -1,11 +1,11 @@
-import typing as t
+from os import environ as env
 
 import click
 from click import pass_context, option, group, Context, Command
-from typing import Tuple
+from typing import Tuple, Optional, List
 from utz import o, DefaultDict, err, is_subsequence
 
-from ctbk.has_root import DEFAULT_ROOTS
+from ctbk.has_root import DEFAULT_ROOTS, ROOTS_ENV_VAR
 from ctbk.util import write, read
 from ctbk.util.constants import S3
 from ctbk.util.read import Disk
@@ -15,13 +15,13 @@ dask = option('--dask', is_flag=True)
 
 
 class StableCommandOrder(click.Group):
-    def list_commands(self, ctx: Context) -> t.List[str]:
+    def list_commands(self, ctx: Context) -> List[str]:
         # Don't sort commands, print them in the order they're registered (see ctbk/__init__.py)
         return list(self.commands.keys())
 
 
 class Ctbk(StableCommandOrder):
-    def get_command(self, ctx: Context, cmd_name: str) -> t.Optional[Command]:
+    def get_command(self, ctx: Context, cmd_name: str) -> Optional[Command]:
         command = super().get_command(ctx, cmd_name)
         if command:
             return command
@@ -83,7 +83,14 @@ def load_roots(roots: Tuple[str, ...]):
             default=roots.default or DEFAULT_ROOTS.default,
         )
     else:
-        return DEFAULT_ROOTS
+        roots_str = env.get(ROOTS_ENV_VAR)
+        if not roots_str:
+            return DEFAULT_ROOTS
+        roots = DefaultDict.load(roots_str.split(','))
+        return DefaultDict(
+            configs={ **DEFAULT_ROOTS.configs, **roots.configs },
+            default=roots.default or DEFAULT_ROOTS.default,
+        )
 
 
 roots_opt = option('-t', '--root', 'roots', multiple=True, help='Path- or URL-prefixes for `HasRoot` subclasses to write to and read from. `<alias>=<value>` to set specific classes by alias, just `<value>` to set a global default. `<value>`s are `memory`, `disk`, and their aliases, indicating whether to return disk-round-tripped versions of newly-computed datasets.')

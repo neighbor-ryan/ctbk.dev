@@ -7,7 +7,8 @@ from utz import DefaultDict
 from ctbk.util.read import Read, Disk
 from ctbk.util.write import IfAbsent, Write
 
-DEFAULT_ROOTS = dr = DefaultDict({'zip': 's3:/'}, 's3')
+DEFAULT_ROOTS = dr = DefaultDict({}, 's3')
+ROOTS_ENV_VAR = 'CTBK_ROOTS'
 
 
 class HasRoot:
