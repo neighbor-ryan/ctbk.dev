@@ -20,7 +20,6 @@ from ctbk.util.region import Region, get_regions
 DIR = f'{BKT}/normalized'
 
 fields = {
-    'Trip Duration',
     'Start Time',
     'Stop Time',
     'Start Station ID',
@@ -42,14 +41,23 @@ dtypes = {
     'Stop Time': 'datetime64[us]',
     'Start Station Latitude': float,
     'Start Station Longitude': float,
+    'Start Station Name': 'string',
     'End Station Latitude': float,
     'End Station Longitude': float,
-    'Trip Duration': int,
-    'Gender': int,
+    'End Station Name': 'string',
+    'Birth Year': 'Int32',
 }
-def normalize_field(f): return sub(r'[\s/]', '', f.lower())
-normalize_fields_map = { normalize_field(f): f for f in fields }
+drop = [
+    'Unnamed: 0',  # NY 202407
+    'rideable_type_duplicate_column_name_1',  # NY 202408, 202410
+    'Trip Duration',
+    'tripduration',
+]
 
+def normalize_field(f):
+    return sub(r'[\s/]', '', f.lower())
+
+normalize_fields_map = { normalize_field(f): f for f in fields }
 normalize_fields_map['bikeid'] = 'Bike ID'
 
 # New columns from 202102
@@ -121,19 +129,38 @@ def normalize_fields(df: DataFrame, src, region: Region) -> DataFrame:
         else:
             err(f'Unexpected field: {normalized_col} ({col})')
 
-    df = df.rename(columns=rename_dict)
+    df = (
+        df
+        .rename(columns=rename_dict)
+        .drop(columns=[ col for col in drop if col in df ])
+    )
     if 'Gender' not in df:
         err(f'{src}: "Gender" column not found; setting to 0 ("unknown") for all rows')
         df['Gender'] = 0  # unknown
+    df['Gender'] = pd.Categorical(
+        df['Gender'].apply(lambda g: 'UMF'[g]),
+        categories=['U', 'M', 'F'],
+        ordered=True,
+    )
     if 'Rideable Type' not in df:
         err(f'{src}: "Rideable Type" column not found; setting to "unknown" for all rows')
         df['Rideable Type'] = 'unknown'
+    df['Rideable Type'] = df['Rideable Type'].apply(lambda rt: 'classic_bike' if rt == 'docked_bike' else rt)
+    df['Rideable Type'] = pd.Categorical(
+        df['Rideable Type'],
+        categories=['unknown', 'classic_bike', 'electric_bike'],
+        ordered=True,
+    )
     if 'Member/Casual' in df:
         assert 'User Type' not in df
         err(f'{src}: renaming/harmonizing "member_casual" → "User Type", substituting "member" → "Subscriber", "casual" → "customer"')
         df['User Type'] = df['Member/Casual'].map({'member':'Subscriber','casual':'Customer'})
         del df['Member/Casual']
-
+    df['User Type'] = pd.Categorical(
+        df['User Type'],
+        categories=['Subscriber', 'Customer'],
+        ordered=True,
+    )
     df = add_region(df, src=src, region=region)
     df = df.astype({ k: v for k, v in dtypes.items() if k in df })
 
