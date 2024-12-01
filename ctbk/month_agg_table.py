@@ -21,7 +21,7 @@ class MonthAggTable(ABC):
     def __init__(
         self,
         yms: list[YM],
-        root: DefaultDict,
+        root: str,
         overwrite: bool = False,
         dask: bool = False,
         out: str | None = None,
@@ -91,7 +91,7 @@ class MonthAggTable(ABC):
     @classmethod
     def main(cls):
         @command
-        @option('-r', '--root', callback=lambda ctx, param, v: load_roots((v,)))
+        @option('-r', '--root')
         @option('-f', '--overwrite', is_flag=True)
         @argument('out', required=False)
         @dates
