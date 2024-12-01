@@ -1,36 +1,36 @@
-const { NEXT_MINIFY, NEXT_BASE_PATH } = process.env
+import WithMdx from "@next/mdx"
+
+const { NEXT_MINIFY } = process.env
 const minimize = !['false', 'n', 'no', '0'].includes(NEXT_MINIFY)
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    swcMinify: true,
-    transpilePackages: ['@rdub/icons'],
-    images: {
-        unoptimized: true,
-    },
-    basePath: NEXT_BASE_PATH,
-    webpack({ optimization, ...webpackConfig }) {
-        return { ...webpackConfig, optimization: { ...optimization, minimize } };
-    },
-    output: "export",
+  swcMinify: true,
+  transpilePackages: ['@rdub/icons'],
+  images: {
+    unoptimized: true,
+  },
+  webpack({ optimization, ...webpackConfig }) {
+    return { ...webpackConfig, optimization: { ...optimization, minimize } }
+  },
+  output: "export",
 }
 
-const withMDX = require('@next/mdx')({
-    extension: /\.mdx?$/,
-    options: {
-        // If you use remark-gfm, you'll need to use next.config.mjs
-        // as the package is ESM only
-        // https://github.com/remarkjs/remark-gfm#install
-        remarkPlugins: [],
-        rehypePlugins: [],
-        // If you use `MDXProvider`, uncomment the following line.
-        providerImportSource: "@mdx-js/react",
-    },
+const withMDX = WithMdx({
+  extension: /\.mdx?$/,
+  options: {
+    // If you use remark-gfm, you'll need to use next.config.mjs
+    // as the package is ESM only
+    // https://github.com/remarkjs/remark-gfm#install
+    remarkPlugins: [],
+    rehypePlugins: [],
+    // If you use `MDXProvider`, uncomment the following line.
+    providerImportSource: "@mdx-js/react",
+  },
 })
 
-module.exports =
-    withMDX({
-        ...nextConfig,
-        // Append the default value with md extensions
-        pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
-    })
+export default withMDX({
+  ...nextConfig,
+  // Append the default value with md extensions
+  pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
+})

@@ -1,8 +1,7 @@
-import { Dispatch } from "react";
-import { Circle, Tooltip } from "react-leaflet";
-import L from "leaflet";
-import css from "../pages/stations.module.css";
-import { CountRow, Stations } from "./stations";
+import { Dispatch } from "react"
+import { Circle, Tooltip } from "react-leaflet"
+import { CountRow, Stations } from "./stations"
+import css from "../pages/stations.module.css"
 const { sqrt } = Math
 
 export type Props = CountRow & {
@@ -13,42 +12,42 @@ export type Props = CountRow & {
 }
 
 export default function StationCircle(
-    {
-        id,
-        count,
-        selected,
-        selectedStationId, setSelectedStationId,
-        stations,
-    }: Props
+  {
+    id,
+    count,
+    selected,
+    selectedStationId, setSelectedStationId,
+    stations,
+  }: Props
 ) {
-    if (!(id in stations)) {
-        console.log(`id ${id} not in stations`)
-        return null
-    }
-    const { name, lat, lng } = stations[id]
-    return (
-        <Circle
-            key={id}
-            center={{lat, lng}}
-            color={selected ? "yellow" : "orange"}
-            radius={sqrt(count)}
-            bubblingMouseEvents={false}
-            eventHandlers={{
-                click: e => {
-                    if (id == selectedStationId) return
-                    console.log("click!", name, e)
-                    setSelectedStationId(id)
-                },
-                mouseover: e => {
-                    if (id == selectedStationId) return
-                    console.log("over!", name, e)
-                    setSelectedStationId(id)
-                },
-            }}
-        >
-            <Tooltip className={css.tooltip} sticky={true} permanent={id == selectedStationId} pane={"selected"}>
-                <p>{name}: {count}</p>
-            </Tooltip>
-        </Circle>
-    )
+  if (!(id in stations)) {
+    console.log(`id ${id} not in stations`)
+    return null
+  }
+  const { name, lat, lng } = stations[id]
+  return (
+    <Circle
+      key={id}
+      center={{ lat, lng }}
+      color={selected ? "yellow" : "orange"}
+      radius={sqrt(count)}
+      bubblingMouseEvents={false}
+      eventHandlers={{
+        click: e => {
+          if (id == selectedStationId) return
+          console.log("click!", name, e)
+          setSelectedStationId(id)
+        },
+        mouseover: e => {
+          if (id == selectedStationId) return
+          console.log("over!", name, e)
+          setSelectedStationId(id)
+        },
+      }}
+    >
+      <Tooltip className={css.tooltip} sticky={true} permanent={id == selectedStationId} pane={"selected"}>
+        <p>{name}: {count}</p>
+      </Tooltip>
+    </Circle>
+  )
 }

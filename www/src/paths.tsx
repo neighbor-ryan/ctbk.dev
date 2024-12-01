@@ -1,4 +1,3 @@
-import React from "react";
 
 export const LAST_MONTH_PATH = 'public/assets/last-month.json'
 

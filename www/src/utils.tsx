@@ -3,8 +3,8 @@ import React from "react"
 export type Setter<T> = React.Dispatch<React.SetStateAction<T>>
 
 export const basename = function(path: string): string {
-    const idx = path.lastIndexOf('/')
-    return idx == -1 ? path : path.substring(idx + 1)
+  const idx = path.lastIndexOf('/')
+  return idx == -1 ? path : path.substring(idx + 1)
 }
 
 // export const encode = function(str: string): string {

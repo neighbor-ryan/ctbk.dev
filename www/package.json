@@ -4,6 +4,7 @@
     "version": "0.1.1",
     "license": "MIT",
     "author": "Ryan Williams <ryan@runsascoded.com",
+    "type": "module",
     "dependencies": {
         "@emotion/react": "^11.13.5",
         "@emotion/styled": "^11.13.5",
@@ -18,7 +19,6 @@
         "@rdub/next-params": "0.3.0",
         "@rdub/next-plotly": "0.3.0",
         "assert": "^2.1.0",
-        "aws-sdk": "^2.1550.0",
         "bootstrap": "^4.6.2",
         "buffer": "^6.0.3",
         "d3-color": "^3.1.0",
@@ -34,10 +34,10 @@
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "react-leaflet": "^4.2.1",
-        "react-markdown": "^7.1.2",
-        "react-router-dom": "^6.22.0"
+        "react-markdown": "^7.1.2"
     },
     "devDependencies": {
+        "@rdub/eslint-config": "0.0.1",
         "@types/chroma-js": "^2.4.3",
         "@types/jquery": "^3.5.29",
         "@types/leaflet": "^1.9.8",
@@ -76,6 +76,7 @@
         "docker-export": "scripts/docker.py next export",
         "dx": "scripts/docker.py next export",
         "export": "next build && next export",
+        "lint": "eslint \"**/*.{js,jsx,ts,tsx}\"",
         "serve": "http-server out",
         "start": "next start",
         "screenshots": "node screenshots.js",

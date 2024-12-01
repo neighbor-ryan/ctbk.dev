@@ -1,4 +1,4 @@
-import React, {ReactNode} from "react";
+import React, { ReactNode } from "react"
 import css from "./controls.module.css"
 
 type Option<T> = {
@@ -8,7 +8,7 @@ type Option<T> = {
 }
 
 export function Radios<T extends string>(
-    { label, options, choice, cb, nowrap = true, children }: {
+  { label, options, choice, cb, nowrap = true, children }: {
         label: string
         options: (Option<T> | T)[]
         choice: T
@@ -17,29 +17,28 @@ export function Radios<T extends string>(
         children?: ReactNode
     }
 ) {
-    const labels = options.map(option => {
-        const { label: text, data: name, disabled } =
+  const labels = options.map(option => {
+    const { label: text, data: name, disabled } =
             typeof option === 'string'
-                ? { label: option, data: option, disabled: false }
-                : option
-        return (
-            <label key={name} className={nowrap ? css.nowrap : ""}>
-                <input
-                    type="radio"
-                    name={label + '-' + name}
-                    value={name}
-                    checked={name == choice}
-                    disabled={disabled}
-                    onChange={e => {
-                    }}
-                />
-                {text}
-            </label>
-        )
-    })
-    return <div className={css.control}>
-        <div className={css.controlHeader}>{label}</div>
-        <div id={label} className={css.subControl} onChange={(e: any) => cb(e.target.value)}>{labels}</div>
-        {children}
-    </div>
+              ? { label: option, data: option, disabled: false }
+              : option
+    return (
+      <label key={name} className={nowrap ? css.nowrap : ""}>
+        <input
+          type="radio"
+          name={label + '-' + name}
+          value={name}
+          checked={name == choice}
+          disabled={disabled}
+          onChange={() => {}}  // Prevent React warning
+        />
+        {text}
+      </label>
+    )
+  })
+  return <div className={css.control}>
+    <div className={css.controlHeader}>{label}</div>
+    <div id={label} className={css.subControl} onChange={(e: any) => cb(e.target.value)}>{labels}</div>
+    {children}
+  </div>
 }
