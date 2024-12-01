@@ -10,7 +10,13 @@ import StationCircle from "./station-circle";
 const { sqrt } = Math
 
 export type ID = string
-export type Stations = { [id: ID]: StationValue }
+export type StationValue = {
+  name: string
+  lat: number
+  lng: number
+  starts: number
+}
+export type Stations = Record<ID, StationValue>
 
 export type StationPairCounts = {
     [k1: string]: { [k2: string]: number }
@@ -27,13 +33,6 @@ export type Props = {
 export type CountRow = {
     id: string
     count: number
-}
-
-export type StationValue = {
-    name: string
-    lat: number
-    lng: number
-    starts: number
 }
 
 export function MapBody(
@@ -101,13 +100,15 @@ export function MapBody(
         }</Pane>
         {lines}
         <Pane name={"circles"} className={css.circles}>{
-            entries(stations).map(([ id, station ]) =>
+            entries(stations)
+              .map(([ id, station ]) =>
                 <StationCircle
-                    key={id}
-                    id={id}
-                    count={station.starts}
-                    {...stationCircleProps}
-                />)
+                  key={id}
+                  id={id}
+                  count={station.starts}
+                  {...stationCircleProps}
+                />
+              )
         }</Pane>
     </>
 }

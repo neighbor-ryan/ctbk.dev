@@ -1,7 +1,9 @@
 import Head from "../src/head"
 
-import { floatParam, LL, llParam, Param, ParsedParam, parseQueryParams, stringParam } from "@rdub/next-params/params";
-import { getSync, loadSync } from "@rdub/base/load"
+import { floatParam, LL, llParam, Param, stringParam } from "@rdub/next-params/params";
+import { parseQueryParams } from "@rdub/next-params/query";
+import { loadJsonSync } from "@rdub/base/json/load"
+import { fetchJson } from "@rdub/base/json/fetch"
 import { useMemo, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 
@@ -12,7 +14,6 @@ import { LAST_MONTH_PATH } from "../src/paths";
 import dynamic from "next/dynamic";
 import type { ID, Props, StationPairCounts, Stations } from "../src/stations";
 import type { MapContainerProps } from "@rdub/next-leaflet/container"
-import A from "@rdub/next-base/a";
 
 const Map = dynamic(() => import("../src/stations"), { ssr: false })
 
@@ -29,9 +30,9 @@ type YmProps = {
 }
 
 export async function getStaticProps() {
-    const ym = loadSync<string>(LAST_MONTH_PATH)
+    const ym = loadJsonSync<string>(LAST_MONTH_PATH)
     const stationsUrl = `https://ctbk.s3.amazonaws.com/aggregated/${ym}/stations.json`
-    const stations = await getSync<Stations>(stationsUrl)
+    const stations = await fetchJson<Stations>(stationsUrl)
     const defaults: YmProps = { ym, stations }
     return { props: { defaults } }
 }
@@ -41,13 +42,6 @@ type Params = {
     z: Param<number>
     ss: Param<string | undefined>
     ym: Param<string>
-}
-
-type ParsedParams = {
-    ll: ParsedParam<LL>
-    z: ParsedParam<number>
-    ss: ParsedParam<string | undefined>
-    ym: ParsedParam<string>
 }
 
 export function ymParam(init: string, push: boolean = true): Param<string> {
@@ -90,7 +84,7 @@ export default function Home({ defaults }: { defaults: YmProps, }) {
         z: [ zoom, setZoom, ],
         ss: [ selectedStationId, setSelectedStationId ],
         ym: [ ym, setYM ],
-    }: ParsedParams = parseQueryParams({ params })
+    } = parseQueryParams({ params })
 
     const [ stations, setStations ] = useState(defaults.stations)
     const [ stationPairCounts, setStationPairCounts ] = useState<StationPairCounts | null>(null)

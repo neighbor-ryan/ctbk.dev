@@ -138,8 +138,9 @@
 
 .footer {
     margin-top: 1em;
-}
-.footer img.icon {
-    width: 2em;
-    margin-right: 0.5rem;
+    margin-bottom: 5em;
+    .icon {
+        width: 2em;
+        margin-right: 1em;
+    }
 }

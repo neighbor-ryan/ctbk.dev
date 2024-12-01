@@ -1,46 +1,44 @@
-import {DataFrame, Series} from "danfojs";
+import { DataFrame, Series } from "danfojs";
 import * as danfo from "../src/danfo"
-import {clampIndex, pivot} from "../src/danfo"
+import { clampIndex, pivot } from "../src/danfo"
 import moment from 'moment';
 import _ from "lodash";
-import React, {ReactNode, useMemo, useState} from 'react';
+import React, { ReactNode, useMemo, useState } from 'react';
 import css from "./index.module.css"
 import controlCss from "../src/controls.module.css"
 
 import { Data, Layout } from "plotly.js"
 
-import {Checkbox} from "../src/checkbox";
-import {Checklist} from "../src/checklist";
-import {DateRange, DateRange2Dates, dateRangeParam} from "../src/date-range";
+import { Checkbox } from "../src/checkbox";
+import { Checklist } from "../src/checklist";
+import { DateRange, DateRange2Dates, dateRangeParam } from "../src/date-range";
 import Head from "../src/head"
-import {Radios} from "../src/radios";
+import { Radios } from "../src/radios";
 
-import {getBasePath} from "@rdub/next-base/basePath"
+import getBasePath from "@rdub/next-base/basePath"
 import A from "@rdub/next-base/a"
-import {loadSync} from "@rdub/base/load"
+import { loadJsonSync } from "@rdub/base/json/load"
 import MD from "@rdub/next-markdown/md"
-import {concat, fromEntries, mapValues, o2a,} from "@rdub/base/objs"
-import { boolParam, enumMultiParam, enumParam, numberArrayParam, Param, ParsedParam, parseQueryParams, } from "@rdub/next-params/params";
+import { concat, fromEntries, mapValues, o2a, } from "@rdub/base/objs"
+import { boolParam, enumMultiParam, enumParam, numberArrayParam, Param } from "@rdub/next-params/params";
+import { parseQueryParams } from "@rdub/next-params/query";
 import { Colors, DownloadFmt, DownloadFmts, Gender, GenderQueryStrings, GenderRollingAvgCutoff, Genders, Int2Gender, NormalizeRideableType, Region, RegionQueryStrings, Regions, RideableType, RideableTypeChars, RideableTypes, Row, StackBy, StackBys, stackKeyDict, toYM, UnknownRideableCutoff, UserType, UserTypeQueryStrings, UserTypes, YAxes, YAxis, yAxisLabelDict, } from "../src/data";
+import { darken } from "../src/colors";
+import { PlotParams } from "react-plotly.js";
+import { LAST_MONTH_PATH } from "../src/paths";
+import PlotWrapper, { dashCase, Download } from "@rdub/next-plotly/plot-wrapper";
+import { Tooltip } from "@mui/material"
+import { icons } from "@rdub/icons"
 
-import dynamic from 'next/dynamic'
-import 'react-tooltip/dist/react-tooltip.css'
+const { Bluesky, GitHub, S3 } = icons({ TooltipC: Tooltip, className: css.icon })
 
-import {darken} from "../src/colors";
-import { Figure, PlotParams } from "react-plotly.js";
-
-import { useEffect } from "react";
-const Tooltip = dynamic(() => import("react-tooltip").then(m => m.Tooltip), { ssr: false, })
-
-const {pow} = Math
+const { pow } = Math
 
 const JSON_PATH = 'public/assets/ymrgtb_cd.json'
-import {LAST_MONTH_PATH} from "../src/paths";
-import PlotWrapper, { Download, dashCase } from "@rdub/next-plotly/plot-wrapper";
 
 export async function getStaticProps() {
-    const data = loadSync<Row[]>(JSON_PATH)
-    const lastMonthStr = loadSync<string>(LAST_MONTH_PATH)
+    const data = loadJsonSync<Row[]>(JSON_PATH)
+    const lastMonthStr = loadJsonSync<string>(LAST_MONTH_PATH)
     return { props: { data, lastMonthStr } }
 }
 
@@ -55,19 +53,6 @@ type Params = {
     d: Param<DateRange>
     avg: Param<number[]>
     dl: Param<DownloadFmt>
-}
-
-type ParsedParams = {
-    y: ParsedParam<YAxis>
-    u: ParsedParam<UserType[]>
-    s: ParsedParam<StackBy>
-    pct: ParsedParam<boolean>
-    r: ParsedParam<Region[]>
-    g: ParsedParam<Gender[]>
-    rt: ParsedParam<RideableType[]>
-    d: ParsedParam<DateRange>
-    avg: ParsedParam<number[]>
-    dl: ParsedParam<DownloadFmt>
 }
 
 type MonthVal = { m: string, v: number }
@@ -125,28 +110,29 @@ const WarningLabel = ({ label, id, children }: { label: string, id: string, chil
     const basePath = getBasePath()
     return (
         <span>
-            {label}
+          {label}
+          <Tooltip id={id} className={css.tooltip} title={children}>
             <span id={id}>
-                <img className={css.warning} alt={"warning icon"} src={`${basePath}/assets/warning.png`}/>
+              <img className={css.warning} alt={"warning icon"} src={`${basePath}/assets/warning.png`}/>
             </span>
-            <Tooltip anchorId={id} className={css.tooltip}>{children}</Tooltip>
+          </Tooltip>
         </span>
     )
 }
 
 const GenderLabel = (suffix: number | string) =>
-    <WarningLabel label={"Gender"} id={`gender-label-tooltip-${suffix}`}>
-        <div>Gender data no longer published</div>
-        <div>(as of February 2021)</div>
-    </WarningLabel>
+  <WarningLabel label={"Gender"} id={`gender-label-tooltip-${suffix}`}>
+    <div>Gender data no longer published</div>
+    <div>(as of February 2021)</div>
+  </WarningLabel>
 
 const BikeTypeLabel = (suffix: number | string) =>
-    <WarningLabel label={"Bike Type"} id={`bike-type-label-tooltip-${suffix}`}>
-        <div>E-bike data seems to be</div>
-        <div>mostly missing / undercounted</div>
-    </WarningLabel>
+  <WarningLabel label={"Bike Type"} id={`bike-type-label-tooltip-${suffix}`}>
+    <div>E-bike data seems to be</div>
+    <div>mostly missing / under-counted</div>
+  </WarningLabel>
 
-export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr: string }) {
+export default function App({ data }: { data: Row[] }) {
     const params: Params = {
         y: enumParam('Rides', YAxes),
         u: enumMultiParam(UserTypes, UserTypeQueryStrings, ''),
@@ -160,17 +146,6 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
         dl: enumParam('none', DownloadFmts.map(f => [ f, f ])),
     }
 
-    const lastMonthDisplayStr = useMemo(
-        () => {
-            const lastMonthYear = parseInt(lastMonthStr.substring(0, 4))
-            const lastMonthIdx = parseInt(lastMonthStr.substring(4, 6)) - 1
-            const lastMonth = new Date(lastMonthYear, lastMonthIdx)
-            return lastMonth.toLocaleDateString('en-us', { month: "short", year: "numeric" })
-
-        },
-        [ lastMonthStr ]
-    )
-
     const {
         y: [ yAxis, setYAxis ],
         u: [ userTypes, setUserTypes ],
@@ -182,7 +157,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
         d: [ dateRange, setDateRange ],
         avg: [ rollingAvgs, setRollingAvgs ],
         dl: [ downloadFmt ],
-    }: ParsedParams = parseQueryParams({ params })
+    } = parseQueryParams({ params })
 
     let df = useMemo(
         () => {
@@ -283,7 +258,7 @@ export default function App({ data, lastMonthStr }: { data: Row[], lastMonthStr:
     const { start, end } = useMemo(
         () => {
             const last = moment(_.max(data.map(r => new Date(r.Year, r.Month - 1,)))).add(1, 'M').toDate()
-            const { start, end } = mapValues<Date, string>(
+            const { start, end } = mapValues(
                 DateRange2Dates(dateRange, last),
                 (_, d) => toYM(d)
             )
@@ -666,9 +641,9 @@ Several things changed in February 2021 (presumably as part of [the Lyft acquisi
 - The "User Type" values changed ("Annual" → "member", "Daily" → "casual"); I'm using the former/old values here, they seem equivalent.
                     ` })}
                         <div className={css.footer}>
-                            Code: { icon(     'gh', 'https://github.com/neighbor-ryan/ctbk.dev#readme',    'GitHub logo') }
-                            Data: { icon(     's3',         'https://s3.amazonaws.com/ctbk/index.html', 'Amazon S3 logo') }
-                            Author: { icon('twitter',                  'https://twitter.com/RunsAsCoded',   'Twitter logo') }
+                          Code: <GitHub repo={"neighbor-ryan/ctbk.dev"} />
+                          Data: <S3 href={"https://s3.amazonaws.com/ctbk/index.html"} title={"Browse s3://ctbk"} />
+                          Author: <Bluesky profile={"runsascoded.com"} />
                         </div>
                     </div>
                 </div>

@@ -5,14 +5,18 @@
     "license": "MIT",
     "author": "Ryan Williams <ryan@runsascoded.com",
     "dependencies": {
+        "@emotion/react": "^11.13.5",
+        "@emotion/styled": "^11.13.5",
         "@mdx-js/loader": "^2.3.0",
+        "@mui/material": "^6.1.9",
         "@next/mdx": "^13.5.6",
-        "@rdub/base": "^0.1.0",
-        "@rdub/next-base": "^0.1.0",
-        "@rdub/next-leaflet": "0.1.0",
-        "@rdub/next-markdown": "0.0.2",
-        "@rdub/next-params": "0.0.3",
-        "@rdub/next-plotly": "0.0.5",
+        "@rdub/base": "0.7.1",
+        "@rdub/icons": "0.1.0",
+        "@rdub/next-base": "0.4.0",
+        "@rdub/next-leaflet": "0.2.0",
+        "@rdub/next-markdown": "0.4.0",
+        "@rdub/next-params": "0.3.0",
+        "@rdub/next-plotly": "0.3.0",
         "assert": "^2.1.0",
         "aws-sdk": "^2.1550.0",
         "bootstrap": "^4.6.2",
@@ -31,8 +35,7 @@
         "react-dom": "^18.2.0",
         "react-leaflet": "^4.2.1",
         "react-markdown": "^7.1.2",
-        "react-router-dom": "^6.22.0",
-        "react-tooltip": "^5.26.0"
+        "react-router-dom": "^6.22.0"
     },
     "devDependencies": {
         "@types/chroma-js": "^2.4.3",
@@ -46,7 +49,6 @@
         "@types/react-dom": "^18.2.18",
         "@types/react-plotly.js": "^2.6.3",
         "@types/use-persisted-state": "^0.3.4",
-        "@vanilla-extract/next-plugin": "^2.3.6",
         "commander": "^2.20.3",
         "http-server": "^14.1.1",
         "puppeteer": "^23.6.0",
@@ -60,6 +62,7 @@
         "buffer": false
     },
     "scripts": {
+        "clean": "rm -rf .next out",
         "dev": "next dev",
         "build": "next build",
         "deploy-s3": "aws s3 sync out/ s3://ctbkdev/",
@@ -75,7 +78,8 @@
         "export": "next build && next export",
         "serve": "http-server out",
         "start": "next start",
-        "screenshots": "node screenshots.js"
+        "screenshots": "node screenshots.js",
+        "tc": "tsc"
     },
     "repository": {
         "type": "git",

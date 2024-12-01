@@ -1,14 +1,10 @@
-const {
-    createVanillaExtractPlugin
-} = require('@vanilla-extract/next-plugin');
-const withVanillaExtract = createVanillaExtractPlugin();
-
 const { NEXT_MINIFY, NEXT_BASE_PATH } = process.env
 const minimize = !['false', 'n', 'no', '0'].includes(NEXT_MINIFY)
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     swcMinify: true,
+    transpilePackages: ['@rdub/icons'],
     images: {
         unoptimized: true,
     },
@@ -33,8 +29,8 @@ const withMDX = require('@next/mdx')({
 })
 
 module.exports =
-    withVanillaExtract(withMDX({
+    withMDX({
         ...nextConfig,
         // Append the default value with md extensions
         pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
-    }))
+    })

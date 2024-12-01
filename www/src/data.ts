@@ -94,7 +94,7 @@ export function rollingAvg<K extends string = string>(vs: NumS<K>, n: number, ):
     let avgs: [ K, number, ][] = []
     let sum: number = 0
     let elems: number[] = [];
-    (entries<number>(vs) as [ K, number ][]).forEach(([ k, v ], i) => {
+    entries(vs).forEach(([ k, v ], i) => {
         sum += v
         elems.push(v)
         if (i >= n) {
