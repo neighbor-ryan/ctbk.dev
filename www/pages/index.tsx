@@ -61,6 +61,9 @@ type AnnualizedPercent = {
     percent: number
 }
 
+type NDF = { [p: number]: DataFrame }
+type RollingSerie = { stackVal: string, n: number, s: Series }
+
 function annualizedPercents(series: Series): AnnualizedPercent[] {
   if (!series.size) {
     return []
@@ -297,8 +300,6 @@ export default function App({ data }: { data: Row[] }) {
     [ yAxis, stackBy, stackPercents, fdf ]
   )
 
-    type NDF = { [p: number]: DataFrame }
-    type RollingSerie = { stackVal: string, n: number, s: Series }
     const rollingSeries: RollingSerie[] = useMemo(
       () => {
         if (stackBy == 'None') {
