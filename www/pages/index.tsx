@@ -300,13 +300,13 @@ export default function App({ data }: { data: Row[] }) {
     [ yAxis, stackBy, stackPercents, fdf ]
   )
 
-    const rollingSeries: RollingSerie[] = useMemo(
-      () => {
-        if (stackBy == 'None') {
-          if (!grouped) return []
-          const rename: {[k: string]: string} = {}
-          rename[`${yAxis}_sum`] = yAxis
-          const series = (
+  const rollingSeries: RollingSerie[] = useMemo(
+    () => {
+      if (stackBy == 'None') {
+        if (!grouped) return []
+        const rename: {[k: string]: string} = {}
+        rename[`${yAxis}_sum`] = yAxis
+        const series = (
             grouped
               .groupby(['m'])
               .col([yAxis])
@@ -314,312 +314,312 @@ export default function App({ data }: { data: Row[] }) {
               .rename(rename)
               .setIndex({ column: 'm', drop: true })
               .sortIndex()[yAxis] as Series
-          )
-          // print("pre-roll", series)
-          return rollingAvgs.map(n => {
-            const rolls = danfo.rollingAvgs(series, n)
-            // print("rolls", rolls)
-            const clamped = clampIndex(rolls, { start, end })
-            annualizedPercents(clamped).forEach(percent => console.log(annualPercentStr(percent)))
-            return { stackVal: '', n, s: clamped }
-          })
-        } else {
-          if (!pivoted) return []
-          let clampEnd = end
-          if (stackBy == 'Gender' && end > GenderRollingAvgCutoff) {
-            clampEnd = GenderRollingAvgCutoff
-          }
-          let avgs: NDF = fromEntries(
-            rollingAvgs.map(n => {
-              // print(`pre-roll pivot`, pivoted)
-              const rolled = danfo.rollingAvgs(pivoted, n)
-              // print(`rolled`, rolled)
-              const clamped = clampIndex(rolled, { start, end: clampEnd })
-              // print(`clamped`, clamped)
-              return [ n, clamped, ]
-            })
-          )
-          return concat(
-            o2a<number, DataFrame, RollingSerie[]>(
-              avgs,
-              (n, df) => {
-                // print(`rolling df`, df)
-                return df.columns.map(stackVal => {
-                  let s = df[stackVal] as Series
-                  if (stackBy == 'Rideable Type' && stackVal == 'Unknown' && end > UnknownRideableCutoff) {
-                    s = clampIndex(s, { end: UnknownRideableCutoff })
-                  }
-                  annualizedPercents(s).forEach(percent => console.log(`${stackVal}: ${annualPercentStr(percent)}`))
-                  return { stackVal, n, s }
-                })
-              }
-            )
-          )
-        }
-      },
-      [ pivoted, grouped, start, end, yAxis, rollingAvgs, ]
-    )
-
-    console.log("rollingSeries:", rollingSeries, rollingSeries[0]?.s?.shape)
-
-    const legendRanks: { [stackVal: string]: number } = useMemo(
-      () => (
-        stackBy == 'None'
-          ? { '': 0 }
-          : fromEntries(
-            stackKeys
-              .filter(stackVal => pivoted?.columns.includes(stackVal))
-              .map((stackVal, idx) => [ stackVal, -idx ])
-          )
-      ),
-      [ stackBy, stackKeys, pivoted ]
-    )
-
-    const pivotedClamped = useMemo(
-      () => {
-        if (!pivoted) return null
-        const pivotedClamped = clampIndex(pivoted, { start, end })
-        // print("pivotedClamped", pivotedClamped)
-        return pivotedClamped
-      },
-      [ pivoted, start, end ]
-    )
-
-    // Create Plotly trace data, including colors (when stacking)
-    const traces: Data[] = useMemo(
-      () => {
-        const rollingTraces: Data[] = rollingSeries.map(
-          ({ stackVal, n, s }) => {
-            const stackName = stackVal || 'Total'
-            const name = stackVal ? `${stackVal} (${n}mo)` : `${n}mo avg`
-            const colors: { [k: string]: string } = Colors[stackBy]
-            const color = stackVal ? darken(colors[stackName], .75) : 'black'
-            return {
-              name,
-              x: s.index,
-              y: s.values,
-              type: 'scatter',
-              marker: { color, },
-              line: { width: 4, },
-              hovertemplate,
-              legendrank: 101 + 2 * legendRanks[stackVal]
-            } as Data
-          }
         )
-        console.log("rollingTraces:", rollingTraces)
-
-        // Bar data (including color fades when stacking)
-        const barTraces: Data[] = pivotedClamped && pivotedClamped.columns.map(k => {
-          const series = pivotedClamped[k]
-          const x = series.index
-          const y = series.values
-          const stackVal = stackBy == 'None' ? '' : k
-          const name = stackVal ? k : yHoverLabel
-          const colors: { [k: string]: string } = Colors[stackBy]
-          const color = colors[stackVal]
-          return {
-            x, y, name,
-            type: 'bar',
-            marker: { color, },
-            hovertemplate,
-            legendrank: 100 + 2*legendRanks[stackVal],
-            //selectedpoints: selectedX ? undefined : [],
-          }
-        }) || []
-        console.log("barTraces:", barTraces)
-
-        return barTraces.concat(rollingTraces)
-      },
-      [ rollingSeries, pivotedClamped, stackBy, ]
-    )
-
-    const gridcolor = "#ddd"
-    const showlegend = showLegend == null ? (stackBy != 'None') : showLegend
-    const layout: Partial<Layout> = {
-      autosize: true,
-      barmode: 'stack',
-      showlegend,
-      hovermode: "x",
-      legend: {
-        x: 0.5,
-        xanchor: 'center',
-        yanchor: 'top',
-        orientation: 'h',
-        traceorder: "normal",
-      },
-      xaxis: {
-        tickfont: { size: 14 },
-        titlefont: { size: 14 },
-        // tickangle: -45,
-        tickformat: "%b '%y",
-        gridcolor,
-      },
-      yaxis: {
-        automargin: true,
-        gridcolor,
-        tickfont: { size: 14 },
-        titlefont: { size: 14 },
-        tickformat: stackPercents ? ".0%" : undefined,
-        range: stackPercents ? [ 0, 1.01, ] : undefined,
-      },
-      paper_bgcolor: 'rgba(0,0,0,0)',
-      plot_bgcolor: 'rgba(0,0,0,0)',
-      margin: { t: 0, r: 0, b: 40, l: 0, },
-    }
-
-    const [ initialized, setInitialized ] = useState(false)
-    const clickToToggle = false
-    const src = 'screenshots/plot-fallback.png'
-
-    const plotParams: PlotParams = {
-      data: traces,
-      useResizeHandler: true,
-      layout: layout,
-      config: {
-        displayModeBar: false,
-        // staticPlot: true,
-        // responsive: true,
-      }
-    }
-
-    const download = useMemo(
-      () => {
-        if (downloadFmt === 'none') return undefined
-        let filename = `ctbk ${yAxis}`
-        if (subtitle) filename += ` (${subtitle})`
-        filename = dashCase(filename)
-        const format: DownloadFmt = downloadFmt === '' ? 'png' : downloadFmt
-        const download: Download = { format, filename, }
-        return download
-      },
-      [ downloadFmt ],
-    )
-
-    return (
-      <div id="plot" className={css.container}>
-        <Head
-          title={title}
-          description={"Graph of Citi Bike ridership over time"}
-          thumbnail={`ctbk-rides`}
-        />
-        <main className={css.main}>
-          <div
-            className={css.titleContainer}
-            onClick={() => clickToToggle && setInitialized(!initialized)}
-          >
-            <h1 className={css.title}>{title}</h1>
-            {subtitle && <p className={css.subtitle}>{subtitle}</p>}
-          </div>
-          {/* Main plot: bar graph + rolling avg line(s) */}
-          <PlotWrapper
-            params={plotParams}
-            src={src}
-            alt={title}
-            download={download}
-          />
-          <div className={css.row}>
-            <details className={css.controls}>
-              <summary><span className={css.settingsGear}>⚙</span>️</summary>
-              {/* DateRange controls */}
-              <div className={`${css.dateControls} ${controlCss.control}`}>
-                <label className={controlCss.controlHeader}>Dates</label>
-                {
-                  ([ "1y", "2y", "3y", "4y", "5y", "All" ] as (DateRange & string)[])
-                    .map(dr =>
-                      <input
-                        type="button"
-                        key={dr}
-                        value={dr}
-                        className={`${css.dateRangeButton} ${dateRange == dr && css.activeButton || css.inactiveButton}`}
-                        onClick={() => setDateRange(dr) }
-                      />
-                    )
+        // print("pre-roll", series)
+        return rollingAvgs.map(n => {
+          const rolls = danfo.rollingAvgs(series, n)
+          // print("rolls", rolls)
+          const clamped = clampIndex(rolls, { start, end })
+          annualizedPercents(clamped).forEach(percent => console.log(annualPercentStr(percent)))
+          return { stackVal: '', n, s: clamped }
+        })
+      } else {
+        if (!pivoted) return []
+        let clampEnd = end
+        if (stackBy == 'Gender' && end > GenderRollingAvgCutoff) {
+          clampEnd = GenderRollingAvgCutoff
+        }
+        let avgs: NDF = fromEntries(
+          rollingAvgs.map(n => {
+            // print(`pre-roll pivot`, pivoted)
+            const rolled = danfo.rollingAvgs(pivoted, n)
+            // print(`rolled`, rolled)
+            const clamped = clampIndex(rolled, { start, end: clampEnd })
+            // print(`clamped`, clamped)
+            return [ n, clamped, ]
+          })
+        )
+        return concat(
+          o2a<number, DataFrame, RollingSerie[]>(
+            avgs,
+            (n, df) => {
+              // print(`rolling df`, df)
+              return df.columns.map(stackVal => {
+                let s = df[stackVal] as Series
+                if (stackBy == 'Rideable Type' && stackVal == 'Unknown' && end > UnknownRideableCutoff) {
+                  s = clampIndex(s, { end: UnknownRideableCutoff })
                 }
-              </div>
-              <Checklist
-                label={"Region"}
-                data={Regions.map(region => ({ name: region, data: region, checked: regions.includes(region), }))}
-                cb={setRegions}
+                annualizedPercents(s).forEach(percent => console.log(`${stackVal}: ${annualPercentStr(percent)}`))
+                return { stackVal, n, s }
+              })
+            }
+          )
+        )
+      }
+    },
+    [ pivoted, grouped, start, end, yAxis, rollingAvgs, ]
+  )
+
+  console.log("rollingSeries:", rollingSeries, rollingSeries[0]?.s?.shape)
+
+  const legendRanks: { [stackVal: string]: number } = useMemo(
+    () => (
+      stackBy == 'None'
+        ? { '': 0 }
+        : fromEntries(
+          stackKeys
+            .filter(stackVal => pivoted?.columns.includes(stackVal))
+            .map((stackVal, idx) => [ stackVal, -idx ])
+        )
+    ),
+    [ stackBy, stackKeys, pivoted ]
+  )
+
+  const pivotedClamped = useMemo(
+    () => {
+      if (!pivoted) return null
+      const pivotedClamped = clampIndex(pivoted, { start, end })
+      // print("pivotedClamped", pivotedClamped)
+      return pivotedClamped
+    },
+    [ pivoted, start, end ]
+  )
+
+  // Create Plotly trace data, including colors (when stacking)
+  const traces: Data[] = useMemo(
+    () => {
+      const rollingTraces: Data[] = rollingSeries.map(
+        ({ stackVal, n, s }) => {
+          const stackName = stackVal || 'Total'
+          const name = stackVal ? `${stackVal} (${n}mo)` : `${n}mo avg`
+          const colors: { [k: string]: string } = Colors[stackBy]
+          const color = stackVal ? darken(colors[stackName], .75) : 'black'
+          return {
+            name,
+            x: s.index,
+            y: s.values,
+            type: 'scatter',
+            marker: { color, },
+            line: { width: 4, },
+            hovertemplate,
+            legendrank: 101 + 2 * legendRanks[stackVal]
+          } as Data
+        }
+      )
+      console.log("rollingTraces:", rollingTraces)
+
+      // Bar data (including color fades when stacking)
+      const barTraces: Data[] = pivotedClamped && pivotedClamped.columns.map(k => {
+        const series = pivotedClamped[k]
+        const x = series.index
+        const y = series.values
+        const stackVal = stackBy == 'None' ? '' : k
+        const name = stackVal ? k : yHoverLabel
+        const colors: { [k: string]: string } = Colors[stackBy]
+        const color = colors[stackVal]
+        return {
+          x, y, name,
+          type: 'bar',
+          marker: { color, },
+          hovertemplate,
+          legendrank: 100 + 2*legendRanks[stackVal],
+          //selectedpoints: selectedX ? undefined : [],
+        }
+      }) || []
+      console.log("barTraces:", barTraces)
+
+      return barTraces.concat(rollingTraces)
+    },
+    [ rollingSeries, pivotedClamped, stackBy, ]
+  )
+
+  const gridcolor = "#ddd"
+  const showlegend = showLegend == null ? (stackBy != 'None') : showLegend
+  const layout: Partial<Layout> = {
+    autosize: true,
+    barmode: 'stack',
+    showlegend,
+    hovermode: "x",
+    legend: {
+      x: 0.5,
+      xanchor: 'center',
+      yanchor: 'top',
+      orientation: 'h',
+      traceorder: "normal",
+    },
+    xaxis: {
+      tickfont: { size: 14 },
+      titlefont: { size: 14 },
+      // tickangle: -45,
+      tickformat: "%b '%y",
+      gridcolor,
+    },
+    yaxis: {
+      automargin: true,
+      gridcolor,
+      tickfont: { size: 14 },
+      titlefont: { size: 14 },
+      tickformat: stackPercents ? ".0%" : undefined,
+      range: stackPercents ? [ 0, 1.01, ] : undefined,
+    },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    margin: { t: 0, r: 0, b: 40, l: 0, },
+  }
+
+  const [ initialized, setInitialized ] = useState(false)
+  const clickToToggle = false
+  const src = 'screenshots/plot-fallback.png'
+
+  const plotParams: PlotParams = {
+    data: traces,
+    useResizeHandler: true,
+    layout: layout,
+    config: {
+      displayModeBar: false,
+      // staticPlot: true,
+      // responsive: true,
+    }
+  }
+
+  const download = useMemo(
+    () => {
+      if (downloadFmt === 'none') return undefined
+      let filename = `ctbk ${yAxis}`
+      if (subtitle) filename += ` (${subtitle})`
+      filename = dashCase(filename)
+      const format: DownloadFmt = downloadFmt === '' ? 'png' : downloadFmt
+      const download: Download = { format, filename, }
+      return download
+    },
+    [ downloadFmt ],
+  )
+
+  return (
+    <div id="plot" className={css.container}>
+      <Head
+        title={title}
+        description={"Graph of Citi Bike ridership over time"}
+        thumbnail={`ctbk-rides`}
+      />
+      <main className={css.main}>
+        <div
+          className={css.titleContainer}
+          onClick={() => clickToToggle && setInitialized(!initialized)}
+        >
+          <h1 className={css.title}>{title}</h1>
+          {subtitle && <p className={css.subtitle}>{subtitle}</p>}
+        </div>
+        {/* Main plot: bar graph + rolling avg line(s) */}
+        <PlotWrapper
+          params={plotParams}
+          src={src}
+          alt={title}
+          download={download}
+        />
+        <div className={css.row}>
+          <details className={css.controls}>
+            <summary><span className={css.settingsGear}>⚙</span>️</summary>
+            {/* DateRange controls */}
+            <div className={`${css.dateControls} ${controlCss.control}`}>
+              <label className={controlCss.controlHeader}>Dates</label>
+              {
+                ([ "1y", "2y", "3y", "4y", "5y", "All" ] as (DateRange & string)[])
+                  .map(dr =>
+                    <input
+                      type="button"
+                      key={dr}
+                      value={dr}
+                      className={`${css.dateRangeButton} ${dateRange == dr && css.activeButton || css.inactiveButton}`}
+                      onClick={() => setDateRange(dr) }
+                    />
+                  )
+              }
+            </div>
+            <Checklist
+              label={"Region"}
+              data={Regions.map(region => ({ name: region, data: region, checked: regions.includes(region), }))}
+              cb={setRegions}
+            />
+            <Radios
+              label="Stack by"
+              options={[
+                "None",
+                "Region",
+                "User Type",
+                { label: GenderLabel(1), data: "Gender", },
+                { label: BikeTypeLabel(1), data: "Rideable Type", },
+              ]}
+              cb={setStackBy}
+              choice={stackBy}
+            />
+            <div className={controlCss.control}>
+              <Checkbox
+                label="12mo avg"
+                checked={rollingAvgs.includes(12)}
+                cb={v => setRollingAvgs(v ? [12] : [])}
               />
-              <Radios
-                label="Stack by"
-                options={[
-                  "None",
-                  "Region",
-                  "User Type",
-                  { label: GenderLabel(1), data: "Gender", },
-                  { label: BikeTypeLabel(1), data: "Rideable Type", },
-                ]}
-                cb={setStackBy}
-                choice={stackBy}
+              <Checkbox
+                label="Legend"
+                checked={showlegend}
+                cb={setShowLegend}
               />
-              <div className={controlCss.control}>
-                <Checkbox
-                  label="12mo avg"
-                  checked={rollingAvgs.includes(12)}
-                  cb={v => setRollingAvgs(v ? [12] : [])}
-                />
-                <Checkbox
-                  label="Legend"
-                  checked={showlegend}
-                  cb={setShowLegend}
-                />
-                <Checkbox
-                  label="Stack %"
-                  checked={stackRelative}
-                  cb={setStackRelative}
-                />
-              </div>
-              <Radios label="Y Axis" options={["Rides", { label: "Minutes", data: "Ride minutes", }]} cb={setYAxis} choice={yAxis} />
-              <Checklist
-                label={"User Type"}
-                data={UserTypes.map(userType => ({ name: userType, data: userType, checked: userTypes.includes(userType), }))}
-                cb={setUserTypes}
+              <Checkbox
+                label="Stack %"
+                checked={stackRelative}
+                cb={setStackRelative}
               />
-              <Checklist
-                label={GenderLabel(2)}
-                data={[
-                  { name: 'Men', data: 'Men', checked: genders.includes('Men') },
-                  { name: 'Women', data: 'Women', checked: genders.includes('Women') },
-                  { name: 'Unknown', data: 'Unknown', checked: genders.includes('Unknown') },
-                ]}
-                cb={setGenders}
-              />
-              <Checklist
-                label={BikeTypeLabel(2)}
-                data={[
-                  { name: 'Classic', data: 'Classic', checked: rideableTypes.includes('Classic') },
-                  // { name: 'Docked', data: 'Docked', checked: rideableTypes.includes('Docked') },
-                  { name: 'Electric', data: 'Electric', checked: rideableTypes.includes('Electric') },
-                  { name: 'Unknown', data: 'Unknown', checked: rideableTypes.includes('Unknown') },
-                ]}
-                cb={setRideableTypes}
-              />
-            </details>
-          </div>
-          <hr/>
-          {/* Usage info */}
-          <div className={`no-gutters row ${css.row}`}>
-            <div className="col-md-12">
-              <p>Expand the "⚙️" to filter or stack by region, user type, gender, bike type, or date, or toggle aggregation of rides or total ride minutes.</p>
-              <h4>Examples</h4>
-              <ul>
-                <li><A href={"/?r=jh"}>JC + Hoboken</A> (<A href={"/?r=jh&s=r"}>stacked</A>)</li>
-                <li><A href={"/?y=m&s=g&pct=&g=mf&d=1406-2102"}>Ride minute %'s, Men vs. Women</A>, Jun '14 – Jan '21</li>
-                <li><A href={"/?s=u&pct="}>Annual vs. daily user %'s</A></li>
-                <li><A href={"/?y=m&s=b&rt=ce"}>Classic / E-bike ride minutes</A></li>
-                <li><A href={"/"}>Default view (system-wide rides over time)</A></li>
-              </ul>
-              <p>This plot refreshes when <A href={"https://www.citibikenyc.com/system-data"} target={"_blank"}>new data is published by Citi Bike</A> (typically the 1st or 2nd week of each month, covering the previous month).</p>
-              <p><A href={"https://github.com/neighbor-ryan/ctbk.dev"} target={"_blank"}>The GitHub repo</A> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"} target={"_blank"}>planned enhancements</a>. Data updates are performed <A href={"https://github.com/neighbor-ryan/ctbk.dev/actions"}>by Github Actions</A>.</p>
-              <hr/>
-              <h3 id={"map"}>Map: Stations + Common Destinations</h3>
-              <p>Tap a station to see where rides originating there go:</p>
-              <iframe src={"/stations"} className={css.map} />
+            </div>
+            <Radios label="Y Axis" options={["Rides", { label: "Minutes", data: "Ride minutes", }]} cb={setYAxis} choice={yAxis} />
+            <Checklist
+              label={"User Type"}
+              data={UserTypes.map(userType => ({ name: userType, data: userType, checked: userTypes.includes(userType), }))}
+              cb={setUserTypes}
+            />
+            <Checklist
+              label={GenderLabel(2)}
+              data={[
+                { name: 'Men', data: 'Men', checked: genders.includes('Men') },
+                { name: 'Women', data: 'Women', checked: genders.includes('Women') },
+                { name: 'Unknown', data: 'Unknown', checked: genders.includes('Unknown') },
+              ]}
+              cb={setGenders}
+            />
+            <Checklist
+              label={BikeTypeLabel(2)}
+              data={[
+                { name: 'Classic', data: 'Classic', checked: rideableTypes.includes('Classic') },
+                // { name: 'Docked', data: 'Docked', checked: rideableTypes.includes('Docked') },
+                { name: 'Electric', data: 'Electric', checked: rideableTypes.includes('Electric') },
+                { name: 'Unknown', data: 'Unknown', checked: rideableTypes.includes('Unknown') },
+              ]}
+              cb={setRideableTypes}
+            />
+          </details>
+        </div>
+        <hr/>
+        {/* Usage info */}
+        <div className={`no-gutters row ${css.row}`}>
+          <div className="col-md-12">
+            <p>Expand the "⚙️" to filter or stack by region, user type, gender, bike type, or date, or toggle aggregation of rides or total ride minutes.</p>
+            <h4>Examples</h4>
+            <ul>
+              <li><A href={"/?r=jh"}>JC + Hoboken</A> (<A href={"/?r=jh&s=r"}>stacked</A>)</li>
+              <li><A href={"/?y=m&s=g&pct=&g=mf&d=1406-2102"}>Ride minute %'s, Men vs. Women</A>, Jun '14 – Jan '21</li>
+              <li><A href={"/?s=u&pct="}>Annual vs. daily user %'s</A></li>
+              <li><A href={"/?y=m&s=b&rt=ce"}>Classic / E-bike ride minutes</A></li>
+              <li><A href={"/"}>Default view (system-wide rides over time)</A></li>
+            </ul>
+            <p>This plot refreshes when <A href={"https://www.citibikenyc.com/system-data"} target={"_blank"}>new data is published by Citi Bike</A> (typically the 1st or 2nd week of each month, covering the previous month).</p>
+            <p><A href={"https://github.com/neighbor-ryan/ctbk.dev"} target={"_blank"}>The GitHub repo</A> has more info as well as <a href={"https://github.com/neighbor-ryan/ctbk.dev/issues"} target={"_blank"}>planned enhancements</a>. Data updates are performed <A href={"https://github.com/neighbor-ryan/ctbk.dev/actions"}>by Github Actions</A>.</p>
+            <hr/>
+            <h3 id={"map"}>Map: Stations + Common Destinations</h3>
+            <p>Tap a station to see where rides originating there go:</p>
+            <iframe src={"/stations"} className={css.map} />
                         (<A href={"/stations"}>Full screen version</A>)
-              <hr />
-              <h3 id="qc">🚧 Data-quality issues 🚧</h3>
-              {MD({ content: `
+            <hr />
+            <h3 id="qc">🚧 Data-quality issues 🚧</h3>
+            {MD({ content: `
 Several things changed in February 2021 (presumably as part of [the Lyft acquisition](https://www.lyft.com/blog/posts/lyft-becomes-americas-largest-bikeshare-service)):
 - "Gender" information is no longer provided:
   - All rides are labeled "unknown" starting February 2021
@@ -627,14 +627,14 @@ Several things changed in February 2021 (presumably as part of [the Lyft acquisi
 - A new "Rideable Type" field was added, containing values \`docked_bike\` and \`electric_bike\` 🎉; however, [it currently only shows ebike data from June 2021](?y=m&s=b&rt=ce)
 - The "User Type" values changed ("Annual" → "member", "Daily" → "casual"); I'm using the former/old values here, they seem equivalent.
                     ` })}
-              <div className={css.footer}>
+            <div className={css.footer}>
                           Code: <GitHub repo={"neighbor-ryan/ctbk.dev"} />
                           Data: <S3 href={"https://s3.amazonaws.com/ctbk/index.html"} title={"Browse s3://ctbk"} />
                           Author: <Bluesky profile={"runsascoded.com"} />
-              </div>
             </div>
           </div>
-        </main>
-      </div>
-    )
+        </div>
+      </main>
+    </div>
+  )
 }
