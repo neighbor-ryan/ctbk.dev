@@ -39,26 +39,26 @@ export async function getStaticProps() {
 }
 
 type Params = {
-    y: Param<YAxis>
-    u: Param<UserType[]>
-    s: Param<StackBy>
-    pct: Param<boolean>
-    r: Param<Region[]>
-    g: Param<Gender[]>
-    rt: Param<RideableType[]>
-    d: Param<DateRange>
-    avg: Param<number[]>
-    dl: Param<DownloadFmt>
+  y: Param<YAxis>
+  u: Param<UserType[]>
+  s: Param<StackBy>
+  pct: Param<boolean>
+  r: Param<Region[]>
+  g: Param<Gender[]>
+  rt: Param<RideableType[]>
+  d: Param<DateRange>
+  avg: Param<number[]>
+  dl: Param<DownloadFmt>
 }
 
 type MonthVal = { m: string, v: number }
 type AnnualizedPercent = {
-    numYrs: number
-    numMos: number
-    first: { m: string, v: number }
-    last: { m: string, v: number }
-    ratio: number
-    percent: number
+  numYrs: number
+  numMos: number
+  first: { m: string, v: number }
+  last: { m: string, v: number }
+  ratio: number
+  percent: number
 }
 
 type NDF = { [p: number]: DataFrame }
@@ -98,9 +98,9 @@ function annualPercentStr({ numYrs, numMos, first, last, ratio, percent }: Annua
   }
   const datesStr = `${ymStr(first.m)}-${ymStr(last.m)}`
   const yrsMsg =
-        (numMos % 12 == 0)
-          ? `${numYrs.toFixed(0)} year${numMos == 12 ? "" : "s"} (${datesStr})`
-          : `${numYrs.toFixed(1)} years (${numMos} mos, ${datesStr})`
+    (numMos % 12 == 0)
+      ? `${numYrs.toFixed(0)} year${numMos == 12 ? "" : "s"} (${datesStr})`
+      : `${numYrs.toFixed(1)} years (${numMos} mos, ${datesStr})`
   const [ percentStr, typeStr ] = percent >= 0 ? [ percent.toFixed(1), "increase" ] : [ (-percent).toFixed(1), "decrease" ]
   return `${yrsMsg}: ${first.v.toFixed(0)} → ${last.v.toFixed(0)} (${ratio.toFixed(1)}x), ${percentStr}% avg annual ${typeStr}`
 }
@@ -307,13 +307,13 @@ export default function App({ data }: { data: Row[] }) {
         const rename: {[k: string]: string} = {}
         rename[`${yAxis}_sum`] = yAxis
         const series = (
-            grouped
-              .groupby(['m'])
-              .col([yAxis])
-              .sum()
-              .rename(rename)
-              .setIndex({ column: 'm', drop: true })
-              .sortIndex()[yAxis] as Series
+          grouped
+            .groupby(['m'])
+            .col([yAxis])
+            .sum()
+            .rename(rename)
+            .setIndex({ column: 'm', drop: true })
+            .sortIndex()[yAxis] as Series
         )
         // print("pre-roll", series)
         return rollingAvgs.map(n => {
@@ -616,7 +616,7 @@ export default function App({ data }: { data: Row[] }) {
             <h3 id={"map"}>Map: Stations + Common Destinations</h3>
             <p>Tap a station to see where rides originating there go:</p>
             <iframe src={"/stations"} className={css.map} />
-                        (<A href={"/stations"}>Full screen version</A>)
+            (<A href={"/stations"}>Full screen version</A>)
             <hr />
             <h3 id="qc">🚧 Data-quality issues 🚧</h3>
             {MD({ content: `
@@ -628,9 +628,9 @@ Several things changed in February 2021 (presumably as part of [the Lyft acquisi
 - The "User Type" values changed ("Annual" → "member", "Daily" → "casual"); I'm using the former/old values here, they seem equivalent.
                     ` })}
             <div className={css.footer}>
-                          Code: <GitHub repo={"neighbor-ryan/ctbk.dev"} />
-                          Data: <S3 href={"https://s3.amazonaws.com/ctbk/index.html"} title={"Browse s3://ctbk"} />
-                          Author: <Bluesky profile={"runsascoded.com"} />
+              Code: <GitHub repo={"neighbor-ryan/ctbk.dev"} />
+              Data: <S3 href={"https://s3.amazonaws.com/ctbk/index.html"} title={"Browse s3://ctbk"} />
+              Author: <Bluesky profile={"runsascoded.com"} />
             </div>
           </div>
         </div>
