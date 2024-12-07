@@ -23,7 +23,8 @@ jobs:
     uses: ./.github/workflows/step.yml
     with:
       name: Join regions, convert to Parquet
-      run: ctbk --s3 normalized create --dask
+      # No Dask mode, to avoid: Column assignment doesn't support type <class 'pandas.core.arrays.categorical.Categorical'> at normalized.py:140
+      run: ctbk --s3 normalized create
     secrets: inherit
   meta_hist-names:
     needs: normalized
