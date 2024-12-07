@@ -15,6 +15,7 @@ class YmrgtbCdJson(MonthAggTable):
 
     def reduce(self, mapped_dfs: list[DataFrame]) -> DataFrame:
         df = self.dpd.concat(mapped_dfs)
+        sort_cols = ['Year', 'Month', 'Region', 'User Type', 'Rideable Type', 'Gender']
         ymr_json = (
             df
             .assign(**{
@@ -28,8 +29,10 @@ class YmrgtbCdJson(MonthAggTable):
                 'Start Year': 'Year',
                 'Start Month': 'Month',
             })
+            .sort_values(sort_cols)
         )
-        return ymr_json
+        cols = list(sorted(list(set(ymr_json.columns) - set(sort_cols))))
+        return ymr_json[sort_cols + cols]
 
 
 if __name__ == '__main__':
