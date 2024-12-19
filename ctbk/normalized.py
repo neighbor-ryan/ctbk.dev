@@ -156,6 +156,8 @@ def normalize_fields(df: DataFrame, src, region: Region) -> DataFrame:
         categories=['Subscriber', 'Customer'],
         ordered=True,
     )
+    df['Start Station ID'] = df['Start Station ID'].str.replace(r'^(\d+)\.0$', r'\1', regex=True)
+    df['End Station ID'] = df['End Station ID'].str.replace(r'^(\d+)\.0$', r'\1', regex=True)
     df = add_region(df, src=src, region=region)
     df = df.astype({ k: v for k, v in dtypes.items() if k in df })
 
