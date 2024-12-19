@@ -18,7 +18,7 @@ def get_regions(ym: Monthy):
 
 
 def region(fn):
-    @option('-r', '--region', type=Choice(REGIONS))
+    @option('-r', '--region', type=Choice(REGIONS), help=f"Region to process ({', '.join(REGIONS)}); default: both/all. \"JC\" actually means \"NJ\" (i.e. Jersey City and Hoboken).")
     @wraps(fn)
     def _fn(*args, region=None, **kwargs):
         regions = [region] if region else REGIONS
