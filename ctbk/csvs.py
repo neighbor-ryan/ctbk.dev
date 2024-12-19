@@ -5,7 +5,7 @@ from abc import ABC
 from os.path import basename, join
 from shutil import copyfileobj, move
 from tempfile import TemporaryDirectory
-from typing import Optional, Union, Iterator, IO, Tuple
+from typing import Optional, Union, Iterator, IO, Tuple, Literal
 from zipfile import ZipFile, BadZipFile
 
 import dask.dataframe as dd
@@ -27,13 +27,22 @@ from ctbk.zips import TripdataZips, TripdataZip
 
 DIR = f'{BKT}/csvs'
 
+NameType = Literal[1, 11, 2, 22, None]
+
 
 class ReadsTripdataZip(Task, ABC):
-    def __init__(self, ym, region, **kwargs):
+    def __init__(
+        self,
+        ym: YM,
+        region: Region,
+        name_type: NameType = None,
+        **kwargs,
+    ):
         if region not in REGIONS:
             raise ValueError(f"Unrecognized region: {region}")
-        self.ym = YM(ym)
+        self.ym = ym
         self.region = region
+        self.name_type = name_type
         super().__init__(**kwargs)
 
     @cached_property
@@ -182,6 +191,7 @@ class TripdataCsv(ReadsTripdataZip, Table):
             if zip_yym < 2024:
                 dir0 = f'{zip_yym}-citibike-tripdata'
                 if zip_yym >= 2020:
+                    # 2020-2023 have per-month Zips nested inside the year Zip
                     inner_zip_name = f'{dir0}/{ym}-citibike-tripdata.zip'
                     with z.open(inner_zip_name, 'r') as inner_zip_fd:
                         inner_zip = ZipFile(inner_zip_fd)
@@ -194,8 +204,50 @@ class TripdataCsv(ReadsTripdataZip, Table):
                     month = ym.m
                     month_name = calendar.month_name[month]
                     dir1 = f'{month}_{month_name}'
-                    prefix = f'{dir0}/{dir1}/{ym}-citibike-tripdata{".csv" if ym.y == 2017 else ""}_'
-                    csvs = list(sorted([ f for f in names if f.startswith(prefix) and f.endswith('.csv') ]))
+                    # "Type 1" name patterns:
+                    # ```
+                    # $ uzl $z18 | ew csv | rv MACOS | snk2 -t_ | snk3 -st_ | snk2 -st/ | last
+                    # …
+                    # 2018-citibike-tripdata/3_March/201803-citibike-tripdata_1.csv
+                    # 2018-citibike-tripdata/4_April/201804-citibike-tripdata_1.csv
+                    # 2018-citibike-tripdata/4_April/201804-citibike-tripdata_2.csv
+                    # …
+                    # ```
+                    # In 2017, there's an extra ".csv" before the "_<N>" suffix:
+                    # ```
+                    # $ uzl $z17 | ew csv | rv MACOS | snk3 -st_ | snk2 -st/ | last
+                    # …
+                    # 2017-citibike-tripdata/3_March/201703-citibike-tripdata.csv_1.csv
+                    # 2017-citibike-tripdata/4_April/201704-citibike-tripdata.csv_1.csv
+                    # 2017-citibike-tripdata/4_April/201704-citibike-tripdata.csv_2.csv
+                    # …
+                    # ```
+                    prefix1 = f'{dir0}/{dir1}/{ym}-citibike-tripdata{".csv" if ym.y == 2017 else ""}_'
+                    csvs1 = list(sorted([ f for f in names if f.startswith(prefix1) and f.endswith('.csv') ]))
+
+                    # "Type 2" name patterns:
+                    # ```
+                    # 2013-citibike-tripdata/201306-citibike-tripdata.csv
+                    # 2018-citibike-tripdata/201801-citibike-tripdata.csv
+                    # ```
+                    name2 = f'{dir0}/{ym}-citibike-tripdata.csv'
+                    csvs2 = list(sorted([ f for f in names if f == name2 ]))
+
+                    if not csvs1 and not csvs2:
+                        raise RuntimeError(f"Failed to find CSVs in {src.url} with name patterns: {prefix1}*.csv, {name2}")
+                    pattern = self.name_type
+                    if pattern is None or pattern == 1:
+                        csvs = csvs1 if csvs1 else csvs2
+                    elif pattern == 2:
+                        csvs = csvs2 if csvs2 else csvs1
+                    elif pattern == 11:
+                        if csvs2 and not csvs1:
+                            raise RuntimeError(f'Expected "type 1" CSV name patterns ({prefix1}*.csv), but only found {csvs2}')
+                        csvs = csvs1
+                    elif pattern == 22:
+                        if csvs1 and not csvs2:
+                            raise RuntimeError(f'Expected "type 2" CSV name pattern ({name2}), but only found {csvs1}')
+                        csvs = csvs2
                     err(f"{ym}: loaded CSVs from annual zip: {csvs}")
             else:
                 csvs = list(sorted([ f for f in names if f.endswith('.csv') and not f.startswith('_') ]))
@@ -275,16 +327,23 @@ class TripdataCsvs(HasRootCLI):
     DIR = DIR
     CHILD_CLS = TripdataCsv
 
-    def __init__(self, yms: list[YM], regions: Optional[list[str]] = None, **kwargs):
+    def __init__(
+        self,
+        yms: list[YM],
+        regions: Optional[list[str]] = None,
+        name_type: NameType = None,
+        **kwargs,
+    ):
         self.src = TripdataZips(yms=yms, regions=regions, roots=kwargs.get('roots'))
         self.yms = yms
         self.regions = regions or REGIONS
+        self.name_type = name_type
         super().__init__(**kwargs)
 
     @cached_property
     def children(self) -> list[TripdataCsv]:
         return [
-            TripdataCsv(ym=u.ym, region=u.region, **self.kwargs)
+            TripdataCsv(ym=u.ym, region=u.region, name_type=self.name_type, **self.kwargs)
             for u in self.src.children
         ]
 
@@ -318,7 +377,11 @@ class TripdataCsvs(HasRootCLI):
 
 cli = TripdataCsvs.cli(
     help=f"Extract CSVs from \"tripdata\" .zip files. Writes to <root>/{DIR}.",
-    cmd_decos=[dates, region],
+    cmd_decos=[
+        dates,
+        region,
+        option('-t', '--name-type', type=int, help='1: prefer type 1, 2: prefer type 2, 11: require type 1, 22: require type 2'),
+    ],
 )
 
 @cli.command('sort')
