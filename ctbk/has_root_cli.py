@@ -4,11 +4,11 @@ from typing import Optional
 
 import click
 import utz
-from click import argument, option, pass_context, Choice, Group
-from utz import err, process, decos, YM, DefaultDict
+from click import option, pass_context, Group
+from utz import decos, YM, DefaultDict
 from utz.case import dash_case
 
-from ctbk.cli.base import ctbk, dask, StableCommandOrder
+from ctbk.cli.base import ctbk, StableCommandOrder
 from ctbk.has_root import HasRoot
 from ctbk.task import Task
 from ctbk.tasks import Tasks
@@ -63,7 +63,6 @@ class HasRootCLI(Tasks, HasRoot, ABC):
         group_cls: type[click.Group] = None,
         urls=True,
         create=True,
-        dag=True,
     ):
         cmd_decos = cmd_decos or []
 
@@ -86,33 +85,10 @@ class HasRootCLI(Tasks, HasRoot, ABC):
         if create:
             @cmd(help="Create selected datasets")
             @decos(create_decos or [])
-            @dask
-            def create(ctx, dask, **kwargs):
+            def create(ctx, **kwargs):
                 o = ctx.obj
-                tasks = cls(dask=dask, **o, **kwargs)
-                created = tasks.create(read=None)
-                if dask:
-                    created.compute()
-
-        if dag:
-            @cmd(help="Save and `open` a graph visualization of the datasets to be computed")
-            @option('-O', '--no-open', is_flag=True)
-            @option('-f', '--format', type=Choice(['png', 'svg']))
-            @argument('filename', required=False)
-            def dag(ctx, no_open, format, filename, **kwargs):
-                o = ctx.obj
-                tasks = cls(dask=True, **o, **kwargs)
-                result = tasks.create(read=None)
-                start = o['start']
-                end = o['end']
-                if filename and format and not filename.endswith(f'.{format}'):
-                    raise ValueError(f"-f/--format {format} doesn't match filename {filename}")
-                format = format or 'png'
-                filename = filename or f'{cls.name()}_{start}-{end}_dag.{format}'
-                err(f"Writing to {filename}")
-                result.visualize(filename)
-                if not no_open:
-                    process.run('open', filename)
+                tasks = cls(**o, **kwargs)
+                tasks.create(read=None)
 
     @classmethod
     def cli(

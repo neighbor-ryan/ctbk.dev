@@ -1,8 +1,7 @@
 import json
-from typing import Union
+from typing import Union, Type
 
 import pandas as pd
-from dask.delayed import Delayed
 from utz import Unset
 from utz.ym import Monthy
 
@@ -51,7 +50,7 @@ class StationPairsJson(MonthTable):
             write_kwargs=self._write,
         )
 
-    def checkpoint(self, read: Union[None, Read] = Unset) -> Union[None, Delayed, DataFrame]:
+    def checkpoint(self, read: Read | None | Type[Unset] = Unset) -> DataFrame | None:
         return super().checkpoint(read)
 
     def _write(self, df):

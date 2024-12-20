@@ -112,5 +112,4 @@ TripdataZips.cli(
     help="Read .csv.zip files from s3://tripdata",
     cmd_decos=[dates, region],
     create=False,
-    dag=False,
 )

@@ -2,8 +2,6 @@ aiobotocore==2.15.2
 boto3==1.35.36
 botocore==1.35.36
 click==8.1.7
-dask==2024.10.0
-dask-expr==1.1.16
 fsspec==2024.9.0
 geopy==2.4.1
 graphviz==0.20.3

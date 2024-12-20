@@ -4,8 +4,8 @@ from typing import Union
 import numpy as np
 import pandas as pd
 from numpy import nan
-from pandas import Series
-from utz import cached_property, err
+from pandas import Series, DataFrame
+from utz import cached_property, err, sxs
 from utz.ym import Monthy
 
 from ctbk.aggregated import AggregatedMonth, DIR
@@ -13,7 +13,6 @@ from ctbk.has_root_cli import HasRootCLI, dates
 from ctbk.month_table import MonthTable
 from ctbk.stations.meta_hists import StationMetaHist
 from ctbk.tasks import MonthTables
-from ctbk.util.df import DataFrame, apply, sxs, meta
 
 
 def row_sketch(a):
@@ -65,24 +64,9 @@ def mode_sketch(row_hist: DataFrame, thresh: float = 0.5, sum_key: str = 'count'
             .drop_duplicates(subset=idx_name)
             .set_index(idx_name)
         )
-        annotated = sxs(annotated, row_sketches).drop(columns=[sum_key]).sort_values('mode_pct')
-        return annotated
+        return sxs(annotated, row_sketches).drop(columns=[sum_key]).sort_values('mode_pct')
 
-    return apply(
-        annotate,
-        meta={
-            'Station Name': str,
-            'mode_count': int,
-            'second': float,
-            'restsum': int,
-            'total': int,
-            'counts': object,
-            'first/second': float,
-            'mode_pct': float,
-            'num': int,
-        }
-    )(counts)
-
+    return counts.apply(annotate)
 
 def transform(df: DataFrame) -> DataFrame:
     df = df.set_index('Station ID')
@@ -142,30 +126,25 @@ class ModesMonthJson(MonthTable):
     @cached_property
     def idx2id(self):
         stations = self.df().reset_index()
-        if self.dask:
-            stations = stations.rename(columns={'index': 'id'})
         stations.index.name = 'idx'
         return stations.id
 
     @cached_property
     def id2idx(self):
         ids = self.idx2id.reset_index()
-        if self.dask:
-            ids = ids.rename(columns={ 'index': 'idx' })
         id2idx = ids.set_index('id').idx
         return id2idx
 
     def _df(self) -> DataFrame:
-        dask = self.dask
         smh_in = StationMetaHist(self.ym, 'in', **self.kwargs)
         df_in = smh_in.df().set_index('id')
         name_groups = df_in.groupby('id')
-        names = name_groups.apply(self.compute_mode, **meta('name', dask)).rename('name')
+        names = name_groups.apply(self.compute_mode).rename('name')
 
         smh_il = StationMetaHist(self.ym, 'il', **self.kwargs)
         df_il = smh_il.df().set_index('id')
         ll_groups = df_il.groupby('id')
-        lls = ll_groups.apply(self.ll_mean, **meta({ 'lat': float, 'lng': float }, dask))
+        lls = ll_groups.apply(self.ll_mean)
         stations = sxs(names, lls).reset_index()
         stations.index.name = 'idx'
 

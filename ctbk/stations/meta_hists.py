@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from functools import wraps
 from typing import Union
 
+import pandas as pd
 from utz.ym import Monthy
 
 from ctbk.has_root_cli import HasRootCLI, dates
@@ -50,7 +51,7 @@ class StationMetaHist(MonthTable):
         super().__init__(ym, **kwargs)
 
     @property
-    def url(self):
+    def url(self) -> str:
         return f'{self.dir}/{self.group_by_keys.label}_{self.ym}.parquet'
 
     def _df(self) -> DataFrame:
@@ -121,7 +122,7 @@ class StationMetaHist(MonthTable):
         ends = starts_ends_hist(starts=False)
 
         # Combine the `starts` and `ends` hists
-        station_entries = self.concat([starts, ends])
+        station_entries = pd.concat([starts, ends])
         cols = station_entries.columns.tolist()[:-1]
         stations_meta_hist = (
             station_entries

@@ -1,7 +1,5 @@
 from typing import Optional
 
-import dask.dataframe as dd
-import pandas as pd
 from utz import DefaultDict
 
 from ctbk.util.read import Read, Disk
@@ -76,7 +74,6 @@ class HasRoot:
         roots: Optional[DefaultDict[str]] = None,
         reads: Optional[DefaultDict[Read]] = None,
         writes: Optional[DefaultDict[Write]] = None,
-        dask: bool = False,
         **extra,
     ):
         names = self.NAMES or []
@@ -95,18 +92,10 @@ class HasRoot:
         if not self.DIR:
             raise RuntimeError(f"{self}.DIR not defined")
         self.dir = f'{root}/{self.DIR}' if root else self.DIR
-        self.dask = dask
         self.extra = extra
         super().__init__()
 
     @property
     def kwargs(self):
         """Useful for kwarg-forwarding in constructors."""
-        return dict(roots=self.roots, reads=self.reads, writes=self.writes, dask=self.dask)
-
-    @property
-    def dpd(self):
-        return dd if self.dask else pd
-
-    def concat(self, *args, **kwargs):
-        return self.dpd.concat(*args, **kwargs)
+        return dict(roots=self.roots, reads=self.reads, writes=self.writes)

@@ -16,63 +16,63 @@ jobs:
     uses: ./.github/workflows/step.yml
     with:
       name: Unzip+Cache CSVs
-      run: ctbk --s3 csv create --dask
+      run: ctbk --s3 csv create
     secrets: inherit
   normalized:
     needs: csvs
     uses: ./.github/workflows/step.yml
     with:
       name: Join regions, convert to Parquet
-      run: ctbk --s3 normalized create --dask
+      run: ctbk --s3 normalized create
     secrets: inherit
   meta_hist-names:
     needs: normalized
     uses: ./.github/workflows/step.yml
     with:
       name: Compute station name histograms
-      run: ctbk --s3 station-meta-hist create --dask -gin
+      run: ctbk --s3 station-meta-hist create -gin
     secrets: inherit
   meta_hist-latlngs:
     needs: normalized
     uses: ./.github/workflows/step.yml
     with:
       name: Compute station lat/lng histograms
-      run: ctbk --s3 station-meta-hist create --dask -gil
+      run: ctbk --s3 station-meta-hist create -gil
     secrets: inherit
   group_counts-start:
     needs: normalized
     uses: ./.github/workflows/step.yml
     with:
       name: Aggregate counts by start station
-      run: ctbk --s3 aggregated create --dask -gs -ac
+      run: ctbk --s3 aggregated create -gs -ac
     secrets: inherit
   group_counts-year-month-region-gender-type-bike-counts-durations:
     needs: normalized
     uses: ./.github/workflows/step.yml
     with:
       name: Aggregate counts by (month, region, gender, user type, rideable type)
-      run: ctbk --s3 aggregated  create --dask -gymrgtb -acd
+      run: ctbk --s3 aggregated  create -gymrgtb -acd
     secrets: inherit
   group_counts-start-end:
     needs: normalized
     uses: ./.github/workflows/step.yml
     with:
       name: Aggregate counts by station-pair
-      run: ctbk --s3 aggregated create --dask -gse -ac
+      run: ctbk --s3 aggregated create -gse -ac
     secrets: inherit
   modes:
     needs: [meta_hist-names, meta_hist-latlngs, group_counts-start]
     uses: ./.github/workflows/step.yml
     with:
       name: Compute canonical station names, latlngs
-      run: ctbk --s3 station-mode create --dask
+      run: ctbk --s3 station-mode create
     secrets: inherit
   station_pair_jsons:
     needs: [modes, group_counts-start-end]
     uses: ./.github/workflows/step.yml
     with:
       name: Build station-pair count JSONs
-      run: ctbk --s3 station-pair-json create --dask
+      run: ctbk --s3 station-pair-json create
     secrets: inherit
   ymrgtb_cd_json:
     name: Write `ymrgtb_cd.json` used by www

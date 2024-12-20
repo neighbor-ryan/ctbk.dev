@@ -1,8 +1,9 @@
 #!/usr/bin/env python
+import pandas as pd
+from pandas import DataFrame
 from utz.ym import Monthy
 
 from ctbk.month_agg_table import MonthAggTable
-from ctbk.util.df import meta, DataFrame
 
 
 class YmrgtbCdJson(MonthAggTable):
@@ -14,16 +15,13 @@ class YmrgtbCdJson(MonthAggTable):
         return f'{self.dir}/ymrgtb_cd_{ym}.parquet'
 
     def reduce(self, mapped_dfs: list[DataFrame]) -> DataFrame:
-        df = self.dpd.concat(mapped_dfs)
+        df = pd.concat(mapped_dfs)
         sort_cols = ['Year', 'Month', 'Region', 'User Type', 'Rideable Type', 'Gender']
         ymr_json = (
             df
             .assign(**{
                 'Region': df.Region.replace('HB', 'HOB'),
-                'User Type': df['User Type'].apply(
-                    lambda u: {'Customer': 'Daily', 'Subscriber': 'Annual'}[u],
-                    **meta('User Type', self.dask),
-                )
+                'User Type': df['User Type'].apply(lambda u: {'Customer': 'Daily', 'Subscriber': 'Annual'}[u])
             })
             .rename(columns={
                 'Start Year': 'Year',

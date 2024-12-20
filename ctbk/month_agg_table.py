@@ -1,13 +1,11 @@
 from abc import ABC
 from os.path import exists
 
-import dask.dataframe as dd
 import pandas as pd
 from click import command, argument, option
-from utz import err, DefaultDict
+from utz import err
 from utz.ym import Monthy, YM
 
-from ctbk.cli.base import dask, load_roots
 from ctbk.has_root_cli import dates
 from ctbk.util import S3
 from ctbk.util.df import DataFrame
@@ -23,7 +21,6 @@ class MonthAggTable(ABC):
         yms: list[YM],
         root: str,
         overwrite: bool = False,
-        dask: bool = False,
         out: str | None = None,
     ):
         self.root = root or self.ROOT
@@ -32,21 +29,20 @@ class MonthAggTable(ABC):
         self.src = self.SRC
         self.dir = f'{self.root}/{self.src}'
         self.overwrite = overwrite
-        self.dask = dask
         self.out = out or self.OUT
-        self.dpd = dd if dask else pd
         self.yms = yms
 
     def url(self, ym: Monthy) -> str:
         return f'{self.dir}/{ym}.parquet'
 
-    def read(self, url):
-        return self.dpd.read_parquet(url)
+    @staticmethod
+    def read(url: str):
+        return pd.read_parquet(url)
 
     def load(self, ym: Monthy) -> DataFrame:
         url = self.url(ym)
         try:
-            df = self.dpd.read_parquet(url)
+            df = pd.read_parquet(url)
         except FileNotFoundError:
             raise FileNotFoundError(url)
         return df
@@ -62,12 +58,9 @@ class MonthAggTable(ABC):
         return df
 
     def reduce(self, mapped_dfs) -> DataFrame:
-        return self.dpd.concat(mapped_dfs)
+        return pd.concat(mapped_dfs)
 
     def write(self, df: DataFrame):
-        if isinstance(df, dd.DataFrame):
-            df = df.compute()
-
         self.write_df(df)
 
     def write_df(self, df: pd.DataFrame):
@@ -95,7 +88,6 @@ class MonthAggTable(ABC):
         @option('-f', '--overwrite', is_flag=True)
         @argument('out', required=False)
         @dates
-        @dask
         def _main(*args, **kwargs):
             task = cls(*args, **kwargs)
             task.run()

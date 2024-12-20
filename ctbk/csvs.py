@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 import calendar
 import gzip
 from abc import ABC
@@ -8,10 +7,8 @@ from tempfile import TemporaryDirectory
 from typing import Optional, Union, Iterator, IO, Tuple, Literal
 from zipfile import ZipFile, BadZipFile
 
-import dask.dataframe as dd
 import pandas as pd
 from click import argument, option
-from dask.delayed import delayed, Delayed
 from utz import cached_property, Unset, err, singleton
 from utz.gzip import DeterministicGzipFile, deterministic_gzip_open
 from utz.ym import YM
@@ -168,13 +165,10 @@ class TripdataCsv(ReadsTripdataZip, Table):
                     )
                 )
 
-    def _create(self, read: Union[None, Read] = Unset) -> Union[None, Delayed]:
+    def _create(self, read: Union[None, Read] = Unset) -> None:
         read = self.read if read is Unset else read
         if read is None:
-            if self.dask:
-                return delayed(self.extract_csv_from_zip)()
-            else:
-                self.extract_csv_from_zip()
+            self.extract_csv_from_zip()
         else:
             return self.checkpoint(read=read)
 
@@ -285,16 +279,8 @@ class TripdataCsv(ReadsTripdataZip, Table):
                 return pd.read_csv(i, **READ_KWARGS, nrows=0)
 
     def _df(self) -> DataFrame:
-        if self.dask:
-            def create_and_read(created):
-                return pd.read_csv(self.url, **READ_KWARGS)
-
-            meta = self.meta()
-            df = dd.from_delayed([ delayed(create_and_read)(self._create(read=None)) ], meta=meta)
-        else:
-            self._create(read=None)
-            df = pd.read_csv(self.url, **READ_KWARGS)
-        return df
+        self._create(read=None)
+        return pd.read_csv(self.url, **READ_KWARGS)
 
     @classmethod
     def infer_sort_cols(cls, df) -> list[str]:
@@ -317,10 +303,7 @@ class TripdataCsv(ReadsTripdataZip, Table):
         return dict(fmt='csv', read_kwargs=dict(dtype=str), write_kwargs=dict(index=False))
 
     def _read(self) -> DataFrame:
-        if self.dask:
-            return dd.read_csv(self.url, dtype=str, blocksize=None)
-        else:
-            return pd.read_csv(self.url, **READ_KWARGS)
+        return pd.read_csv(self.url, **READ_KWARGS)
 
 
 class TripdataCsvs(HasRootCLI):
@@ -360,19 +343,12 @@ class TripdataCsvs(HasRootCLI):
 
     def m2df(self):
         return {
-            m: self.concat([
+            m: pd.concat([
                 csv.df()
                 for r, csv in r2csv.items()
             ])
             for m, r2csv in self.m2r2csv.items()
         }
-
-    @cached_property
-    def df(self):
-        if self.dask:
-            return self.concat([ child.df() for child in self.children ])
-        else:
-            raise NotImplementedError("Unified DataFrame is large, you probably want .dd instead (.dd.compute() if you must)")
 
 
 cli = TripdataCsvs.cli(

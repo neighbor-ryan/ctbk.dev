@@ -11,8 +11,6 @@ from ctbk.util.constants import S3
 from ctbk.util.read import Disk
 from ctbk.util.write import IfAbsent
 
-dask = option('--dask', is_flag=True)
-
 
 class StableCommandOrder(click.Group):
     def list_commands(self, ctx: Context) -> List[str]:

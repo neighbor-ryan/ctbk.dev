@@ -4,7 +4,7 @@ CLI for generating [ctbk.dev] datasets (derived from Citi Bike public data in [`
 - [Data flow](#data-flow)
 - [Installation](#installation)
 - [CLI](#cli)
-  - [Subcommands: `urls`, `create`, `dag`](#subcommands)
+  - [Subcommands: `urls`, `create`](#subcommands)
   - [Examples](#examples)
 - [GitHub Actions](#ghas)
 
@@ -204,7 +204,6 @@ Options:
 Commands:
   urls    Print URLs for selected datasets
   create  Create selected datasets
-  dag     Save and `open` a graph visualization of the datasets to be...
 ```
 </details>
 
@@ -224,7 +223,6 @@ Options:
 Commands:
   urls    Print URLs for selected datasets
   create  Create selected datasets
-  dag     Save and `open` a graph visualization of the datasets to be...
 ```
 </details>
 
@@ -250,7 +248,6 @@ Options:
 Commands:
   urls    Print URLs for selected datasets
   create  Create selected datasets
-  dag     Save and `open` a graph visualization of the datasets to be...
 ```
 </details>
 
@@ -274,7 +271,6 @@ Options:
 Commands:
   urls    Print URLs for selected datasets
   create  Create selected datasets
-  dag     Save and `open` a graph visualization of the datasets to be...
 ```
 </details>
 
@@ -294,7 +290,6 @@ Options:
 Commands:
   urls    Print URLs for selected datasets
   create  Create selected datasets
-  dag     Save and `open` a graph visualization of the datasets to be...
 ```
 </details>
 
@@ -314,7 +309,6 @@ Options:
 Commands:
   urls    Print URLs for selected datasets
   create  Create selected datasets
-  dag     Save and `open` a graph visualization of the datasets to be...
 ```
 </details>
 
@@ -335,16 +329,14 @@ Options:
 Commands:
   urls    Print URLs for selected datasets
   create  Create selected datasets
-  dag     Save and `open` a graph visualization of the datasets to be...
 ```
 </details>
 
-### Subcommands: `urls`, `create`, `dag` <a id="subcommands"></a>
+### Subcommands: `urls`, `create` <a id="subcommands"></a>
 
 Each of the `ctbk` commands above supports 3 further subcommands:
 - `urls`: print the URLs that would be read from or written to
 - `create`: compute and save the relevant data to those URLs (optionally no-op'ing if already present, overwriting, or failing if not present)
-- `dag`: rudimentary DAG visualization of computation (powered by [Dask], see [below](#dask))
 
 ### Examples <a id="examples"></a>
 
@@ -397,61 +389,9 @@ stderr messages about `Rideable Type` not being found are due to the chosen mont
 
 </details>
 
-Parallel computation with `--dask`:
-<details><summary><code>ctbk --s3 -tagg=tmproot agg -d202210-2023 -gymr -ac create --dask</code></summary>
-
-```
-Writing tmproot/ctbk/aggregated/ymr_c_202210.parquet
-Reading s3://ctbk/normalized/202210.parquet
-Writing tmproot/ctbk/aggregated/ymr_c_202211.parquet
-Reading s3://ctbk/normalized/202211.parquet
-Writing tmproot/ctbk/aggregated/ymr_c_202212.parquet
-Reading s3://ctbk/normalized/202212.parquet
-```
-
-Upstream data is read from S3 (`--s3` flag):
-- [`zips`] from [`s3://tripdata`]
-- [`csvs`] from [`s3://ctbk/csvs`]
-- [`normalized`] from [`s3://ctbk/normalized`]
-
-Output [`aggregated`] data is written under local folder `tmproot/` (`-tagg=tmproot`):
-
-```bash
-tree -sh tmproot
-# [  96]  tmproot
-# └── [ 128]  ctbk
-#     ├── [ 160]  aggregated
-#     │   ├── [4.2K]  ymr_c_202210.parquet
-#     │   ├── [4.2K]  ymr_c_202211.parquet
-#     │   └── [4.2K]  ymr_c_202212.parquet
-#     └── [  96]  normalized
-#         └── [ 30M]  202101.parquet
-#
-# 4 directories, 4 files
-```
-
-Inspect the generated `ymr_c_202210.parquet` file using [`parquet2json`]:
-```bash
-f=tmproot/ctbk/aggregated/ymr_c_202210.parquet
-parquet2json $f rowcount
-# 3
-parquet2json $f schema
-# message schema {
-#   OPTIONAL BYTE_ARRAY Region (STRING);
-#   OPTIONAL INT64 Start Year;
-#   OPTIONAL INT64 Start Month;
-#   OPTIONAL INT64 Count;
-# }
-parquet2json $f cat
-# {"Region":"HB","Start Year":2022,"Start Month":10,"Count":40520}
-# {"Region":"JC","Start Year":2022,"Start Month":10,"Count":48681}
-# {"Region":"NYC","Start Year":2022,"Start Month":10,"Count":3015015}
-```
-</details>
-
 Generate all the data used by [ctbk.dev] in a local `s3/ctbk` directory (mirroring [`s3://ctbk`]):
 
-<details><summary><code>ctbk spj create --dask</code></summary>
+<details><summary><code>ctbk spj create</code></summary>
 
 - `spj` stands for [`station-pair-json`] (the final derived data product in [the diagram above](#data-flow))
 - `create`ing `spj` requires `create`ing all predecessor datasets
@@ -466,44 +406,10 @@ Generate all the data used by [ctbk.dev] in a local `s3/ctbk` directory (mirrori
 
 ⚠️ takes O(hours), streams ≈7GB of [`.csv.zip`s](#zips) from [`s3://tripdata`], writes ≈12GiB under `s3/ctbk/` locally.
 
-#### `dag`: DAG visualization of a given computation
-[Dask] also powers a rudimentary DAG visualization for each stage, e.g.:
-
-4 months of [`aggregated`] data (by year, month, and region, counting rides), reading from existing upstream [`normalized`] data in S3:
-<details><summary><code>ctbk --s3 -tagg=tmproot agg -d202210- -gymr -ac dag</code></summary>
-
-![aggregated_dag](https://user-images.githubusercontent.com/465045/221421244-9d6c0289-36de-482a-9b32-892f86f32b7a.png)
-
-This vaguely shows a computation that:
-- produces 4 months of [aggregated](#aggregated) `ymr_c_YYYYMM.parquet` files
-  - grouped by year (`y`), month (`m`), and region (`r`)
-  - counting (`c`) rides
-- written to a local folder `s3/ctbk/aggregated/`
-  - `-tagg=s3` is short for `--root aggregated=s3`
-  - `s3` as "root" URL prefix results in writing to a local relative path `s3/ctbk/…`
-- reads input [`NormalizedMonth`] data on S3 ([`s3://ctbk/normalized`])
-  - `--s3` is short for `-ts3` or `--root s3`, meaning datasets besides [`aggregated`] are read from S3
-
-</details>
-
-5 months of [`normalized`] data, reading [`zips`] from [`s3://tripdata`] and writing intermediate [`csvs`] (and final [`normalized`] outputs) under local folder `tmproot/ctbk/`:
-
-<details><summary><code>ctbk -ttmproot n -d2022-202206 dag -fsvg</code></summary>
-
-Convert the initial SVG output to PNG:
-```bash
-svg2png -h4000 normalized_202201-202206_dag.{svg,png}
-```
-
-![normalized_202201-202206_dag medium](https://user-images.githubusercontent.com/465045/221422471-72c694a2-5685-4642-a555-73c466e812f6.png)
-</details>
-
 ### Abbreviated command names
-Abbreviations for each subcommand are supported, e.g.:
+Abbreviations for each subcommand are supported, e.g. `n` for `normalized`:
 ```bash
-# Save and open a graph visualization of the computations involved in creating
-# `normalized` (`n`) datasets for the months from 202201 to the present
-ctbk n -d2022- dag
+ctbk n -d2022- urls
 ```
 
 See [`HasRoot`](./has_root.py) for more info about top-level `-r/--read`, `-w/--write`, and `-t/--root` parameters.
@@ -541,7 +447,6 @@ The code for the site is under [../www](../www).
 [@www]: https://github.com/neighbor-ryan/ctbk.dev/tree/www
 [the www branch]: https://github.com/neighbor-ryan/ctbk.dev/tree/www
 [www GHA]: https://github.com/neighbor-ryan/ctbk.dev/actions/workflows/www.yml
-[Dask]: https://www.dask.org/
 
 [`zips`]: #zips
 [`TripdataZips`]: #zips

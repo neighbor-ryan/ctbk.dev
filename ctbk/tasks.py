@@ -1,9 +1,9 @@
 from abc import ABC
 from functools import cache
 
-from typing import Union
+from typing import Type
 
-from dask import delayed
+import pandas as pd
 from utz import cached_property, Unset
 from utz.ym import YM, Monthy
 
@@ -19,11 +19,9 @@ class Tasks(HasRoot, ABC):
     def children(self):
         raise NotImplementedError
 
-    def create(self, read: Union[None, Read] = Unset):
+    def create(self, read: Read | None | Type[Unset] = Unset):
         children = self.children
         creates = [ child.create(read=read) for child in children ]
-        if self.dask:
-            return delayed(lambda x: x)(creates)
 
 
 class MonthTasks(Tasks, ABC):
@@ -48,7 +46,6 @@ class MonthTables(MonthTasks, ABC):
 
     @cached_property
     def children(self) -> list[Table]:
-        # TODO: is this performing computations serially in Dask mode (when it should be delayed and later parallelized)?
         return [
             self.month(ym)
             for ym in self.yms
@@ -70,4 +67,4 @@ class MonthTables(MonthTasks, ABC):
 
     @cache
     def df(self):
-        return self.concat(self.dfs())
+        return pd.concat(self.dfs())

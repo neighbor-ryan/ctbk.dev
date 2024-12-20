@@ -1,27 +1,29 @@
 from abc import ABC
 from functools import cache
 from os.path import dirname, exists
-from typing import Union
+from typing import Union, Type
+
+import pandas as pd
+from pandas import DataFrame
 
 from ctbk.task import Task
-from ctbk.util.df import DataFrame, checkpoint_dd, checkpoint_df
+from ctbk.util.df import checkpoint
 from ctbk.util.read import Read
-from dask.delayed import Delayed
-from utz import cached_property, err, Unset
+from utz import err, Unset
 
 
 class Table(Task, ABC):
-    def create(self, read: Union[None, Read] = Unset) -> Union[None, DataFrame, Delayed]:
+    def create(self, read: Union[None, Read] = Unset) -> DataFrame | None:
         return super().create(read=read)
 
     def _df(self) -> DataFrame:
         raise NotImplementedError
 
-    def _create(self, read: Union[None, Read] = Unset) -> Union[None, Delayed, DataFrame]:
+    def _create(self, read: Union[None, Read] = Unset) -> DataFrame | None:
         return self.checkpoint(read=self.read if read is Unset else read)
 
     def _read(self) -> DataFrame:
-        return self.dpd.read_parquet(self.url)
+        return pd.read_parquet(self.url)
 
     @cache
     def df(self) -> DataFrame:
@@ -33,7 +35,7 @@ class Table(Task, ABC):
     def checkpoint_kwargs(self):
         return dict()
 
-    def checkpoint(self, read: Union[None, Read] = Unset) -> Union[None, Delayed, DataFrame]:
+    def checkpoint(self, read: Read | None | Type[Unset] = Unset) -> DataFrame | None:
         url = self.url
         parent = dirname(url)
         read = self.read if read is Unset else read
@@ -42,10 +44,7 @@ class Table(Task, ABC):
             self.fs.mkdirs(parent)
             rmdir = True
         try:
-            if self.dask:
-                df = checkpoint_dd(self._df(), url=url, read=read, **self.checkpoint_kwargs)
-            else:
-                df = checkpoint_df(self._df(), url=url, read=read, **self.checkpoint_kwargs)
+            df = checkpoint(self._df(), url=url, read=read, **self.checkpoint_kwargs)
             rmdir = False
             return df
         finally:

@@ -2,7 +2,6 @@ import re
 from re import sub
 from typing import Pattern
 
-import dask.dataframe as dd
 import pandas as pd
 from click import option
 from numpy import nan
@@ -166,9 +165,8 @@ def normalize_fields(df: DataFrame, src, region: Region) -> DataFrame:
 
 
 def add_region(df: DataFrame, src: str, region: Region) -> DataFrame:
-    meta = lambda k: dict(meta=(k, 'str')) if isinstance(df, dd.DataFrame) else dict()
-    df['Start Region'] = df['Start Station ID'].fillna(NONE).apply(get_region, src=src, file_region=region, **meta('Start Station ID'))
-    df['End Region'] = df['End Station ID'].fillna(NONE).apply(get_region, src=src, file_region=region, **meta('End Station ID'))
+    df['Start Region'] = df['Start Station ID'].fillna(NONE).apply(get_region, src=src, file_region=region)
+    df['End Region'] = df['End Station ID'].fillna(NONE).apply(get_region, src=src, file_region=region)
 
     sys_none_start = df['Start Region'].isin({NONE, 'SYS'})
     sys_none_end = df['End Region'].isin({NONE, 'SYS'})
@@ -181,7 +179,7 @@ def add_region(df: DataFrame, src: str, region: Region) -> DataFrame:
 
     def fill_ends(r):
         return r['Start Region'] if r['End Region'] == NONE else r['End Region']
-    df['End Region'] = df[['Start Region', 'End Region']].apply(fill_ends, axis=1, **meta(None))
+    df['End Region'] = df[['Start Region', 'End Region']].apply(fill_ends, axis=1)
     # no_end = df['End Region'] == NONE
     # df.loc[no_end, 'End Region'] = df.loc[no_end, 'Start Region']  # assume incomplete rides ended in the region they started in
     # err(f'Dropping {sys_none_counts.sum()} SYS/NONE records')
@@ -224,10 +222,7 @@ class NormalizedMonth(MonthTable):
                 df = df[~wrong_yms]
             return df
 
-        if self.dask:
-            df = df.map_partitions(fsck_ym, meta=df._meta)
-        else:
-            df = fsck_ym(df)
+        df = fsck_ym(df)
         sort_keys = ['Start Time', 'Stop Time']
         if 'Ride ID' in df:
             sort_keys.append('Ride ID')
@@ -240,7 +235,7 @@ class NormalizedMonth(MonthTable):
         return dict(write_kwargs=dict(index=False, engine=self.engine))
 
     def _df(self) -> DataFrame:
-        return self.concat([
+        return pd.concat([
             self.normalized_region(region)
             for region in get_regions(self.ym)
         ])

@@ -3,7 +3,6 @@ from shutil import copyfileobj
 from typing import Optional, Union
 from zipfile import ZipFile, ZIP_LZMA
 
-from dask import delayed
 from utz import cached_property, Unset
 from utz.ym import YM
 
@@ -36,27 +35,22 @@ class SampledZip(ReadsTripdataZip):
     def _create(self, read: Union[None, Read] = Unset) -> None:
         src = self.src
         src_create = src.create(read=read)
-        def make(src_create):
-            with src.fd('rb') as zin:
-                z_in = ZipFile(zin)
-                with self.fd('w') as f:
-                    z_out = ZipFile(f, 'w', compression=self.DEFAULT_COMPRESSION)
-                    names = z_in.namelist()
-                    print(f'{src.url}: zip names: {names}')
+        with src.fd('rb') as zin:
+            z_in = ZipFile(zin)
+            with self.fd('w') as f:
+                z_out = ZipFile(f, 'w', compression=self.DEFAULT_COMPRESSION)
+                names = z_in.namelist()
+                print(f'{src.url}: zip names: {names}')
 
-                    for name in names:
-                        with z_in.open(name, 'r') as i, z_out.open(name, 'w') as o:
-                            if name.endswith('.csv'):
-                                for lineno, line in enumerate(i):
-                                    o.write(line)
-                                    if lineno == self.nrows:
-                                        break
-                            else:
-                                copyfileobj(i, o)
-        if self.dask:
-            return delayed(make)(src_create, dask_key_name=f'SampledZip_{self.region}_{self.ym}')
-        else:
-            return make(src_create)
+                for name in names:
+                    with z_in.open(name, 'r') as i, z_out.open(name, 'w') as o:
+                        if name.endswith('.csv'):
+                            for lineno, line in enumerate(i):
+                                o.write(line)
+                                if lineno == self.nrows:
+                                    break
+                        else:
+                            copyfileobj(i, o)
 
 
 class SampledZips(HasRootCLI):
