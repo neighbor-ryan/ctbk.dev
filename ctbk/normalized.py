@@ -137,6 +137,7 @@ def normalize_fields(df: DataFrame, src, region: Region) -> DataFrame:
     if 'Gender' not in df:
         err(f'{src}: "Gender" column not found; setting to 0 ("unknown") for all rows')
         df['Gender'] = 0  # unknown
+        df['Gender'] = df['Gender'].astype('Int8')
     if 'Rideable Type' not in df:
         err(f'{src}: "Rideable Type" column not found; setting to "unknown" for all rows')
         df['Rideable Type'] = 'unknown'
