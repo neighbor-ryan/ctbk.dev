@@ -1,0 +1,5 @@
+outs:
+- md5: ab6de96c95252e05a890ac0c644850c0
+  size: 882575
+  hash: md5
+  path: se_c.json

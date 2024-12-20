@@ -1,0 +1,5 @@
+outs:
+- md5: f70937ef07f829c10e7a2deff599135e
+  size: 221456
+  hash: md5
+  path: stations.json

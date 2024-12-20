@@ -1,0 +1,5 @@
+outs:
+- md5: c2fd9381b734c26b1e149cfe9f2c140a
+  size: 25456
+  hash: md5
+  path: in_202006.parquet

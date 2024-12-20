@@ -1,0 +1,5 @@
+outs:
+- md5: 5326f9b46f4abf8add8603861ae65f15
+  size: 68204
+  hash: md5
+  path: il_202202.parquet

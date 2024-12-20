@@ -1,0 +1,5 @@
+outs:
+- md5: cfdb32d18347e3e610d52e89cb04183f
+  size: 10184
+  hash: md5
+  path: in_201411.parquet

@@ -1,0 +1,5 @@
+outs:
+- md5: 9062bbdc14789a8e2ee72277be77b291
+  size: 9081
+  hash: md5
+  path: s_c_201610.parquet
