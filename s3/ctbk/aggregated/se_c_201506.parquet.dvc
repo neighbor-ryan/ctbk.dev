@@ -1,5 +1,5 @@
 outs:
-- md5: ec2b0c4df23c5e539d5f4dcdade0f8a8
-  size: 140718
+- md5: 0d89d2c5549ac157acbf325d68f073af
+  size: 140722
   hash: md5
   path: se_c_201506.parquet
