@@ -141,7 +141,7 @@ class AggregatedMonth(MonthTable):
                 df['Duration'] = (df['Stop Time'] - df['Start Time']).dt.seconds
             aggregate_by_cols.append('Duration')
 
-        grouped = df.groupby(group_by_cols)
+        grouped = df.groupby(group_by_cols, observed=True)
         counts = (
             grouped
             [aggregate_by_cols]
