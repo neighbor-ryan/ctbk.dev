@@ -166,7 +166,6 @@ Commands:
   station-meta-hist   Aggregate station name, lat/lng info from ride...
   station-modes-json  Compute canonical station names, lat/lngs from...
   station-pairs-json  Write station-pair ride_counts keyed by...
-  sampled-zip         Generate test data by downsampling tripdata...
 ```
 </details>
 
@@ -305,26 +304,6 @@ Usage: ctbk station-pairs-json [OPTIONS] COMMAND [ARGS]...
 Options:
   -d, --dates TEXT
   --help            Show this message and exit.
-
-Commands:
-  urls    Print URLs for selected datasets
-  create  Create selected datasets
-```
-</details>
-
-
-<details><summary><code>ctbk sampled-zip</code></summary>
-
-```
-Usage: ctbk sampled-zip [OPTIONS] COMMAND [ARGS]...
-
-  Generate test data by downsampling tripdata .csv.zip files. Writes to
-  <root>/ctbk/sampled/tripdata.
-
-Options:
-  -d, --dates TEXT
-  -r, --region [NYC|JC]
-  --help                 Show this message and exit.
 
 Commands:
   urls    Print URLs for selected datasets
