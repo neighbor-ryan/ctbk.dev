@@ -66,6 +66,7 @@ READ_DTYPES = {
 READ_KWARGS = dict(
     dtype=READ_DTYPES,
     na_values=r'\N',
+    float_precision='round_trip',
 )
 
 

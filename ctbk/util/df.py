@@ -33,7 +33,7 @@ def checkpoint(
         elif fmt == 'pqt':
             return pd.read_parquet(url, **read_kwargs)
         elif fmt == 'csv':
-            return pd.read_csv(url, **read_kwargs)
+            return pd.read_csv(url, **{ 'float_precision': 'round_trip', **read_kwargs })
         elif fmt == 'json':
             return pd.read_json(url, **read_kwargs)
         else:
