@@ -8,7 +8,7 @@ from utz.ym import Monthy
 from ctbk.has_root_cli import HasRootCLI, dates
 from ctbk.month_table import MonthTable
 from ctbk.normalized import NormalizedMonth
-from ctbk.tasks import MonthTables
+from ctbk.tasks import MonthsTables
 from ctbk.util import keys
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
@@ -151,7 +151,7 @@ class AggregatedMonth(MonthTable):
         return counts
 
 
-class AggregatedMonths(HasRootCLI, MonthTables):
+class AggregatedMonths(HasRootCLI, MonthsTables):
     DIR = DIR
     CHILD_CLS = AggregatedMonth
 

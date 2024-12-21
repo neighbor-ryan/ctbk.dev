@@ -4,7 +4,7 @@ from abc import ABC
 from os.path import basename, join
 from shutil import copyfileobj, move
 from tempfile import TemporaryDirectory
-from typing import Optional, Union, Iterator, IO, Tuple, Literal
+from typing import Optional, Union, Iterator, IO, Tuple, Literal, TypeVar, Generic
 from zipfile import ZipFile, BadZipFile
 
 import pandas as pd
@@ -26,8 +26,9 @@ DIR = f'{BKT}/csvs'
 
 NameType = Literal[1, 11, 2, 22, None]
 
+T = TypeVar("T")
 
-class ReadsTripdataZip(Task, ABC):
+class ReadsTripdataZip(Task[T], ABC, Generic[T]):
     def __init__(
         self,
         ym: YM,
@@ -68,7 +69,7 @@ READ_KWARGS = dict(
 )
 
 
-class TripdataCsv(ReadsTripdataZip, Table):
+class TripdataCsv(ReadsTripdataZip[DataFrame], Table):
     DIR = DIR
     NAMES = [ 'csv', 'c', ]
 
@@ -165,7 +166,7 @@ class TripdataCsv(ReadsTripdataZip, Table):
                     )
                 )
 
-    def _create(self, read: Union[None, Read] = Unset) -> None:
+    def _create(self, read: Union[None, Read] = Unset) -> DataFrame | None:
         read = self.read if read is Unset else read
         if read is None:
             self.extract_csv_from_zip()

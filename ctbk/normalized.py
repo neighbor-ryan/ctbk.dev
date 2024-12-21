@@ -5,13 +5,14 @@ from typing import Pattern
 import pandas as pd
 from click import option
 from numpy import nan
-from utz import err
+from utz import err, sxs
 from utz.ym import Monthy
 
 from ctbk.csvs import TripdataCsv
 from ctbk.has_root_cli import HasRootCLI, dates
-from ctbk.month_table import MonthTable
-from ctbk.tasks import MonthTables
+from ctbk.month_table import MonthDirTables
+from ctbk.tables_dir import Tables
+from ctbk.tasks import MonthsDirTables
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
 from ctbk.util.region import Region, get_regions
@@ -45,6 +46,7 @@ dtypes = {
     'End Station Longitude': float,
     'End Station Name': 'string',
     'Birth Year': 'Int32',
+    'Bike ID': 'string',
 }
 drop = [
     'Unnamed: 0',  # NY 202407
@@ -146,6 +148,8 @@ def normalize_fields(df: DataFrame, src, region: Region) -> DataFrame:
         categories=['unknown', 'classic_bike', 'electric_bike'],
         ordered=True,
     )
+    if 'Bike ID' in df:
+        df['Bike ID'] = df['Bike ID'].astype(str)
     if 'Member/Casual' in df:
         assert 'User Type' not in df
         err(f'{src}: renaming/harmonizing "member_casual" → "User Type", substituting "member" → "Subscriber", "casual" → "customer"')
@@ -190,7 +194,7 @@ def add_region(df: DataFrame, src: str, region: Region) -> DataFrame:
     return df
 
 
-class NormalizedMonth(MonthTable):
+class NormalizedMonth(MonthDirTables):
     DIR = DIR
     NAMES = [ 'normalized', 'norm', 'n', ]
 
@@ -198,50 +202,49 @@ class NormalizedMonth(MonthTable):
         self.engine = 'fastparquet' if engine == 1 else 'pyarrow' if engine == 2 else 'auto'
         super().__init__(ym, **kwargs)
 
-    def normalized_region(self, region) -> DataFrame:
+    def normalized_region(self, region) -> Tables:
         ym = self.ym
         csv = TripdataCsv(ym=ym, region=region, **self.kwargs)
         df = csv.df()
         df = normalize_fields(df, csv.url, region=region)
-        def fsck_ym(df: pd.DataFrame):
-            start, end = ym.dates
-            ride_start = df['Start Time'].dt.date
-            ride_end = df['Stop Time'].dt.date
-            bad_start = (ride_start < start) | (ride_start >= end)
-            bad_end = (ride_end < start) | (ride_end >= end)
-            wrong_yms = bad_start & bad_end
-            num_wrong_yms = wrong_yms.sum()
-            if num_wrong_yms:
-                wrong_dates_hist = (
-                    pd.concat([ ride_start, ride_end ], axis=1)
-                    [wrong_yms]
-                    .value_counts()
-                    .sort_index()
-                )
-                err(f'{num_wrong_yms} rides not in {ym}:\n{wrong_dates_hist}')
-                df = df[~wrong_yms]
-            return df
+        def ym_series(k: str):
+            dt = df[k].dt
+            y = dt.year.rename('y')
+            m = dt.month.rename('m')
+            return sxs(y, m).apply(lambda r: '%d%02d' % (r.y, r.m), axis=1)
 
-        df = fsck_ym(df)
-        sort_keys = ['Start Time', 'Stop Time']
-        if 'Ride ID' in df:
-            sort_keys.append('Ride ID')
-        elif 'Bike ID' in df:
-            sort_keys.append('Bike ID')
-        return df.sort_values(sort_keys)
+        start_ym_strs = ym_series('Start Time')
+        stop_ym_strs = ym_series('Stop Time')
+        ym_strs = start_ym_strs + '_' + stop_ym_strs
+        ym_dfs_dict: dict[str, DataFrame] = { ym_str: df for ym_str, df in df.groupby(ym_strs) }
+
+        def sort(df: DataFrame) -> DataFrame:
+            sort_keys = ['Start Time', 'Stop Time']
+            if 'Ride ID' in df:
+                sort_keys.append('Ride ID')
+            elif 'Bike ID' in df:
+                sort_keys.append('Bike ID')
+            return df.sort_values(sort_keys)
+
+        return { ym_str: sort(df) for ym_str, df in ym_dfs_dict.items() }
 
     @property
     def checkpoint_kwargs(self):
         return dict(write_kwargs=dict(index=False, engine=self.engine))
 
-    def _df(self) -> DataFrame:
-        return pd.concat([
-            self.normalized_region(region)
-            for region in get_regions(self.ym)
-        ])
+    def _dfs(self) -> Tables:
+        dfs_dict: dict[str, list[DataFrame]] = {}
+        for region in get_regions(self.ym):
+            for name, df in self.normalized_region(region).items():
+                if name not in dfs_dict:
+                    dfs_dict[name] = []
+                dfs_dict[name].append(df)
+        return {
+            name: pd.concat(dfs)
+            for name, dfs in dfs_dict.items()
+        }
 
-
-class NormalizedMonths(MonthTables, HasRootCLI):
+class NormalizedMonths(MonthsDirTables, HasRootCLI):
     DIR = DIR
     CHILD_CLS = NormalizedMonth
 
@@ -250,7 +253,7 @@ class NormalizedMonths(MonthTables, HasRootCLI):
 
 
 NormalizedMonths.cli(
-    help=f"Normalize \"tripdata\" CSVs (combine regions for each month, harmonize column names, etc. Writes to <root>/{DIR}/YYYYMM.parquet.",
+    help=f"Normalize \"tripdata\" CSVs (combine regions for each month, harmonize column names, etc. Populates directory `<root>/{DIR}/YYYYMM/` with files of the form `YYYYMM_YYYYMM.parquet`, for each pair of (start,end) months found in a given month's CSVs.",
     cmd_decos=[dates],
     create_decos=[
         option('-e', '--engine', count=True, help='1x: fastparquet, 2x: pyarrow'),

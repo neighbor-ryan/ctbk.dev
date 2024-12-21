@@ -3,18 +3,23 @@ from abc import ABC
 from utz.ym import Monthy
 
 from ctbk.table import Table
+from ctbk.tables_dir import TablesDir
 from ctbk.task import Task
 
 
 class MonthTask(Task, ABC):
     def __init__(self, ym: Monthy, **kwargs):
         self.ym = ym
-        super().__init__(**kwargs)
+        Task.__init__(self, **kwargs)
 
+
+class MonthTable(MonthTask, Table, ABC):
     @property
     def url(self):
         return f'{self.dir}/{self.ym}.parquet'
 
 
-class MonthTable(MonthTask, Table, ABC):
-    pass
+class MonthDirTables(MonthTask, TablesDir, ABC):
+    @property
+    def url(self):
+        return f'{self.dir}/{self.ym}'

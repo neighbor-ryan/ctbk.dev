@@ -1,25 +1,25 @@
 from abc import ABC
 from functools import cache
 from os.path import dirname, exists
-from typing import Union, Type
+from typing import Type
 
 import pandas as pd
 from pandas import DataFrame
+from utz import err, Unset
 
 from ctbk.task import Task
 from ctbk.util.df import checkpoint
 from ctbk.util.read import Read
-from utz import err, Unset
 
 
-class Table(Task, ABC):
-    def create(self, read: Union[None, Read] = Unset) -> DataFrame | None:
+class Table(Task[DataFrame], ABC):
+    def create(self, read: Read | None | Type[Unset] = Unset) -> DataFrame:
         return super().create(read=read)
 
     def _df(self) -> DataFrame:
         raise NotImplementedError
 
-    def _create(self, read: Union[None, Read] = Unset) -> DataFrame | None:
+    def _create(self, read: Read | None | Type[Unset] = Unset) -> DataFrame:
         return self.checkpoint(read=self.read if read is Unset else read)
 
     def _read(self) -> DataFrame:
@@ -35,7 +35,7 @@ class Table(Task, ABC):
     def checkpoint_kwargs(self):
         return dict()
 
-    def checkpoint(self, read: Read | None | Type[Unset] = Unset) -> DataFrame | None:
+    def checkpoint(self, read: Read | None | Type[Unset] = Unset) -> DataFrame:
         url = self.url
         parent = dirname(url)
         read = self.read if read is Unset else read

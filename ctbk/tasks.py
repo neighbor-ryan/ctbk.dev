@@ -1,14 +1,13 @@
 from abc import ABC
 from functools import cache
-
 from typing import Type
 
-import pandas as pd
 from utz import cached_property, Unset
 from utz.ym import YM, Monthy
 
 from ctbk.has_root import HasRoot
 from ctbk.table import Table
+from ctbk.tables_dir import Tables, TablesDir
 from ctbk.task import Task
 from ctbk.util.df import DataFrame
 from ctbk.util.read import Read
@@ -24,7 +23,7 @@ class Tasks(HasRoot, ABC):
         creates = [ child.create(read=read) for child in children ]
 
 
-class MonthTasks(Tasks, ABC):
+class MonthsTasks(Tasks, ABC):
     def __init__(self, yms: list[YM], **kwargs):
         self.yms = yms
         super().__init__(**kwargs)
@@ -40,7 +39,7 @@ class MonthTasks(Tasks, ABC):
         ]
 
 
-class MonthTables(MonthTasks, ABC):
+class MonthsTables(MonthsTasks, ABC):
     def month(self, ym: Monthy) -> Table:
         raise NotImplementedError
 
@@ -65,6 +64,24 @@ class MonthTables(MonthTasks, ABC):
             for ym in self.yms
         ]
 
-    @cache
-    def df(self):
-        return pd.concat(self.dfs())
+
+class MonthsDirTables(MonthsTasks, ABC):
+    def month(self, ym: Monthy) -> TablesDir:
+        raise NotImplementedError
+
+    @cached_property
+    def children(self) -> list[TablesDir]:
+        return [
+            self.month(ym)
+            for ym in self.yms
+        ]
+
+    def month_tables(self, ym: Monthy, add_ym=False) -> Tables:
+        month = self.month(ym)
+        dfs = month.dfs()
+        if add_ym:
+            dfs = {
+                name: df.assign(ym=ym)
+                for name, df in dfs.items()
+            }
+        return dfs

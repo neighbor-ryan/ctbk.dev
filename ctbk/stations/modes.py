@@ -12,7 +12,7 @@ from ctbk.aggregated import AggregatedMonth, DIR
 from ctbk.has_root_cli import HasRootCLI, dates
 from ctbk.month_table import MonthTable
 from ctbk.stations.meta_hists import StationMetaHist
-from ctbk.tasks import MonthTables
+from ctbk.tasks import MonthsTables
 
 
 def row_sketch(a):
@@ -181,7 +181,7 @@ class ModesMonthJson(MonthTable):
         )
 
 
-class ModesMonthJsons(HasRootCLI, MonthTables):
+class ModesMonthJsons(HasRootCLI, MonthsTables):
     DIR = DIR
     CHILD_CLS = ModesMonthJson
 

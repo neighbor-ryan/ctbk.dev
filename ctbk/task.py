@@ -1,22 +1,24 @@
 from abc import ABC
-from typing import Union, Type
+from typing import Type, TypeVar, Generic
+
+from utz import Unset, err
 
 from ctbk.has_root import HasRoot
 from ctbk.has_url import HasURL
 from ctbk.util.read import Read
 from ctbk.util.write import Always, Never
-from utz import Unset, err
 
+T = TypeVar("T")
 
-class Task(HasRoot, HasURL, ABC):
+class Task(HasRoot, HasURL, ABC, Generic[T]):
     def __init__(self, **kwargs):
         HasRoot.__init__(self, **kwargs)
         HasURL.__init__(self)
 
-    def _create(self, read: Read | None | Type[Unset] = Unset) -> None:
+    def _create(self, read: Read | None | Type[Unset] = Unset) -> T | None:
         raise NotImplementedError
 
-    def create(self, read: Read | None | Type[Unset] = Unset) -> None:
+    def create(self, read: Read | None | Type[Unset] = Unset) -> T:
         read = self.read if read is Unset else read
         url = self.url
         if self.exists():
@@ -34,5 +36,5 @@ class Task(HasRoot, HasURL, ABC):
             err(f'Writing {url}')
             return self._create(read=read)
 
-    def _read(self) -> None:
+    def _read(self) -> T:
         raise NotImplementedError

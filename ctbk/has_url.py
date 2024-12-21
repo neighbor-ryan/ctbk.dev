@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from os.path import dirname
-from urllib.parse import urlparse
+from urllib.parse import urlparse, ParseResult
 
 import fsspec
 from utz import cached_property, err
@@ -10,35 +10,35 @@ from utz import cached_property, err
 class HasURL(ABC):
     @property
     @abstractmethod
-    def url(self):
+    def url(self) -> str:
         raise NotImplementedError
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f'{self.__class__.__name__}({self.url})'
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str(self)
 
     @property
-    def scheme(self):
+    def scheme(self) -> str:
         return self.parsed.scheme
 
     @cached_property
-    def parsed(self):
+    def parsed(self) -> ParseResult:
         return urlparse(self.url)
 
     @cached_property
     def fs(self) -> fsspec.AbstractFileSystem:
         return fsspec.filesystem(self.scheme)
 
-    def exists(self):
+    def exists(self) -> bool:
         try:
             return self.fs.exists(self.url)
         except Exception:
             raise RuntimeError(f"Error checking existence of URL {self.url}")
 
     @property
-    def dirname(self):
+    def dirname(self) -> str:
         return dirname(self.url)
 
     @contextmanager

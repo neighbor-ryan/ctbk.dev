@@ -9,7 +9,7 @@ from ctbk.aggregated import AggregatedMonth, DIR
 from ctbk.has_root_cli import HasRootCLI, dates
 from ctbk.month_table import MonthTable
 from ctbk.stations.modes import ModesMonthJson
-from ctbk.tasks import MonthTables
+from ctbk.tasks import MonthsTables
 from ctbk.util.df import DataFrame
 from ctbk.util.read import Read
 
@@ -50,9 +50,6 @@ class StationPairsJson(MonthTable):
             write_kwargs=self._write,
         )
 
-    def checkpoint(self, read: Read | None | Type[Unset] = Unset) -> DataFrame | None:
-        return super().checkpoint(read)
-
     def _write(self, df):
         se_ids_obj = self.df_to_json(df)
         with self.fd('w') as f:
@@ -81,7 +78,7 @@ class StationPairsJson(MonthTable):
         ])
 
 
-class StationPairsJsons(HasRootCLI, MonthTables):
+class StationPairsJsons(HasRootCLI, MonthsTables):
     DIR = DIR
     CHILD_CLS = StationPairsJson
 
