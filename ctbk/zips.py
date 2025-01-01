@@ -5,7 +5,6 @@ from utz.ym import YM
 
 from ctbk.has_root_cli import HasRootCLI, dates
 from ctbk.task import Task
-from ctbk.util import S3
 from ctbk.util.region import REGIONS, Region, get_regions, region
 
 DIR = 'tripdata'
@@ -26,7 +25,6 @@ class TripdataZip(Task):
         self.ym = ym
         self.yym = ym.y if region == 'NYC' and ym.y < 2024 else ym
         self.region = region
-        roots = roots or DefaultDict(configs={ self.NAMES[0]: S3 })
         Task.__init__(self, roots=roots)
 
     @cached_property
