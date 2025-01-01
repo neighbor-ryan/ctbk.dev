@@ -96,7 +96,7 @@ jobs:
           python-version: 3.11.8
           cache: pip
       - run: pip install -e .
-      - run: python -m ctbk.ymrgtb_cd -f
+      - run: ctbk ymrgtb-cd
       - name: Update www/public/assets/last_month.json
         run: |
           last_month="$(ctbk --s3 aggregated urls -gymrgtb -acd | tail -n1 | grep -Eo '[0-9]+' | tail -n1)"

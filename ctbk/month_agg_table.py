@@ -7,12 +7,12 @@ from utz import err
 from utz.ym import Monthy, YM
 
 from ctbk.has_root_cli import dates
-from ctbk.util import S3
+from ctbk.util.constants import DEFAULT_ROOT
 from ctbk.util.df import DataFrame
 
 
 class MonthAggTable(ABC):
-    ROOT = S3
+    ROOT = DEFAULT_ROOT
     SRC = None
     OUT = None
 
