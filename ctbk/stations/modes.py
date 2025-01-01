@@ -148,19 +148,19 @@ class ModesMonthJson(MonthTable):
         stations = sxs(names, lls).reset_index()
         stations.index.name = 'idx'
 
-        sc_am = AggregatedMonth(self.ym, 's', 'c', **self.kwargs)
-        sc_df = sc_am.df()
-        starts = (
-            sc_df
+        ec_am = AggregatedMonth(self.ym, 'e', 'c', **self.kwargs)
+        ec_df = ec_am.df()
+        ends = (
+            ec_df
             .rename(columns={
-                'Start Station ID': 'id',
-                'Count': 'starts',
+                'End Station ID': 'id',
+                'Count': 'ends',
             })
             .set_index('id')
-            .starts
+            .ends
         )
-        stations = sxs(names, lls, starts)
-        stations['starts'] = stations.starts.fillna(0).astype(int)
+        stations = sxs(names, lls, ends)
+        stations['ends'] = stations.ends.fillna(0).astype(int)
         return stations
 
     def _read(self) -> DataFrame:

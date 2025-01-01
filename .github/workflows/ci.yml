@@ -46,6 +46,13 @@ jobs:
       name: Aggregate counts by start station
       run: ctbk --s3 aggregated create -gs -ac
     secrets: inherit
+  group_counts-end:
+    needs: normalized
+    uses: ./.github/workflows/step.yml
+    with:
+      name: Aggregate counts by end station
+      run: ctbk --s3 aggregated create -ge -ac
+    secrets: inherit
   group_counts-year-month-region-gender-type-bike-counts-durations:
     needs: normalized
     uses: ./.github/workflows/step.yml
@@ -61,7 +68,7 @@ jobs:
       run: ctbk --s3 aggregated create -gse -ac
     secrets: inherit
   modes:
-    needs: [meta_hist-names, meta_hist-latlngs, group_counts-start]
+    needs: [meta_hist-names, meta_hist-latlngs, group_counts-end]
     uses: ./.github/workflows/step.yml
     with:
       name: Compute canonical station names, latlngs

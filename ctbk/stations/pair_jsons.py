@@ -1,8 +1,6 @@
 import json
-from typing import Union, Type
 
 import pandas as pd
-from utz import Unset
 from utz.ym import Monthy
 
 from ctbk.aggregated import AggregatedMonth, DIR
@@ -11,7 +9,6 @@ from ctbk.month_table import MonthTable
 from ctbk.stations.modes import ModesMonthJson
 from ctbk.tasks import MonthsTables
 from ctbk.util.df import DataFrame
-from ctbk.util.read import Read
 
 
 class StationPairsJson(MonthTable):
