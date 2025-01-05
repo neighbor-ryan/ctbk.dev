@@ -232,9 +232,18 @@ def dedupe_sort(df: pd.DataFrame, name: str) -> pd.DataFrame:
     elif 'Bike ID' in df:
         sort_keys.append('Bike ID')
     df = df.sort_values(sort_keys)
-    dupe_mask = df[sort_keys].duplicated()
+    dupe_mask = df.duplicated()
     if dupe_mask.any():
-        raise AssertionError(f"{name}: {sort_keys=} not unique: {dupe_mask.value_counts()}")
+        err(f"{name}: dropping {dupe_mask.sum()} dupes")
+        df = df[~dupe_mask]
+    dfk = df[sort_keys]
+    dupe_mask = dfk.duplicated()
+    if dupe_mask.any():
+        all_dups_msk = dfk.duplicated(keep=False)
+        dups = df[all_dups_msk]
+        hist = dups.groupby(sort_keys).size().value_counts()
+        msg = f"{name} [{sort_keys}] dups:\n{hist}\n{dups}"
+        raise AssertionError(msg)
     return df
 
 
