@@ -216,17 +216,7 @@ class NormalizedMonth(MonthDirTables):
         start_ym_strs = ym_series('Start Time')
         stop_ym_strs = ym_series('Stop Time')
         ym_strs = start_ym_strs + '_' + stop_ym_strs
-        ym_dfs_dict: dict[str, DataFrame] = { ym_str: df for ym_str, df in df.groupby(ym_strs) }
-
-        def sort(df: DataFrame) -> DataFrame:
-            sort_keys = ['Start Time', 'Stop Time']
-            if 'Ride ID' in df:
-                sort_keys.append('Ride ID')
-            elif 'Bike ID' in df:
-                sort_keys.append('Bike ID')
-            return df.sort_values(sort_keys)
-
-        return { ym_str: sort(df) for ym_str, df in ym_dfs_dict.items() }
+        return { str(ym_str): df for ym_str, df in df.groupby(ym_strs) }
 
     @property
     def checkpoint_kwargs(self):
@@ -239,10 +229,26 @@ class NormalizedMonth(MonthDirTables):
                 if name not in dfs_dict:
                     dfs_dict[name] = []
                 dfs_dict[name].append(df)
-        return {
-            name: pd.concat(dfs)
-            for name, dfs in dfs_dict.items()
-        }
+
+        rv = {}
+        time_cols = ['Start Time', 'Stop Time']
+        for name, dfs in dfs_dict.items():
+            df = pd.concat(dfs)
+            dupe_mask = df.duplicated()
+            if dupe_mask.any():
+                err(f"{self.ym}/{name}: removing {dupe_mask.sum()} duplicated rows")
+                df = df[~dupe_mask]
+            sort_keys = [ *time_cols ]
+            if 'Ride ID' in df:
+                sort_keys.append('Ride ID')
+            elif 'Bike ID' in df:
+                sort_keys.append('Bike ID')
+            df = df.sort_values(sort_keys)
+            dupe_mask = df[sort_keys].duplicated()
+            if dupe_mask.any():
+                raise AssertionError(f"{self.ym}/{name}: {sort_keys=} not unique: {dupe_mask.value_counts()}")
+            rv[name] = df
+        return rv
 
 class NormalizedMonths(MonthsDirTables, HasRootCLI):
     DIR = DIR
