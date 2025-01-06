@@ -7,7 +7,7 @@ from utz.ym import Monthy, YM
 
 from ctbk.util.ym import NJ_GENESIS
 
-Region = Literal[ 'NYC', 'JC', ]
+Region = Literal[ 'NYC', 'JC' ]
 REGIONS: Tuple[Region, ...] = typing.get_args(Region)
 
 def get_regions(ym: Monthy):

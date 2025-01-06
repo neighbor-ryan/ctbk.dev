@@ -19,6 +19,27 @@ from ctbk.util.region import Region, get_regions
 
 DIR = f'{BKT}/normalized'
 
+OUT_FIELD_ORDER = [
+    "Ride ID",
+    "Start Time",
+    "Stop Time",
+    "Start Station ID",
+    "Start Station Name",
+    "Start Station Latitude",
+    "Start Station Longitude",
+    "Start Region",
+    "End Station ID",
+    "End Station Name",
+    "End Station Latitude",
+    "End Station Longitude",
+    "End Region",
+    "Rideable Type",
+    "User Type",
+    "Gender",
+    "Birth Year",
+    "Bike ID",
+]
+
 fields = {
     'Start Time',
     'Stop Time',
@@ -98,9 +119,10 @@ RGXS: dict[str, list[Pattern]] = {
         NONE: NONE,
     }.items()
 }
+GENDER_MAP = {"U": 0, "M": 1, "F": 2}
 
 
-def get_region(station_id, src: str, file_region: str):
+def get_region(station_id, src: str, file_region: Region | None):
     regions = [
         region
         for region, rgxs in RGXS.items()
@@ -117,17 +139,18 @@ def get_region(station_id, src: str, file_region: str):
 
     region = regions[0]
     if region == 'NYC' and file_region == 'JC':
+        # err(f"{src}: ambiguous JC region: {station_id}")
         return file_region
     return region
 
 
-def normalize_fields(df: DataFrame, src, region: Region) -> DataFrame:
+def normalize_fields(df: DataFrame, src, region: Region | None) -> DataFrame:
     rename_dict = {}
     for col in df.columns:
         normalized_col = normalize_field(col)
         if normalized_col in normalize_fields_map:
             rename_dict[col] = normalize_fields_map[normalized_col]
-        else:
+        elif col not in OUT_FIELD_ORDER:
             err(f'Unexpected field: {normalized_col} ({col})')
 
     df = (
@@ -139,6 +162,10 @@ def normalize_fields(df: DataFrame, src, region: Region) -> DataFrame:
         err(f'{src}: "Gender" column not found; setting to 0 ("unknown") for all rows')
         df['Gender'] = 0  # unknown
         df['Gender'] = df['Gender'].astype('Int8')
+    elif isinstance(df.Gender.dtype, pd.CategoricalDtype):
+        err(f'{src}: Converting "Gender" from categorical to int')
+        df['Gender'] = df['Gender'].map(GENDER_MAP).astype('Int8')
+
     if 'Rideable Type' not in df:
         err(f'{src}: "Rideable Type" column not found; setting to "unknown" for all rows')
         df['Rideable Type'] = 'unknown'
@@ -164,11 +191,11 @@ def normalize_fields(df: DataFrame, src, region: Region) -> DataFrame:
     df['End Station ID'] = df['End Station ID'].str.replace(r'^(\d+)\.0$', r'\1', regex=True)
     df = add_region(df, src=src, region=region)
     df = df.astype({ k: v for k, v in dtypes.items() if k in df })
-
+    df = df[[ k for k in OUT_FIELD_ORDER if k in df ]]
     return df
 
 
-def add_region(df: DataFrame, src: str, region: Region) -> DataFrame:
+def add_region(df: DataFrame, src: str, region: Region | None) -> DataFrame:
     df['Start Region'] = df['Start Station ID'].fillna(NONE).apply(get_region, src=src, file_region=region)
     df['End Region'] = df['End Station ID'].fillna(NONE).apply(get_region, src=src, file_region=region)
 
@@ -194,6 +221,37 @@ def add_region(df: DataFrame, src: str, region: Region) -> DataFrame:
     return df
 
 
+def dedupe_sort(df: pd.DataFrame, name: str) -> pd.DataFrame:
+    dupe_mask = df.duplicated()
+    if dupe_mask.any():
+        err(f"{name}: removing {dupe_mask.sum()} duplicated rows")
+        df = df[~dupe_mask]
+    sort_keys = ['Start Time', 'Stop Time']
+    if 'Ride ID' in df:
+        sort_keys.append('Ride ID')
+    elif 'Bike ID' in df:
+        sort_keys.append('Bike ID')
+    df = df.sort_values(sort_keys)
+    dupe_mask = df[sort_keys].duplicated()
+    if dupe_mask.any():
+        raise AssertionError(f"{name}: {sort_keys=} not unique: {dupe_mask.value_counts()}")
+    return df
+
+
+def normalize_df(df: DataFrame, src: str, region: Region | None = None) -> Tables:
+    df = normalize_fields(df, src, region=region)
+    def ym_series(k: str):
+        dt = df[k].dt
+        y = dt.year.rename('y')
+        m = dt.month.rename('m')
+        return sxs(y, m).apply(lambda r: '%d%02d' % (r.y, r.m), axis=1)
+
+    start_ym_strs = ym_series('Start Time')
+    stop_ym_strs = ym_series('Stop Time')
+    ym_strs = start_ym_strs + '_' + stop_ym_strs
+    return { str(ym_str): df for ym_str, df in df.groupby(ym_strs) }
+
+
 class NormalizedMonth(MonthDirTables):
     DIR = DIR
     NAMES = [ 'normalized', 'norm', 'n', ]
@@ -202,21 +260,10 @@ class NormalizedMonth(MonthDirTables):
         self.engine = 'fastparquet' if engine == 1 else 'pyarrow' if engine == 2 else 'auto'
         super().__init__(ym, **kwargs)
 
-    def normalized_region(self, region) -> Tables:
+    def normalized_region(self, region: Region) -> Tables:
         ym = self.ym
         csv = TripdataCsv(ym=ym, region=region, **self.kwargs)
-        df = csv.df()
-        df = normalize_fields(df, csv.url, region=region)
-        def ym_series(k: str):
-            dt = df[k].dt
-            y = dt.year.rename('y')
-            m = dt.month.rename('m')
-            return sxs(y, m).apply(lambda r: '%d%02d' % (r.y, r.m), axis=1)
-
-        start_ym_strs = ym_series('Start Time')
-        stop_ym_strs = ym_series('Stop Time')
-        ym_strs = start_ym_strs + '_' + stop_ym_strs
-        return { str(ym_str): df for ym_str, df in df.groupby(ym_strs) }
+        return normalize_df(csv.df(), src=csv.url, region=region)
 
     @property
     def checkpoint_kwargs(self):
@@ -231,22 +278,9 @@ class NormalizedMonth(MonthDirTables):
                 dfs_dict[name].append(df)
 
         rv = {}
-        time_cols = ['Start Time', 'Stop Time']
         for name, dfs in dfs_dict.items():
             df = pd.concat(dfs)
-            dupe_mask = df.duplicated()
-            if dupe_mask.any():
-                err(f"{self.ym}/{name}: removing {dupe_mask.sum()} duplicated rows")
-                df = df[~dupe_mask]
-            sort_keys = [ *time_cols ]
-            if 'Ride ID' in df:
-                sort_keys.append('Ride ID')
-            elif 'Bike ID' in df:
-                sort_keys.append('Bike ID')
-            df = df.sort_values(sort_keys)
-            dupe_mask = df[sort_keys].duplicated()
-            if dupe_mask.any():
-                raise AssertionError(f"{self.ym}/{name}: {sort_keys=} not unique: {dupe_mask.value_counts()}")
+            df = dedupe_sort(df, f'{self.ym}/{name}')
             rv[name] = df
         return rv
 
