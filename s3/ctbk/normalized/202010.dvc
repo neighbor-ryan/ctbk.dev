@@ -1,0 +1,6 @@
+outs:
+- md5: b37bd19de9e103de18a081a7fefd95f5.dir
+  size: 95151390
+  nfiles: 13
+  hash: md5
+  path: '202010'

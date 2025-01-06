@@ -1,0 +1,6 @@
+outs:
+- md5: a3d8c48c11b5757a6cb688c1cd6d29cd.dir
+  size: 25929474
+  nfiles: 7
+  hash: md5
+  path: '201803'

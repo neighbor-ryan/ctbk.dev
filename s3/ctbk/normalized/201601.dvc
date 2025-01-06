@@ -1,0 +1,6 @@
+outs:
+- md5: fabedc9106ebfdfd8d16eed450b85c98.dir
+  size: 12381150
+  nfiles: 2
+  hash: md5
+  path: '201601'
