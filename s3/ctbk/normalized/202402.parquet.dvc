@@ -1,5 +1,5 @@
 outs:
-- md5: 4e4e04b11f6d99a28586a5845ef8afa2
-  size: 116121979
+- md5: 11db30535126928166bec6e80e855610
+  size: 116499055
   hash: md5
   path: 202402.parquet
