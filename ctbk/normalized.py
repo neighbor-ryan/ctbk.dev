@@ -46,7 +46,7 @@ dtypes = {
     'End Station Longitude': float,
     'End Station Name': 'string',
     'Birth Year': 'Int32',
-    'Bike ID': 'string',
+    'Bike ID': 'Int32',
 }
 drop = [
     'Unnamed: 0',  # NY 202407
