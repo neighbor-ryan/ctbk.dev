@@ -7,10 +7,18 @@ from ..util.ym import parse_ym_ranges_str
 
 
 @ctbk.command()
+@option('-p', '--prefix', help='Prepend this string to each "YM" output line')
 @option('-r', '--reverse', is_flag=True, help='Output months in reverse order')
+@option('-s', '--suffix', help='Append this string to each "YM" output line')
 @roots_opt
 @argument('ym-ranges', required=False)
-def yms(reverse, roots, ym_ranges):
+def yms(
+    prefix: str | None,
+    reverse: bool,
+    suffix: str | None,
+    roots: tuple[str, ...],
+    ym_ranges: str | None,
+):
     roots = load_roots(roots)
     if not ym_ranges:
         ym_ranges = '-'  # Default to all available months
@@ -20,4 +28,4 @@ def yms(reverse, roots, ym_ranges):
         default_end=lambda: default_end(roots=roots),
     )
     for ym in reversed(yms) if reverse else yms:
-        print(ym)
+        print(f"{prefix or ''}{ym}{suffix or ''}")
