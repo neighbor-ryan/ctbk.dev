@@ -1,3 +1,4 @@
+from os.path import dirname, join, relpath
 from typing import Optional
 
 from utz import DefaultDict
@@ -5,7 +6,10 @@ from utz import DefaultDict
 from ctbk.util.read import Read, Disk
 from ctbk.util.write import IfAbsent, Write
 
-DEFAULT_ROOTS = dr = DefaultDict({}, 's3')
+CTBK_ROOT = dirname(__file__)
+REPO_ROOT = dirname(CTBK_ROOT)
+S3_DIR = join(REPO_ROOT, 's3')
+DEFAULT_ROOTS = dr = DefaultDict({}, relpath(S3_DIR))
 ROOTS_ENV_VAR = 'CTBK_ROOTS'
 
 
