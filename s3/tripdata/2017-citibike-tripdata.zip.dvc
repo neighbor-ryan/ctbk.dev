@@ -3,3 +3,10 @@ outs:
   size: 557126574
   hash: md5
   path: 2017-citibike-tripdata.zip
+md5: 78d66e8ddde8d594c97da040cd8b4da2
+frozen: true
+deps:
+- etag: ffc98ca3b95907fc9f2d0314682e473a-33
+  size: 557126574
+  hash: md5
+  path: s3://tripdata/2017-citibike-tripdata.zip

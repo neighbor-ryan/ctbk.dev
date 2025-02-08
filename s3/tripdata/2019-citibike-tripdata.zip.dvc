@@ -3,3 +3,10 @@ outs:
   size: 858704099
   hash: md5
   path: 2019-citibike-tripdata.zip
+md5: 475b25cd25f306f0ae28f8f6a554e7db
+frozen: true
+deps:
+- etag: 41f02e655e52b5464f82ce740e848ddc-50
+  size: 858704099
+  hash: md5
+  path: s3://tripdata/2019-citibike-tripdata.zip

@@ -3,3 +3,10 @@ outs:
   size: 1483922
   hash: md5
   path: JC-202203-citibike-tripdata.csv.zip
+md5: cd5b9af78d664493b8e2a7a6e27ddc25
+frozen: true
+deps:
+- etag: 8736135b0e4eb58d48793ecf65131cb2
+  size: 1483922
+  hash: md5
+  path: s3://tripdata/JC-202203-citibike-tripdata.csv.zip
