@@ -39,13 +39,6 @@ jobs:
       name: Compute station lat/lng histograms
       run: ctbk --s3 station-meta-hist create -gil
     secrets: inherit
-  group_counts-start:
-    needs: normalized
-    uses: ./.github/workflows/step.yml
-    with:
-      name: Aggregate counts by start station
-      run: ctbk --s3 aggregated create -gs -ac
-    secrets: inherit
   group_counts-end:
     needs: normalized
     uses: ./.github/workflows/step.yml
