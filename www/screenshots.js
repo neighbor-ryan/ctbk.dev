@@ -41,7 +41,7 @@ console.log("host:", host, "includes:", include);
     'plot-fallback': { query: '?dl=1', download: true },
   }
 
-  const browser = await puppeteer.launch({ headless: 'new', })
+  const browser = await puppeteer.launch({ headless: 'new', args: ["--no-sandbox"], })
   const page = await browser.newPage()
 
   const items = Array.from(Object.entries(screens))
