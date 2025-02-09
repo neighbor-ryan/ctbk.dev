@@ -124,11 +124,7 @@ const GenderLabel = (suffix: number | string) =>
     <div>(as of February 2021)</div>
   </WarningLabel>
 
-const BikeTypeLabel = (suffix: number | string) =>
-  <WarningLabel label={"Bike Type"} id={`bike-type-label-tooltip-${suffix}`}>
-    <div>E-bike data seems to be</div>
-    <div>mostly missing / under-counted</div>
-  </WarningLabel>
+export const RideableTypesExample = "/?y=m&s=b&rt=ce&d=2002-"
 
 export default function App({ data }: { data: Row[] }) {
   const params: Params = {
@@ -548,7 +544,7 @@ export default function App({ data }: { data: Row[] }) {
                 "Region",
                 "User Type",
                 { label: GenderLabel(1), data: "Gender", },
-                { label: BikeTypeLabel(1), data: "Rideable Type", },
+                { label: "Bike Type", data: "Rideable Type", },
               ]}
               cb={setStackBy}
               choice={stackBy}
@@ -586,7 +582,7 @@ export default function App({ data }: { data: Row[] }) {
               cb={setGenders}
             />
             <Checklist
-              label={BikeTypeLabel(2)}
+              label={"Bike Type"}
               data={[
                 { name: 'Classic', data: 'Classic', checked: rideableTypes.includes('Classic') },
                 // { name: 'Docked', data: 'Docked', checked: rideableTypes.includes('Docked') },
@@ -607,7 +603,7 @@ export default function App({ data }: { data: Row[] }) {
               <li><A href={"/?r=jh"}>JC + Hoboken</A> (<A href={"/?r=jh&s=r"}>stacked</A>)</li>
               <li><A href={"/?y=m&s=g&pct=&g=mf&d=1406-2102"}>Ride minute %'s, Men vs. Women</A>, Jun '14 – Jan '21</li>
               <li><A href={"/?s=u&pct="}>Annual vs. daily user %'s</A></li>
-              <li><A href={"/?y=m&s=b&rt=ce"}>Classic / E-bike ride minutes</A></li>
+              <li><A href={RideableTypesExample}>Classic / E-bike ride minutes</A> (<A href={`${RideableTypesExample}&pct`}>stacked</A>)</li>
               <li><A href={"/"}>Default view (system-wide rides over time)</A></li>
             </ul>
             <p>This plot refreshes when <A href={"https://www.citibikenyc.com/system-data"} target={"_blank"}>new data is published by Citi Bike</A> (typically the 1st or 2nd week of each month, covering the previous month).</p>
@@ -624,7 +620,7 @@ Several things changed in February 2021 (presumably as part of [the Lyft acquisi
 - "Gender" information is no longer provided:
   - All rides are labeled "unknown" starting February 2021
   - [Here's an example showing the available data](?y=m&s=g&pct=&g=mf&d=1406-2102)
-- A new "Rideable Type" field was added, containing values \`docked_bike\` and \`electric_bike\` 🎉; however, [it currently only shows ebike data from June 2021](?y=m&s=b&rt=ce)
+- JC/HOB e-bike data only begins in Feb '21 (vs. Jan '20 for NYC) ([example](${RideableTypesExample}))
 - The "User Type" values changed ("Annual" → "member", "Daily" → "casual"); I'm using the former/old values here, they seem equivalent.
                     ` })}
             <div className={css.footer}>
