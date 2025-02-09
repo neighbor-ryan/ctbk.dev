@@ -20,7 +20,7 @@ def default_end(roots: Optional[DefaultDict[str]]):
     """Infer the last available month of data by checking which Tripdata Zips are present."""
     global _default_end
     if not _default_end:
-        from ctbk import TripdataZips
+        from ctbk.zips import TripdataZips
 
         yms = list(GENESIS.until(YM()))
         zips = TripdataZips(yms=yms, roots=roots)

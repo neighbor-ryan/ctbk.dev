@@ -2,17 +2,19 @@ from abc import ABC
 from os.path import exists
 
 import pandas as pd
-from click import command, argument, option
+from click import argument, option
 from utz import err
 from utz.ym import Monthy, YM
 
-from ctbk.has_root_cli import yms_arg
+from ctbk.cli.base import ctbk
+from ctbk.has_root_cli import yms_opt
 from ctbk.util.constants import DEFAULT_ROOT
 from ctbk.util.df import DataFrame
 
 
 class MonthAggTable(ABC):
     ROOT = DEFAULT_ROOT
+    NAME = None
     SRC = None
     OUT = None
 
@@ -64,7 +66,8 @@ class MonthAggTable(ABC):
         self.write_df(df)
 
     def write_df(self, df: pd.DataFrame):
-        df.to_json(self.out, 'records')
+        err(f"Writing {self.out}")
+        df.to_json(self.out, orient='records')
 
     def run(self):
         out = self.out
@@ -82,13 +85,13 @@ class MonthAggTable(ABC):
         self.write(df)
 
     @classmethod
-    def main(cls):
-        @command
+    def init_cli(cls, help: str | None = None):
+        @ctbk.command(cls.NAME, help=help)
+        @yms_opt
         @option('-r', '--root')
         @option('-f', '--overwrite', is_flag=True)
         @argument('out', required=False)
-        @yms_arg
         def _main(*args, **kwargs):
             task = cls(*args, **kwargs)
             task.run()
-        return _main()
+

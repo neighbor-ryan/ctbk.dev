@@ -3,12 +3,12 @@ import pandas as pd
 from pandas import DataFrame
 from utz.ym import Monthy
 
-from ctbk.cli.base import ctbk
 from ctbk.month_agg_table import MonthAggTable
 
 
 class YmrgtbCdJson(MonthAggTable):
     # Used by [`index.tsx`](www/pages/index.tsx) plot
+    NAME = 'ymrgtb-cd'
     SRC = 'ctbk/aggregated'
     OUT = 'www/public/assets/ymrgtb_cd.json'
 
@@ -34,8 +34,6 @@ class YmrgtbCdJson(MonthAggTable):
         return ymr_json[sort_cols + cols]
 
 
-@ctbk.command
-def ymrgtb_cd():
-    """Read aggregated {year,month,region,gender,user-type,bike-type} x {counts,durations}, output `ymrgtb_cd.json` used
-    by webapp."""
-    YmrgtbCdJson.main()
+YmrgtbCdJson.init_cli(
+    help="Read aggregated {year,month,region,gender,user-type,bike-type} x {counts,durations}, output `ymrgtb_cd.json` used by webapp."
+)
