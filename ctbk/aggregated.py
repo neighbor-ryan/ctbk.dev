@@ -5,9 +5,9 @@ from typing import Union
 from utz import decos
 from utz.ym import Monthy
 
+from ctbk.consolidated import ConsolidatedMonth
 from ctbk.has_root_cli import HasRootCLI, yms_arg
 from ctbk.month_table import MonthTable
-from ctbk.normalized import NormalizedMonth
 from ctbk.tasks import MonthsTables
 from ctbk.util import keys
 from ctbk.util.constants import BKT
@@ -84,7 +84,7 @@ class AggregatedMonth(MonthTable):
         return f'{self.dir}/{self.group_by_keys.label}_{self.aggregate_by_keys.label}_{self.ym}.parquet'
 
     def _df(self) -> DataFrame:
-        src = NormalizedMonth(self.ym, **self.kwargs)
+        src = ConsolidatedMonth(self.ym, **self.kwargs)
         df = src.df()
         group_by_keys = dict(self.group_by_keys)
         aggregate_by_keys = dict(self.aggregate_by_keys)

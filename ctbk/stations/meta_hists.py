@@ -5,9 +5,9 @@ from typing import Union
 import pandas as pd
 from utz.ym import Monthy
 
+from ctbk.consolidated import ConsolidatedMonth
 from ctbk.has_root_cli import HasRootCLI, yms_arg
 from ctbk.month_table import MonthTable
-from ctbk.normalized import NormalizedMonth
 from ctbk.tasks import MonthsTables
 from ctbk.util import keys
 from ctbk.util.constants import BKT
@@ -55,7 +55,7 @@ class StationMetaHist(MonthTable):
         return f'{self.dir}/{self.group_by_keys.label}_{self.ym}.parquet'
 
     def _df(self) -> DataFrame:
-        src = NormalizedMonth(self.ym, **self.kwargs)
+        src = ConsolidatedMonth(self.ym, **self.kwargs)
         df = src.df()
         # Assign each ride to its start YM, ignore the end time (except for the "duration" sum_key)
         df = df.rename(columns={

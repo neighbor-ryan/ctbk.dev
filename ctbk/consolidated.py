@@ -3,14 +3,15 @@ from os.path import join
 
 import pandas as pd
 import yaml
-from click import option
 from numpy import float64
 from pandas import CategoricalDtype, DataFrame, isna
 from utz import YM, singleton, err, sxs
+from utz.ym import Monthy
 
-from ctbk.cli.base import ctbk
-from ctbk.has_root_cli import yms_arg
-from ctbk.normalized import OUT_FIELD_ORDER, dedupe_sort
+from ctbk.has_root_cli import yms_arg, HasRootCLI
+from ctbk.month_table import MonthTable
+from ctbk.normalized import DIR, OUT_FIELD_ORDER, dedupe_sort, NormalizedMonth, parquet_engine_opt, ParquetEngine
+from ctbk.tasks import MonthsTables
 
 DEFAULT_COLS = ['Birth Year', 'Gender', 'Bike ID']
 
@@ -65,21 +66,41 @@ def merge_dupes(df: DataFrame, cols: tuple[str, ...]) -> DataFrame:
     return r1.to_frame().T.astype(df.dtypes)
 
 
-@ctbk.command
-@option('-c', '--col', 'backfill_cols', multiple=True, help=f'Columns to backfill; default: {DEFAULT_COLS}')
-@option('-n', '--dry-run', is_flag=True, help='Print stats about fields that would be backfilled, but don\'t perform any writes')
-@yms_arg
-def consolidate(
-    backfill_cols: tuple[str, ...],
-    dry_run: bool,
-    yms: list[YM],
-):
-    """Consolidate `normalized/YM/YM_YM.parquet` files into a single `normalized/YM.parquet`, containing all rides
-    ending in the given month.
-    """
-    backfill_cols = list(backfill_cols) if backfill_cols else DEFAULT_COLS
-    for ym in yms:
-        d1 = load_dvc_parquets(ym)
+class ConsolidatedMonth(MonthTable):
+    DIR = DIR
+    NAMES = [ 'consolidated', 'cons', 'con', ]
+
+    def __init__(self, ym: Monthy, /, engine: ParquetEngine = 'auto', **kwargs):
+        self.engine = engine
+        super().__init__(ym, **kwargs)
+
+    @property
+    def checkpoint_kwargs(self):
+        return dict(write_kwargs=dict(index=False, engine=self.engine))
+
+    def load_df(self) -> DataFrame:
+        norm_dfs = NormalizedMonth(self.ym, engine=self.engine, **self.kwargs).dfs()
+        dfs = []
+        for file, df in norm_dfs.items():
+            df = df.assign(file=file)
+            if file == '201306/201307_201307.parquet':
+                assert len(df) == 1
+                # This file contains an almost-dupe of the first row in 201307/201307_201307.parquet:
+                #
+                #   Start Time           Stop Time Start Station ID Start Station Name Start Station Latitude  Start Station Longitude Start Region End Station ID End Station Name  End Station Latitude  End Station Longitude End Region Rideable Type User Type  Gender Birth Year  Bike ID
+                # 0 2013-07-01 2013-07-01 00:10:34              164    E 47 St & 2 Ave              40.753231               -73.970325          NYC            504  1 Ave & E 15 St             40.732219             -73.981656        NYC       unknown  Customer       0       <NA>    16950
+                # 0 2013-07-01 2013-07-01 00:10:34              164    E 47 St & 2 Ave              40.753231               -73.970325          NYC            504  1 Ave & E 16 St             40.732219             -73.981656        NYC       unknown  Customer       0       <NA>    16950
+                #
+                # Note what looks like a typo in "End Station Name", everything else is identical
+                err(f"Skipping {file} containing 1 known-dupe row")
+            else:
+                dfs.append(df)
+        return pd.concat(dfs)
+
+    def _df(self) -> DataFrame:
+        d1 = self.load_df()
+        ym = self.ym
+        backfill_cols = DEFAULT_COLS
         if ym.y >= 2020 and ym <= YM(202101):
             # Earlier versions of Citi Bike data included "Gender", "Birth Year", and "Bike ID" columns for
             # [202001,202101] (ending when Lyft took over in 202102). For those months, we join and backfill those
@@ -180,25 +201,36 @@ def consolidate(
                 fill_col(col)
 
         d1 = dedupe_sort(d1, name=f"{ym}")
+        d1 = d1.drop(columns='file')
+        expected_cols = [*OUT_FIELD_ORDER]
+        if ym.y < 2020:
+            expected_cols.remove('Ride ID')
+        elif ym >= YM(202102):
+            expected_cols.remove('Bike ID')
+            expected_cols.remove('Birth Year')
+        cols0 = set(expected_cols)
+        cols1 = set(d1.columns)
+        extra_cols = cols1 - cols0
+        missing_cols = cols0 - cols1
+        if extra_cols:
+            err(f"{ym}: extra columns: {', '.join(extra_cols)}")
+        if missing_cols:
+            err(f"{ym}: missing columns: {', '.join(missing_cols)}")
 
-        pqt_path = join('s3', 'ctbk', 'normalized', f'{ym}.parquet')
-        if not dry_run:
-            d1 = d1.drop(columns='file')
-            expected_cols = [*OUT_FIELD_ORDER]
-            if ym.y < 2020:
-                expected_cols.remove('Ride ID')
-            elif ym >= YM(202102):
-                expected_cols.remove('Bike ID')
-                expected_cols.remove('Birth Year')
-            cols0 = set(expected_cols)
-            cols1 = set(d1.columns)
-            extra_cols = cols1 - cols0
-            missing_cols = cols0 - cols1
-            if extra_cols:
-                err(f"{ym}: extra columns: {', '.join(extra_cols)}")
-            if missing_cols:
-                err(f"{ym}: missing columns: {', '.join(missing_cols)}")
+        d1 = d1[[ k for k in OUT_FIELD_ORDER if k in d1 ]]
+        return d1
 
-            d1 = d1[[ k for k in OUT_FIELD_ORDER if k in d1 ]]
-            d1.to_parquet(pqt_path, index=False)
-            err(f"Saved {pqt_path}")
+
+class ConsolidatedMonths(MonthsTables, HasRootCLI):
+    DIR = DIR
+    CHILD_CLS = ConsolidatedMonth
+
+    def month(self, ym: Monthy) -> ConsolidatedMonth:
+        return ConsolidatedMonth(ym, **self.kwargs, **self.extra)
+
+
+ConsolidatedMonths.cli(
+    help=f"Consolidate normalized parquet files (combine regions for each month, harmonize column names, etc. Populates directory `<root>/{DIR}/YYYYMM/` with files of the form `YYYYMM_YYYYMM.parquet`, for each pair of (start,end) months found in a given month's CSVs.",
+    cmd_decos=[yms_arg],
+    create_decos=[parquet_engine_opt]
+)

@@ -1,4 +1,4 @@
-from . import zips, csvs, normalized, partition, consolidate, aggregated, ymrgtb_cd
+from . import zips, csvs, normalized, partition, consolidated, aggregated, ymrgtb_cd
 from .stations import meta_hists, modes, pair_jsons
 from .cli import yms
 

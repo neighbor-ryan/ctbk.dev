@@ -1,6 +1,6 @@
 import re
 from re import sub
-from typing import Pattern
+from typing import Literal, Pattern
 
 import pandas as pd
 from click import option
@@ -120,6 +120,15 @@ RGXS: dict[str, list[Pattern]] = {
     }.items()
 }
 GENDER_MAP = {"U": 0, "M": 1, "F": 2}
+
+
+ParquetEngine = Literal['auto', 'fastparquet', 'pyarrow']
+parquet_engine_opt = option(
+    '-e', '--engine',
+    count=True,
+    callback=lambda ctx, param, value: ['auto', "fastparquet", "pyarrow"][value],
+    help='1x: fastparquet, 2x: pyarrow',
+)
 
 
 def get_region(station_id, src: str, file_region: Region | None):
@@ -265,8 +274,8 @@ class NormalizedMonth(MonthDirTables):
     DIR = DIR
     NAMES = [ 'normalized', 'norm', 'n', ]
 
-    def __init__(self, ym: Monthy, /, engine: int | None = None, **kwargs):
-        self.engine = 'fastparquet' if engine == 1 else 'pyarrow' if engine == 2 else 'auto'
+    def __init__(self, ym: Monthy, /, engine: ParquetEngine = 'auto', **kwargs):
+        self.engine = engine
         super().__init__(ym, **kwargs)
 
     def normalized_region(self, region: Region) -> Tables:
@@ -304,7 +313,5 @@ class NormalizedMonths(MonthsDirTables, HasRootCLI):
 NormalizedMonths.cli(
     help=f"Normalize \"tripdata\" CSVs (combine regions for each month, harmonize column names, etc. Populates directory `<root>/{DIR}/YYYYMM/` with files of the form `YYYYMM_YYYYMM.parquet`, for each pair of (start,end) months found in a given month's CSVs.",
     cmd_decos=[yms_arg],
-    create_decos=[
-        option('-e', '--engine', count=True, help='1x: fastparquet, 2x: pyarrow'),
-    ]
+    create_decos=[parquet_engine_opt]
 )
