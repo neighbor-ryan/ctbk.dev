@@ -95,6 +95,7 @@ Then the `ctbk` executable will be available, which exposes a subcommand for eac
 
 ## CLI <a id="cli"></a>
 
+<!-- `bmdfff -- ctbk` -->
 <details><summary><code>ctbk</code></summary>
 
 ```
@@ -162,16 +163,20 @@ Commands:
   zip                 Read .csv.zip files from s3://tripdata
   csv                 Extract CSVs from "tripdata" .zip files.
   normalized          Normalize "tripdata" CSVs (combine regions for each...
+  partition           Separate pre-2024 parquets (`normalized/v0`) by...
+  consolidate         Consolidate `normalized/YM/YM_YM.parquet` files...
   aggregated          Aggregate normalized ride entries by various...
   ymrgtb-cd           Read aggregated...
   station-meta-hist   Aggregate station name, lat/lng info from ride...
   station-modes-json  Compute canonical station names, lat/lngs from...
   station-pairs-json  Write station-pair ride_counts keyed by...
+  yms                 Print one or more YM (year-month) ranges, e.g.:
 ```
 </details>
 
 
-<details><summary><code>ctbk zip</code></summary>
+<!-- `bmdfff -- ctbk zip --help` -->
+<details><summary><code>ctbk zip --help</code></summary>
 
 ```
 Usage: ctbk zip [OPTIONS] COMMAND [ARGS]...
@@ -179,17 +184,15 @@ Usage: ctbk zip [OPTIONS] COMMAND [ARGS]...
   Read .csv.zip files from s3://tripdata
 
 Options:
-  -d, --dates TEXT
-  -r, --region [NYC|JC]
-  --help                 Show this message and exit.
+  --help  Show this message and exit.
 
 Commands:
   urls  Print URLs for selected datasets
 ```
 </details>
 
-
-<details><summary><code>ctbk csv</code></summary>
+<!-- `bmdfff -- ctbk csv --help` -->
+<details><summary><code>ctbk csv --help</code></summary>
 
 ```
 Usage: ctbk csv [OPTIONS] COMMAND [ARGS]...
@@ -197,28 +200,28 @@ Usage: ctbk csv [OPTIONS] COMMAND [ARGS]...
   Extract CSVs from "tripdata" .zip files. Writes to <root>/ctbk/csvs.
 
 Options:
-  -d, --dates TEXT
-  -r, --region [NYC|JC]
-  --help                 Show this message and exit.
+  --help  Show this message and exit.
 
 Commands:
   urls    Print URLs for selected datasets
   create  Create selected datasets
+  sort    Sort one or more `.csv{,.gz}`'s in-place, remove empty lines
 ```
 </details>
 
-
-<details><summary><code>ctbk normalized</code></summary>
+<!-- `bmdfff -- ctbk normalized --help` -->
+<details><summary><code>ctbk normalized --help</code></summary>
 
 ```
 Usage: ctbk normalized [OPTIONS] COMMAND [ARGS]...
 
   Normalize "tripdata" CSVs (combine regions for each month, harmonize column
-  names, etc. Writes to <root>/ctbk/normalized/YYYYMM.parquet.
+  names, etc. Populates directory `<root>/ctbk/normalized/YYYYMM/` with files
+  of the form `YYYYMM_YYYYMM.parquet`, for each pair of (start,end) months
+  found in a given month's CSVs.
 
 Options:
-  -d, --dates TEXT
-  --help            Show this message and exit.
+  --help  Show this message and exit.
 
 Commands:
   urls    Print URLs for selected datasets
@@ -226,8 +229,39 @@ Commands:
 ```
 </details>
 
+<!-- `bmdfff -- ctbk partition --help` -->
+<details><summary><code>ctbk partition --help</code></summary>
 
-<details><summary><code>ctbk aggregated</code></summary>
+```
+Usage: ctbk partition [OPTIONS] [YM_RANGES_STR]
+
+  Separate pre-2024 parquets (`normalized/v0`) by {src,start,end} months.
+
+Options:
+  --help  Show this message and exit.
+```
+</details>
+
+<!-- `bmdfff -- ctbk consolidate --help` -->
+<details><summary><code>ctbk consolidate --help</code></summary>
+
+```
+Usage: ctbk consolidate [OPTIONS] [YM_RANGES_STR]
+
+  Consolidate `normalized/YM/YM_YM.parquet` files into a single
+  `normalized/YM.parquet`, containing all rides ending in the given month.
+
+Options:
+  -c, --col TEXT  Columns to backfill; default: ['Birth Year', 'Gender', 'Bike
+                  ID']
+  -n, --dry-run   Print stats about fields that would be backfilled, but don't
+                  perform any writes
+  --help          Show this message and exit.
+```
+</details>
+
+<!-- `bmdfff -- ctbk aggregated --help` -->
+<details><summary><code>ctbk aggregated --help</code></summary>
 
 ```
 Usage: ctbk aggregated [OPTIONS] COMMAND [ARGS]...
@@ -236,14 +270,7 @@ Usage: ctbk aggregated [OPTIONS] COMMAND [ARGS]...
   durations. Writes to <root>/ctbk/aggregated/KEYS_YYYYMM.parquet.
 
 Options:
-  -d, --dates TEXT
-  -g, --group-by TEXT      One or more keys to group rides by: 'y' (year), 'm'
-                           (month), 'w' (weekday), 'h' (hour), 'r' (region),
-                           'g' (gender), 't' (user_type), 'b' (rideable_type),
-                           's' (start_station), 'e' (end_station)  [required]
-  -a, --aggregate-by TEXT  One or more keys to aggregate (sum) rides by: 'c'
-                           (count), 'd' (duration)  [required]
-  --help                   Show this message and exit.
+  --help  Show this message and exit.
 
 Commands:
   urls    Print URLs for selected datasets
@@ -251,8 +278,8 @@ Commands:
 ```
 </details>
 
-
-<details><summary><code>ctbk station-meta-hist</code></summary>
+<!-- `bmdfff -- ctbk station-meta-hist --help` -->
+<details><summary><code>ctbk station-meta-hist --help</code></summary>
 
 ```
 Usage: ctbk station-meta-hist [OPTIONS] COMMAND [ARGS]...
@@ -261,12 +288,7 @@ Usage: ctbk station-meta-hist [OPTIONS] COMMAND [ARGS]...
   to <root>/ctbk/stations/meta_hists/KEYS_YYYYMM.parquet.
 
 Options:
-  -d, --dates TEXT
-  -g, --group-by TEXT  One or more keys to group station occurrences (taken
-                       from both ride starts and ends) by: 'y' (year), 'm'
-                       (month), 'i' (id), 'n' (name), 'l' (lat_lng)
-                       [required]
-  --help               Show this message and exit.
+  --help  Show this message and exit.
 
 Commands:
   urls    Print URLs for selected datasets
@@ -274,8 +296,8 @@ Commands:
 ```
 </details>
 
-
-<details><summary><code>ctbk station-modes-json</code></summary>
+<!-- `bmdfff -- ctbk station-modes-json --help` -->
+<details><summary><code>ctbk station-modes-json --help</code></summary>
 
 ```
 Usage: ctbk station-modes-json [OPTIONS] COMMAND [ARGS]...
@@ -284,8 +306,7 @@ Usage: ctbk station-modes-json [OPTIONS] COMMAND [ARGS]...
   <root>/ctbk/aggregated/YYYYMM/stations.json.
 
 Options:
-  -d, --dates TEXT
-  --help            Show this message and exit.
+  --help  Show this message and exit.
 
 Commands:
   urls    Print URLs for selected datasets
@@ -293,8 +314,8 @@ Commands:
 ```
 </details>
 
-
-<details><summary><code>ctbk station-pairs-json</code></summary>
+<!-- `bmdfff -- ctbk station-pairs-json --help` -->
+<details><summary><code>ctbk station-pairs-json --help</code></summary>
 
 ```
 Usage: ctbk station-pairs-json [OPTIONS] COMMAND [ARGS]...
@@ -303,8 +324,7 @@ Usage: ctbk station-pairs-json [OPTIONS] COMMAND [ARGS]...
   to <root>/ctbk/aggregated/YYYYMM/se_c.json.
 
 Options:
-  -d, --dates TEXT
-  --help            Show this message and exit.
+  --help  Show this message and exit.
 
 Commands:
   urls    Print URLs for selected datasets
