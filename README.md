@@ -35,7 +35,7 @@
 [![](www/public/screenshots/ctbk-rides-by-user.png)][ctbk user type pct plot]
 
 ### Total Classic / E-bike Ride Minutes <a id="ctbk-ebike-minutes"></a>
-[ctbk.dev?y=m&s=b&rt=ce][ctbk ebike minutes plot]:
+[ctbk.dev?y=m&s=b&rt=ce&d=2002-][ctbk ebike minutes plot]:
 
 [![](www/public/screenshots/ctbk-ebike-minutes.png)][ctbk ebike minutes plot]
 
@@ -45,7 +45,7 @@ This is a work-in-progress; red = newer, yellow = older:
 ![](www/public/img/stations-by-creation-date.png)
 
 ### E-bike minutes by user type <a id="ctbk-ebike-minutes-by-user"></a>
-[ctbk.dev/?y=m&s=u&rt=e][ctbk ebike minutes by user plot]:
+[ctbk.dev/?y=m&s=u&rt=e&d=2002-][ctbk ebike minutes by user plot]:
 
 [![](www/public/screenshots/ctbk-ebike-minutes-by-user.png)][ctbk ebike minutes by user plot]
 
@@ -102,8 +102,8 @@ Feel free to [file an issue here][github new issue] with any comments, bug repor
 [ctbk.dev/stations]: https://ctbk.dev/stations?ll=40.733_-74.036&z=14&ss=HB102
 [ctbk nj plot]: https://ctbk.dev/?r=jh
 [ctbk user type pct plot]: https://ctbk.dev/?s=u&pct=
-[ctbk ebike minutes plot]: https://ctbk.dev?y=m&s=b&rt=ce
-[ctbk ebike minutes by user plot]: https://ctbk.dev/?y=m&s=u&rt=e
+[ctbk ebike minutes plot]: https://ctbk.dev?y=m&s=b&rt=ce&d=2002-
+[ctbk ebike minutes by user plot]: https://ctbk.dev/?y=m&s=u&rt=e&d=2002-
 [citi bike day pricing]: https://citibikenyc.com/pricing/day
 [citi bike member pricing]: https://citibikenyc.com/pricing/annual
 [citi ebike rides per day]: https://ride.citibikenyc.com/blog/ridershiprecords#:~:text=Our%20ebikes%20are%20seeing%20more%20than%2010%20rides%20per%20bike%20per%20day
