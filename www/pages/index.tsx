@@ -1,6 +1,6 @@
 import { Tooltip } from "@mui/material"
+import { concat, fromEntries, mapValues, o2a, } from "@rdub/base"
 import { loadJsonSync } from "@rdub/base/json/load"
-import { concat, fromEntries, mapValues, o2a, } from "@rdub/base/objs"
 import { icons } from "@rdub/icons"
 import A from "@rdub/next-base/a"
 import MD from "@rdub/next-markdown/md"

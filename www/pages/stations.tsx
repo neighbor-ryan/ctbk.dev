@@ -5,12 +5,12 @@ import { parseQueryParams } from "@rdub/next-params/query"
 import 'leaflet/dist/leaflet.css'
 import _ from "lodash"
 import dynamic from "next/dynamic"
-import fetch from "node-fetch"
 import { useMemo, useState } from 'react'
 import css from './stations.module.css'
+import { loadDvcUrlsMap } from '../src/dvc'
 import Head from "../src/head"
 import { LAST_MONTH_PATH } from "../src/paths"
-import type { ID, Props, StationPairCounts, Stations } from "../src/stations"
+import type { ID, Props as StationsProps, StationPairCounts, Stations } from "../src/stations"
 import type { MapContainerProps } from "@rdub/next-leaflet/container"
 
 const Map = dynamic(() => import("../src/stations"), { ssr: false })
@@ -22,17 +22,25 @@ const { entries, fromEntries, keys } = Object
 
 type Idx = string
 
-type YmProps = {
-    ym: string
-    stations: Stations
+export type Defaults = {
+  ym: string
+  stations: Stations
+}
+export type Props = {
+  defaults: Defaults
+  stationsUrls: Record<string, string>
+  stationsPairsUrl: Record<string, string>
 }
 
 export async function getStaticProps() {
   const ym = loadJsonSync<string>(LAST_MONTH_PATH)
-  const stationsUrl = `https://ctbk.s3.amazonaws.com/aggregated/${ym}/stations.json`
+  const stationsUrls = await loadDvcUrlsMap(`../s3/ctbk/aggregated/20*/stations.json.dvc`)
+  const stationsPairsUrl = await loadDvcUrlsMap(`../s3/ctbk/aggregated/20*/se_c.json.dvc`)
+  const stationsUrl = stationsUrls[ym]
+  console.log(`Stations URL (${ym}): ${stationsUrl}`)
   const stations = await fetchJson<Stations>(stationsUrl)
-  const defaults: YmProps = { ym, stations }
-  return { props: { defaults } }
+  const defaults: Defaults = { ym, stations }
+  return { props: { defaults, stationsUrls, stationsPairsUrl, } }
 }
 
 type Params = {
@@ -70,7 +78,7 @@ export function ymParam(init: string, push: boolean = true): Param<string> {
   }
 }
 
-export default function Home({ defaults }: { defaults: YmProps, }) {
+export default function Home({ defaults, stationsUrls, stationsPairsUrl, }: Props) {
   const params: Params = {
     ll: llParam({ init: DEFAULT_CENTER, places: 3, }),
     z: floatParam(DEFAULT_ZOOM, false),
@@ -92,9 +100,8 @@ export default function Home({ defaults }: { defaults: YmProps, }) {
       const year = parseInt(ym.substring(0, 4))
       const month = parseInt(ym.substring(4))
       const ymString = new Date(year, month - 1).toLocaleDateString('default', { month: 'short', year: 'numeric' })
-      const dir = `https://ctbk.s3.amazonaws.com/aggregated/${ym}`
-      const stationPairsUrl = `${dir}/se_c.json`
-      const stationsUrl = `${dir}/stations.json`
+      const stationsUrl = stationsUrls[ym]
+      const stationPairsUrl = stationsPairsUrl[ym]
 
       let stationsPromise: Promise<Stations>
       if (ym == defaults.ym) {
@@ -128,7 +135,6 @@ export default function Home({ defaults }: { defaults: YmProps, }) {
         console.log(`got stationPairCounts (${entries(newStationPairCounts).length} stations)`)
         setStationPairCounts(newStationPairCounts)
       })
-
       return { ymString }
     },
     [ ym ]
@@ -145,7 +151,7 @@ export default function Home({ defaults }: { defaults: YmProps, }) {
       setSelectedStationId(undefined)
     },
   }
-  const mapBodyProps: Props = {
+  const mapBodyProps: StationsProps = {
     stations,
     selectedStationId,
     setSelectedStationId,

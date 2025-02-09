@@ -6,12 +6,15 @@ const minimize = !['false', 'n', 'no', '0'].includes(NEXT_MINIFY)
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   swcMinify: true,
-  transpilePackages: ['@rdub/icons'],
+  transpilePackages: [
+    '@rdub/base',
+    '@rdub/icons',
+  ],
   images: {
     unoptimized: true,
   },
-  webpack({ optimization, ...webpackConfig }) {
-    return { ...webpackConfig, optimization: { ...optimization, minimize } }
+  webpack({ optimization, ...config }) {
+    return { ...config, optimization: { ...optimization, minimize } }
   },
   output: "export",
 }

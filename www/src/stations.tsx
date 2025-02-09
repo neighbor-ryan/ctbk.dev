@@ -14,7 +14,8 @@ export type StationValue = {
   name: string
   lat: number
   lng: number
-  starts: number
+  // starts: number
+  ends: number
 }
 export type Stations = Record<ID, StationValue>
 
@@ -74,7 +75,7 @@ export function MapBody(
           const { name, lat, lng } = stations[id]
           return <Polyline key={`${selectedStationId}-${id}-${zoom}`} color={"red"}
             positions={[[src.lat, src.lng], [lat, lng],]}
-            weight={Math.max(0.7, count / maxDst * sqrt(src.starts) / mPerPx)} opacity={0.7}>
+            weight={Math.max(0.7, count / maxDst * sqrt(src.ends) / mPerPx)} opacity={0.7}>
             <Tooltip sticky={true}>
               {src.name} → {name}: {count}
             </Tooltip>
@@ -93,7 +94,7 @@ export function MapBody(
             <StationCircle
               key={selectedStationId}
               id={selectedStationId}
-              count={selectedStation.starts}
+              count={selectedStation.ends}
               selected={true}
               {...stationCircleProps}
             />
@@ -105,7 +106,7 @@ export function MapBody(
           <StationCircle
             key={id}
             id={id}
-            count={station.starts}
+            count={station.ends}
             {...stationCircleProps}
           />
         )

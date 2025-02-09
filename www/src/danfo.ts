@@ -1,4 +1,4 @@
-import { isSorted } from "@rdub/base/objs"
+import { isSorted } from "@rdub/base"
 import { DataFrame, Series } from "danfojs"
 
 const { fromEntries } = Object

@@ -25,6 +25,10 @@ export default function StationCircle(
     return null
   }
   const { name, lat, lng } = stations[id]
+  const radius = sqrt(count)
+  if (isNaN(radius)) {
+    return null
+  }
   return (
     <Circle
       key={id}
