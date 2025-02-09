@@ -1,12 +1,23 @@
 # `ctbk` python library
 CLI for generating [ctbk.dev] datasets (derived from Citi Bike public data in [`s3://tripdata`]).
 
+<!-- toc -->
 - [Data flow](#data-flow)
+    - [`TripdataZips` (a.k.a. `zip`s): public Citi Bike `.csv.zip` files](#zips)
+    - [`TripdataCsvs` (a.k.a. `csv`s): unzipped and gzipped CSVs](#csvs)
+    - [`NormalizedMonths` (a.k.a. `norm`s): normalize `csv`s](#normalized)
+    - [`AggregatedMonths` (a.k.a. `agg`s): compute histograms over each month's rides:](#aggregated)
+    - [`StationMetaHists` (a.k.a. `smh`s): compute station {id,name,lat/lng} histograms:](#station-meta-hists)
+    - [`StationModes` (a.k.a. `sm`s): canonical {id,name,lat/lng} info for each station:](#station-modes)
+    - [`StationPairJsons` (a.k.a. `spj`s): counts of rides between each pair of stations:](#station-pair-jsons)
 - [Installation](#installation)
 - [CLI](#cli)
-  - [Subcommands: `urls`, `create`](#subcommands)
-  - [Examples](#examples)
+    - [Subcommands: `urls`, `create`](#subcommands)
+    - [Examples](#examples)
 - [GitHub Actions](#ghas)
+    - [`ci.yml`](#ci-yml)
+    - [`www.yml`](#www-yml)
+<!-- /toc -->
 
 ## Data flow <a id="data-flow"></a>
 
