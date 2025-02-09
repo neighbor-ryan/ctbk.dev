@@ -67,7 +67,7 @@ jobs:
       name: Aggregate counts by station-pair
       run: ctbk --s3 aggregated create -gse -ac
     secrets: inherit
-  modes:
+  station-modes:
     needs: [meta_hist-names, meta_hist-latlngs, group_counts-end]
     uses: ./.github/workflows/step.yml
     with:
@@ -75,7 +75,7 @@ jobs:
       run: ctbk --s3 station-mode create
     secrets: inherit
   station_pair_jsons:
-    needs: [modes, group_counts-start-end]
+    needs: [station-modes, group_counts-start-end]
     uses: ./.github/workflows/step.yml
     with:
       name: Build station-pair count JSONs
