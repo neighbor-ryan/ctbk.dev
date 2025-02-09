@@ -31,21 +31,7 @@ class TripdataZip(Task):
     def url(self):
         ymi = int(self.yym)
         region = self.region
-
-        # Typos in 202206, 202207 and JC-202207
-        citbike_typo_months = [ (202207, 'JC'), ]
-        citibike = 'citbike' if (ymi, region) in citbike_typo_months else 'citibike'
-
-        extension = 'csv.zip'
-        if region == 'NYC':
-            # NYC zips are broken into multiple CSVs starting in 202404, maybe that's why the extension is just ".zip"?
-            if ymi < 2024 or ymi > 202404:
-                extension = 'zip'
-            url = f'{self.dir}/{ymi}-{citibike}-tripdata.{extension}'
-        else:
-            sep = ' ' if ymi == 201708 else '-'
-            url = f'{self.dir}/{region}-{ymi}{sep}{citibike}-tripdata.{extension}'
-        return url
+        return f'{self.dir}/{"JC-" if region == "JC" else ""}{ymi}-citibike-tripdata.zip'
 
 
 class TripdataZips(HasRootCLI):
