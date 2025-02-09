@@ -5,7 +5,7 @@ from typing import Union
 from utz import decos
 from utz.ym import Monthy
 
-from ctbk.has_root_cli import HasRootCLI, dates
+from ctbk.has_root_cli import HasRootCLI, yms_arg
 from ctbk.month_table import MonthTable
 from ctbk.normalized import NormalizedMonth
 from ctbk.tasks import MonthsTables
@@ -183,5 +183,5 @@ def cmd(fn):
 
 AggregatedMonths.cli(
     help=f"Aggregate normalized ride entries by various columns, summing ride counts or durations. Writes to <root>/{DIR}/KEYS_YYYYMM.parquet.",
-    cmd_decos=[dates, cmd],
+    cmd_decos=[yms_arg, cmd],
 )

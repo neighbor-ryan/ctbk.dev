@@ -9,7 +9,7 @@ from utz import cached_property, err, sxs
 from utz.ym import Monthy
 
 from ctbk.aggregated import AggregatedMonth, DIR
-from ctbk.has_root_cli import HasRootCLI, dates
+from ctbk.has_root_cli import HasRootCLI, yms_arg
 from ctbk.month_table import MonthTable
 from ctbk.stations.meta_hists import StationMetaHist
 from ctbk.tasks import MonthsTables
@@ -191,5 +191,5 @@ class ModesMonthJsons(HasRootCLI, MonthsTables):
 
 ModesMonthJsons.cli(
     help=f"Compute canonical station names, lat/lngs from StationMetaHists. Writes to <root>/{DIR}/YYYYMM/stations.json.",
-    cmd_decos=[dates],
+    cmd_decos=[yms_arg],
 )

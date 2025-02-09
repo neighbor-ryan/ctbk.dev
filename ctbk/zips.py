@@ -3,7 +3,7 @@ from typing import Optional
 from utz import cached_property, DefaultDict
 from utz.ym import YM
 
-from ctbk.has_root_cli import HasRootCLI, dates
+from ctbk.has_root_cli import HasRootCLI, yms_arg
 from ctbk.task import Task
 from ctbk.util.region import REGIONS, Region, get_regions, region
 
@@ -94,6 +94,6 @@ class TripdataZips(HasRootCLI):
 
 TripdataZips.cli(
     help="Read .csv.zip files from s3://tripdata",
-    cmd_decos=[dates, region],
+    cmd_decos=[yms_arg, region],
     create=False,
 )

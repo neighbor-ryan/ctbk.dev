@@ -1,31 +1,26 @@
-from click import argument, option
+from click import option
+from utz import YM
 
-from .base import ctbk, roots_opt, load_roots
-from ..has_root_cli import default_end
-from ..util import GENESIS
-from ..util.ym import parse_ym_ranges_str
+from .base import ctbk
+from ..has_root_cli import yms_arg
 
 
 @ctbk.command()
 @option('-p', '--prefix', help='Prepend this string to each "YM" output line')
 @option('-r', '--reverse', is_flag=True, help='Output months in reverse order')
 @option('-s', '--suffix', help='Append this string to each "YM" output line')
-@roots_opt
-@argument('ym-ranges', required=False)
+@yms_arg
 def yms(
     prefix: str | None,
     reverse: bool,
     suffix: str | None,
-    roots: tuple[str, ...],
-    ym_ranges: str | None,
+    yms: list[YM],
 ):
-    roots = load_roots(roots)
-    if not ym_ranges:
-        ym_ranges = '-'  # Default to all available months
-    yms = parse_ym_ranges_str(
-        ym_ranges,
-        default_start=GENESIS,
-        default_end=lambda: default_end(roots=roots),
-    )
+    """Print one or more YM (year-month) ranges, e.g.:
+
+    yms 24-25  # 202401, 202402, …, 202412
+
+    yms -r     # All YMs, reverse order
+    """
     for ym in reversed(yms) if reverse else yms:
         print(f"{prefix or ''}{ym}{suffix or ''}")

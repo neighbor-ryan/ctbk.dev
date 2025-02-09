@@ -9,7 +9,7 @@ from pandas import CategoricalDtype, DataFrame, isna
 from utz import YM, singleton, err, sxs
 
 from ctbk.cli.base import ctbk
-from ctbk.has_root_cli import dates
+from ctbk.has_root_cli import yms_arg
 from ctbk.normalized import OUT_FIELD_ORDER, dedupe_sort
 
 DEFAULT_COLS = ['Birth Year', 'Gender', 'Bike ID']
@@ -67,12 +67,12 @@ def merge_dupes(df: DataFrame, cols: tuple[str, ...]) -> DataFrame:
 
 @ctbk.command
 @option('-c', '--col', 'backfill_cols', multiple=True, help=f'Columns to backfill; default: {DEFAULT_COLS}')
-@dates
 @option('-n', '--dry-run', is_flag=True, help='Print stats about fields that would be backfilled, but don\'t perform any writes')
+@yms_arg
 def consolidate(
     backfill_cols: tuple[str, ...],
-    yms: list[YM],
     dry_run: bool,
+    yms: list[YM],
 ):
     """Consolidate `normalized/YM/YM_YM.parquet` files into a single `normalized/YM.parquet`, containing all rides
     ending in the given month.

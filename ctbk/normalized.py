@@ -9,7 +9,7 @@ from utz import err, sxs
 from utz.ym import Monthy
 
 from ctbk.csvs import TripdataCsv
-from ctbk.has_root_cli import HasRootCLI, dates
+from ctbk.has_root_cli import HasRootCLI, yms_arg
 from ctbk.month_table import MonthDirTables
 from ctbk.tables_dir import Tables
 from ctbk.tasks import MonthsDirTables
@@ -303,7 +303,7 @@ class NormalizedMonths(MonthsDirTables, HasRootCLI):
 
 NormalizedMonths.cli(
     help=f"Normalize \"tripdata\" CSVs (combine regions for each month, harmonize column names, etc. Populates directory `<root>/{DIR}/YYYYMM/` with files of the form `YYYYMM_YYYYMM.parquet`, for each pair of (start,end) months found in a given month's CSVs.",
-    cmd_decos=[dates],
+    cmd_decos=[yms_arg],
     create_decos=[
         option('-e', '--engine', count=True, help='1x: fastparquet, 2x: pyarrow'),
     ]

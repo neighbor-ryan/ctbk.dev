@@ -13,7 +13,7 @@ from utz import cached_property, Unset, err, singleton
 from utz.gzip import DeterministicGzipFile, deterministic_gzip_open
 from utz.ym import YM
 
-from ctbk.has_root_cli import HasRootCLI, dates
+from ctbk.has_root_cli import HasRootCLI, yms_arg
 from ctbk.table import Table
 from ctbk.task import Task
 from ctbk.util.constants import BKT
@@ -356,7 +356,7 @@ class TripdataCsvs(HasRootCLI):
 cli = TripdataCsvs.cli(
     help=f"Extract CSVs from \"tripdata\" .zip files. Writes to <root>/{DIR}.",
     cmd_decos=[
-        dates,
+        yms_arg,
         region,
         option('-t', '--name-type', type=int, help='1: prefer type 1, 2: prefer type 2, 11: require type 1, 22: require type 2'),
     ],

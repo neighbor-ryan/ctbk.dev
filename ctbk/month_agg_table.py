@@ -6,7 +6,7 @@ from click import command, argument, option
 from utz import err
 from utz.ym import Monthy, YM
 
-from ctbk.has_root_cli import dates
+from ctbk.has_root_cli import yms_arg
 from ctbk.util.constants import DEFAULT_ROOT
 from ctbk.util.df import DataFrame
 
@@ -87,7 +87,7 @@ class MonthAggTable(ABC):
         @option('-r', '--root')
         @option('-f', '--overwrite', is_flag=True)
         @argument('out', required=False)
-        @dates
+        @yms_arg
         def _main(*args, **kwargs):
             task = cls(*args, **kwargs)
             task.run()

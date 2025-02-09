@@ -4,7 +4,7 @@ import pandas as pd
 from utz.ym import Monthy
 
 from ctbk.aggregated import AggregatedMonth, DIR
-from ctbk.has_root_cli import HasRootCLI, dates
+from ctbk.has_root_cli import HasRootCLI, yms_arg
 from ctbk.month_table import MonthTable
 from ctbk.stations.modes import ModesMonthJson
 from ctbk.tasks import MonthsTables
@@ -85,5 +85,5 @@ class StationPairsJsons(HasRootCLI, MonthsTables):
 
 StationPairsJsons.cli(
     help=f"Write station-pair ride_counts keyed by StationModes' JSON indices. Writes to <root>/{DIR}/YYYYMM/se_c.json.",
-    cmd_decos=[dates],
+    cmd_decos=[yms_arg],
 )

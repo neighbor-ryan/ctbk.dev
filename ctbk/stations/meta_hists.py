@@ -5,7 +5,7 @@ from typing import Union
 import pandas as pd
 from utz.ym import Monthy
 
-from ctbk.has_root_cli import HasRootCLI, dates
+from ctbk.has_root_cli import HasRootCLI, yms_arg
 from ctbk.month_table import MonthTable
 from ctbk.normalized import NormalizedMonth
 from ctbk.tasks import MonthsTables
@@ -162,5 +162,5 @@ def cmd(fn):
 
 StationMetaHists.cli(
     help=f"Aggregate station name, lat/lng info from ride start and end fields. Writes to <root>/{DIR}/KEYS_YYYYMM.parquet.",
-    cmd_decos=[dates, cmd],
+    cmd_decos=[yms_arg, cmd],
 )

@@ -5,14 +5,14 @@ import pandas as pd
 from utz import YM, err
 
 from ctbk.cli.base import ctbk
-from ctbk.has_root_cli import dates
+from ctbk.has_root_cli import yms_arg
 from ctbk.normalized import normalize_df
 
 V0_DIR = 's3/ctbk/normalized/v0'
 
 
 @ctbk.command
-@dates
+@yms_arg
 def partition(yms: list[YM]):
     """Separate pre-2024 parquets (`normalized/v0`) by {src,start,end} months."""
     for ym in yms:

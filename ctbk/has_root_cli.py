@@ -4,7 +4,7 @@ from typing import Optional
 
 import click
 import utz
-from click import option, pass_context, Group
+from click import option, pass_context, Group, argument
 from utz import decos, YM, DefaultDict
 from utz.case import dash_case
 
@@ -28,18 +28,25 @@ def default_end(roots: Optional[DefaultDict[str]]):
     return _default_end
 
 
-def dates(fn):
-    @option('-d', '--dates', 'ym_ranges_str', help="Start and end dates in the format 'YYYY-MM'")
-    @wraps(fn)
-    def _fn(*args, ym_ranges_str: str | None, **kwargs):
-        yms = parse_ym_ranges_str(
-            ym_ranges_str,
-            default_start=GENESIS,
-            default_end=lambda: default_end(roots=kwargs.get('roots') or kwargs.get('root')),
-        )
-        return fn(*args, yms=yms, **kwargs)
+def yms_param(deco):
+    def wrapper(fn):
+        @deco
+        @wraps(fn)
+        def _fn(*args, ym_ranges_str: str | None, **kwargs):
+            yms = parse_ym_ranges_str(
+                ym_ranges_str,
+                default_start=GENESIS,
+                default_end=lambda: default_end(roots=kwargs.get('roots') or kwargs.get('root')),
+            )
+            return fn(*args, yms=yms, **kwargs)
 
-    return _fn
+        return _fn
+
+    return wrapper
+
+
+yms_opt = yms_param(option('-d', '--dates', 'ym_ranges_str', help="Start and end dates in the format 'YYYY-MM'"))
+yms_arg = yms_param(argument('ym_ranges_str', required=False))
 
 
 class HasRootCLI(Tasks, HasRoot, ABC):
