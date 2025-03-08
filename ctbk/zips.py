@@ -1,6 +1,6 @@
 from typing import Optional
 
-from utz import cached_property, DefaultDict
+from utz import cached_property
 from utz.ym import YM
 
 from ctbk.has_root_cli import HasRootCLI, yms_arg
@@ -42,7 +42,6 @@ class TripdataZips(HasRootCLI):
         self,
         yms: list[YM],
         regions: Optional[list[str]] = None,
-        roots: Optional[DefaultDict[str]] = None,
         **kwargs,
     ):
         self.yms = yms
@@ -53,7 +52,7 @@ class TripdataZips(HasRootCLI):
             (
                 ym,
                 {
-                    region: TripdataZip(ym=ym, region=region, roots=roots)
+                    region: TripdataZip(ym=ym, region=region)
                     for region in self.regions
                     if region in get_regions(ym)
                 }
@@ -81,7 +80,7 @@ class TripdataZips(HasRootCLI):
         self.m2r2u: dict[YM, dict[Region, TripdataZip]] = m2r2u
         self.end: YM = end
 
-        super().__init__(**kwargs, roots=roots)
+        super().__init__(**kwargs)
 
     @cached_property
     def children(self) -> list[TripdataZip]:

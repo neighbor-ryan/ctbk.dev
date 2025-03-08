@@ -5,9 +5,9 @@ from typing import Literal, Tuple
 from click import option, Choice
 from utz.ym import Monthy, YM
 
-from ctbk.util.ym import NJ_GENESIS
+from ctbk.util.ym import NJ_GENESIS, GENESIS
 
-Region = Literal[ 'NYC', 'JC' ]
+Region = Literal['NYC', 'JC']
 REGIONS: Tuple[Region, ...] = typing.get_args(Region)
 
 def get_regions(ym: Monthy):
@@ -15,6 +15,15 @@ def get_regions(ym: Monthy):
         return ['NYC', 'JC']
     else:
         return ['NYC']
+
+
+def valid_ym_region(ym: YM, region: Region):
+    if region == 'NYC':
+        return ym >= GENESIS
+    elif region == 'JC':
+        return ym >= NJ_GENESIS
+    else:
+        raise ValueError(f"Unrecognized region: {region}")
 
 
 def region(fn):

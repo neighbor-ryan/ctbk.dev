@@ -1,10 +1,13 @@
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
-from os.path import dirname
+from os.path import dirname, relpath
 from urllib.parse import urlparse, ParseResult
 
 import fsspec
+import yaml
 from utz import cached_property, err
+
+from ctbk.has_root import S3_DIR
 
 
 class HasURL(ABC):
@@ -12,6 +15,21 @@ class HasURL(ABC):
     @abstractmethod
     def url(self) -> str:
         raise NotImplementedError
+
+    @property
+    def dvc_path(self) -> str:
+        return f"{self.url}.dvc"
+
+    @property
+    def dvc_spec(self):
+        dvc_path = self.dvc_path
+        with open(dvc_path, 'r') as f:
+            return yaml.safe_load(f)
+
+    @property
+    def path(self) -> str:
+        url = self.url
+        return relpath(url, S3_DIR)
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__}({self.url})'

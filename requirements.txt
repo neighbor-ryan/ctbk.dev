@@ -1,5 +1,5 @@
 aiobotocore==2.15.2
-awscli
+awscli==1.35.2
 boto3==1.35.36
 botocore==1.35.36
 click==8.1.7
