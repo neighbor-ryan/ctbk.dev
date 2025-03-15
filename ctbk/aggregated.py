@@ -73,19 +73,18 @@ class AggregatedMonth(MonthTable):
         ym: Monthy,
         group_by_keys: Union[str, GroupByKeys, dict],
         aggregate_by_keys: Union[str, AggregateByKeys, dict],
-        **kwargs
     ):
         self.group_by_keys = GroupByKeys.load(group_by_keys)
         self.aggregate_by_keys = AggregateByKeys.load(aggregate_by_keys)
-        super().__init__(ym, **kwargs)
+        super().__init__(ym)
 
     @property
     def url(self):
         return f'{self.dir}/{self.group_by_keys.label}_{self.aggregate_by_keys.label}_{self.ym}.parquet'
 
     def _df(self) -> DataFrame:
-        src = ConsolidatedMonth(self.ym, **self.kwargs)
-        df = src.df()
+        src = ConsolidatedMonth(self.ym)
+        df = src.read()
         group_by_keys = dict(self.group_by_keys)
         aggregate_by_keys = dict(self.aggregate_by_keys)
         group_by_cols = []
@@ -168,16 +167,16 @@ class AggregatedMonths(HasRootCLI, MonthsTables):
         super().__init__(**kwargs)
 
     def month(self, ym: Monthy) -> AggregatedMonth:
-        return AggregatedMonth(ym, group_by_keys=self.group_by_keys, aggregate_by_keys=self.aggregate_by_keys, **self.kwargs)
+        return AggregatedMonth(ym, group_by_keys=self.group_by_keys, aggregate_by_keys=self.aggregate_by_keys)
 
 
 def cmd(fn):
     @decos([ GroupByKeys.opt(), AggregateByKeys.opt() ])
     @wraps(fn)
-    def _fn(ctx, *args, group_by, aggregate_by, **kwargs):
+    def _fn(*args, group_by, aggregate_by, **kwargs):
         group_by_keys = GroupByKeys.load(group_by)
         aggregate_by_keys = AggregateByKeys.load(aggregate_by)
-        fn(*args, ctx=ctx, group_by_keys=group_by_keys, aggregate_by_keys=aggregate_by_keys, **kwargs)
+        fn(*args, group_by_keys=group_by_keys, aggregate_by_keys=aggregate_by_keys, **kwargs)
     return _fn
 
 

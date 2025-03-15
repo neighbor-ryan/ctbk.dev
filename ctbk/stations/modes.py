@@ -125,7 +125,7 @@ class ModesMonthJson(MonthTable):
 
     @cached_property
     def idx2id(self):
-        stations = self.df().reset_index()
+        stations = self.read().reset_index()
         stations.index.name = 'idx'
         return stations.id
 
@@ -136,20 +136,20 @@ class ModesMonthJson(MonthTable):
         return id2idx
 
     def _df(self) -> DataFrame:
-        smh_in = StationMetaHist(self.ym, 'in', **self.kwargs)
-        df_in = smh_in.df().set_index('id')
+        smh_in = StationMetaHist(self.ym, 'in')
+        df_in = smh_in.read().set_index('id')
         name_groups = df_in.groupby('id')
         names = name_groups.apply(self.compute_mode).rename('name')
 
-        smh_il = StationMetaHist(self.ym, 'il', **self.kwargs)
-        df_il = smh_il.df().set_index('id')
+        smh_il = StationMetaHist(self.ym, 'il')
+        df_il = smh_il.read().set_index('id')
         ll_groups = df_il.groupby('id')
         lls = ll_groups.apply(self.ll_mean)
         stations = sxs(names, lls).reset_index()
         stations.index.name = 'idx'
 
-        ec_am = AggregatedMonth(self.ym, 'e', 'c', **self.kwargs)
-        ec_df = ec_am.df()
+        ec_am = AggregatedMonth(self.ym, 'e', 'c')
+        ec_df = ec_am.read()
         ends = (
             ec_df
             .rename(columns={
@@ -163,7 +163,7 @@ class ModesMonthJson(MonthTable):
         stations['ends'] = stations.ends.fillna(0).astype(int)
         return stations
 
-    def _read(self) -> DataFrame:
+    def read(self) -> DataFrame:
         with self.fd('r') as f:
             df = pd.read_json(f, orient='index', convert_axes=False)
         df.index.name = 'id'
@@ -174,11 +174,8 @@ class ModesMonthJson(MonthTable):
             df.to_json(f, orient='index')
 
     @property
-    def checkpoint_kwargs(self):
-        return dict(
-            write_kwargs=self._write,
-            read_kwargs=self._read,
-        )
+    def save_kwargs(self):
+        return dict(write_kwargs=self._write)
 
 
 class ModesMonthJsons(HasRootCLI, MonthsTables):
@@ -186,7 +183,7 @@ class ModesMonthJsons(HasRootCLI, MonthsTables):
     CHILD_CLS = ModesMonthJson
 
     def month(self, ym: Monthy) -> ModesMonthJson:
-        return ModesMonthJson(ym, **self.kwargs)
+        return ModesMonthJson(ym)
 
 
 ModesMonthJsons.cli(

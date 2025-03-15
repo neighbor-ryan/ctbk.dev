@@ -7,7 +7,7 @@ import fsspec
 import yaml
 from utz import cached_property, err
 
-from ctbk.has_root import S3_DIR
+from ctbk.paths import S3
 
 
 class HasURL(ABC):
@@ -29,7 +29,7 @@ class HasURL(ABC):
     @property
     def path(self) -> str:
         url = self.url
-        return relpath(url, S3_DIR)
+        return relpath(url, S3)
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__}({self.url})'

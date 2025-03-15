@@ -1,15 +1,8 @@
-from os import environ as env
+from typing import Optional, List
 
 import click
-from click import pass_context, option, group, Context, Command
-from typing import Tuple, Optional, List
-from utz import o, DefaultDict, err, is_subsequence
-
-from ctbk.has_root import DEFAULT_ROOTS, ROOTS_ENV_VAR
-from ctbk.util import write, read
-from ctbk.util.constants import S3
-from ctbk.util.read import Disk
-from ctbk.util.write import IfAbsent
+from click import option, group, Context, Command
+from utz import err, is_subsequence
 
 
 class StableCommandOrder(click.Group):
@@ -73,24 +66,6 @@ class Ctbk(StableCommandOrder):
         return super().get_help(ctx)
 
 
-def load_roots(roots: Tuple[str, ...]):
-    if roots:
-        roots = DefaultDict.load(roots)
-        return DefaultDict(
-            configs={ **DEFAULT_ROOTS.configs, **roots.configs },
-            default=roots.default or DEFAULT_ROOTS.default,
-        )
-    else:
-        roots_str = env.get(ROOTS_ENV_VAR)
-        if not roots_str:
-            return DEFAULT_ROOTS
-        roots = DefaultDict.load(roots_str.split(','))
-        return DefaultDict(
-            configs={ **DEFAULT_ROOTS.configs, **roots.configs },
-            default=roots.default or DEFAULT_ROOTS.default,
-        )
-
-
 roots_opt = option('-t', '--root', 'roots', multiple=True, help='Path- or URL-prefixes for `HasRoot` subclasses to write to and read from. `<alias>=<value>` to set specific classes by alias, just `<value>` to set a global default. `<value>`s are `memory`, `disk`, and their aliases, indicating whether to return disk-round-tripped versions of newly-computed datasets.')
 
 
@@ -145,16 +120,5 @@ CLI for generating ctbk.dev datasets (derived from Citi Bike public data in `s3:
 - Writes `<root>/ctbk/aggregated/YYYYMM/se_c.json`
 - See also: https://ctbk.s3.amazonaws.com/index.html#/aggregated
 """)
-@pass_context
-@option('-r', '--read', 'reads', multiple=True, help='Set "read" behavior for `HasRoot` subclasses, `<alias>=<value>` to set specific classes by alias, just `<value>` to set a global default. `<value>`s are `memory`, `disk`, and their aliases, indicating whether to return disk-round-tripped versions of newly-computed datasets.')
-@roots_opt
-@option('-w', '--write', 'writes', multiple=True, help='Set "write" behavior for `HasRoot` subclasses, `<alias>=<value>` to set specific classes by alias, just `<value>` to set a global default. `<value>`s are `never`, `ifabsent`, `always`, and their aliases, indicating how to handle each dataset type already existing on disk (under its `root`) vs. not.')
-@option('--s3', is_flag=True, help="Alias for `--root s3:/`, pointing all classes' \"root\" dirs at S3")
-def ctbk(ctx, reads, roots, writes, s3):
-    if s3:
-        roots = [S3] + (list(roots) or [])
-
-    roots = load_roots(roots)
-    reads = DefaultDict.load(reads, name2value=read.parse, fallback=Disk)
-    writes = DefaultDict.load(writes, name2value=write.parse, fallback=IfAbsent)
-    ctx.obj = o(roots=roots, reads=reads, writes=writes)
+def ctbk():
+    pass

@@ -1,3 +1,4 @@
+from os.path import exists
 from typing import Optional
 
 from utz import cached_property
@@ -5,6 +6,7 @@ from utz.ym import YM
 
 from ctbk.has_root_cli import HasRootCLI, yms_arg
 from ctbk.task import Task
+from ctbk.tripdata_month import TripdataMonth
 from ctbk.util.region import REGIONS, Region, get_regions, region
 
 DIR = 'tripdata'
@@ -18,14 +20,13 @@ class TripdataZip(Task):
         self,
         ym: YM,
         region: Region,
-        roots: Optional[DefaultDict[str]] = None,
     ):
         if region not in REGIONS:
             raise ValueError(f"Unrecognized region: {region}")
         self.ym = ym
         self.yym = ym.y if region == 'NYC' and ym.y < 2024 else ym
         self.region = region
-        Task.__init__(self, roots=roots)
+        Task.__init__(self)
 
     @cached_property
     def url(self):
@@ -52,7 +53,7 @@ class TripdataZips(HasRootCLI):
             (
                 ym,
                 {
-                    region: TripdataZip(ym=ym, region=region)
+                    region: TripdataMonth(ym=ym, region=region)
                     for region in self.regions
                     if region in get_regions(ym)
                 }
@@ -63,13 +64,13 @@ class TripdataZips(HasRootCLI):
         # Default "end": current or previous calendar month
         end = max(yms) + 1
         end1, last1 = m2r2u[-1]
-        missing1 = [ region for region, month in last1.items() if not month.exists() ]
+        missing1 = [ region for region, month in last1.items() if not exists(month.dvc_path) ]
         if missing1:
             if len(m2r2u) < 2:
                 raise RuntimeError(f"Missing regions from {end1} ({', ' .join(missing1)})")
             else:
                 end2, last2 = m2r2u[-2]
-                missing2 = [ region for region, month in last2.items() if not month.exists() ]
+                missing2 = [ region for region, month in last2.items() if not exists(month.dvc_path) ]
                 if missing2:
                     raise RuntimeError(f"Missing regions from {end1} ({', ' .join(missing1)}) and {end2} ({', '.join(missing2)})")
             end = end2 + 1

@@ -8,9 +8,9 @@ from ctbk.task import Task
 
 
 class MonthTask(Task, ABC):
-    def __init__(self, ym: Monthy, **kwargs):
+    def __init__(self, ym: Monthy):
         self.ym = YM(ym)
-        Task.__init__(self, **kwargs)
+        Task.__init__(self)
 
 
 class MonthTable(MonthTask, Table, ABC):

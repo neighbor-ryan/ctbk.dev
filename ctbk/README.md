@@ -423,8 +423,6 @@ Abbreviations for each subcommand are supported, e.g. `n` for `normalized`:
 ctbk n -d2022- urls
 ```
 
-See [`HasRoot`](./has_root.py) for more info about top-level `-r/--read`, `-w/--write`, and `-t/--root` parameters.
-
 ## GitHub Actions <a id="ghas"></a>
 
 ### [`ci.yml`] <a id="ci-yml"></a>

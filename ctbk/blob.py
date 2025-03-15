@@ -1,16 +1,42 @@
 from dataclasses import dataclass
+from functools import cached_property
 from os.path import join, exists
 
 import yaml
-from utz import run, err, silent, Log
+from utz import run, err, Log
 from utz.collections import solo
 
 from ctbk.paths import S3
 from ctbk.s3 import parse_bkt_key, get_etag
 
 
+class DvcBlob:
+    path: str
+
+    @property
+    def dvc_path(self) -> str:
+        return f"{self.path}.dvc"
+
+    @cached_property
+    def dvc_spec(self):
+        with open(self.dvc_path, 'r') as f:
+            return yaml.safe_load(f)
+
+    @property
+    def out(self):
+        return solo(self.dvc_spec['outs'])
+
+    @property
+    def dep(self):
+        return solo(self.dvc_spec['deps'])
+
+    @property
+    def etag(self) -> str:
+        return self.dep['etag']
+
+
 @dataclass(init=False)
-class Blob:
+class Blob(DvcBlob):
     bkt: str
     key: str
 
@@ -24,21 +50,6 @@ class Blob:
     @property
     def path(self) -> str:
         return join(S3, self.bkt, self.key)
-
-    @property
-    def dvc_path(self) -> str:
-        return f"{self.path}.dvc"
-
-    @property
-    def dvc_spec(self):
-        with open(self.dvc_path, 'r') as f:
-            return yaml.safe_load(f)
-
-    @property
-    def etag(self) -> str:
-        dvc_spec = self.dvc_spec
-        dep = solo(dvc_spec['deps'])
-        return dep['etag']
 
     @property
     def s3_etag(self) -> str:

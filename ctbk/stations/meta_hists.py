@@ -48,15 +48,15 @@ class StationMetaHist(MonthTable):
             **kwargs
     ):
         self.group_by_keys = GroupByKeys.load(group_by_keys)
-        super().__init__(ym, **kwargs)
+        super().__init__(ym)
 
     @property
     def url(self) -> str:
         return f'{self.dir}/{self.group_by_keys.label}_{self.ym}.parquet'
 
     def _df(self) -> DataFrame:
-        src = ConsolidatedMonth(self.ym, **self.kwargs)
-        df = src.df()
+        src = ConsolidatedMonth(self.ym)
+        df = src.read()
         # Assign each ride to its start YM, ignore the end time (except for the "duration" sum_key)
         df = df.rename(columns={
             'Start Year': 'year',
@@ -135,7 +135,7 @@ class StationMetaHist(MonthTable):
         return stations_meta_hist
 
     @property
-    def checkpoint_kwargs(self):
+    def save_kwargs(self):
         return dict(write_kwargs=dict(index=False))
 
 
@@ -154,9 +154,9 @@ class StationMetaHists(HasRootCLI, MonthsTables):
 def cmd(fn):
     @GroupByKeys.opt()
     @wraps(fn)
-    def _fn(ctx, *args, group_by, **kwargs):
+    def _fn(*args, group_by, **kwargs):
         group_by_keys = GroupByKeys.load(group_by)
-        fn(*args, ctx=ctx, group_by_keys=group_by_keys, **kwargs)
+        fn(*args, group_by_keys=group_by_keys, **kwargs)
     return _fn
 
 

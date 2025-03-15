@@ -3,16 +3,17 @@ from re import sub
 from typing import Literal, Pattern
 
 import pandas as pd
-from click import option
 from numpy import nan
 from utz import err, sxs
+from utz.cli import count
 from utz.ym import Monthy
 
-from ctbk.csvs import TripdataCsv
+from ctbk.csvs import NameType, name_type_opt
 from ctbk.has_root_cli import HasRootCLI, yms_arg
 from ctbk.month_table import MonthDirTables
 from ctbk.tables_dir import Tables
 from ctbk.tasks import MonthsDirTables
+from ctbk.tripdata_month import TripdataMonth
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
 from ctbk.util.region import Region, get_regions
@@ -123,11 +124,10 @@ GENDER_MAP = {"U": 0, "M": 1, "F": 2}
 
 
 ParquetEngine = Literal['auto', 'fastparquet', 'pyarrow']
-parquet_engine_opt = option(
+parquet_engine_opt = count(
     '-e', '--engine',
-    count=True,
-    callback=lambda ctx, param, value: ['auto', "fastparquet", "pyarrow"][value],
-    help='1x: fastparquet, 2x: pyarrow',
+    values=['auto', "fastparquet", "pyarrow"],
+    help='0x: "auto", 1x: "fastparquet", 2x: "pyarrow"',
 )
 
 
@@ -153,7 +153,7 @@ def get_region(station_id, src: str, file_region: Region | None):
     return region
 
 
-def normalize_fields(df: DataFrame, src, region: Region | None) -> DataFrame:
+def normalize_fields(df: DataFrame, src: str, region: Region | None) -> DataFrame:
     rename_dict = {}
     for col in df.columns:
         normalized_col = normalize_field(col)
@@ -274,14 +274,21 @@ class NormalizedMonth(MonthDirTables):
     DIR = DIR
     NAMES = [ 'normalized', 'norm', 'n', ]
 
-    def __init__(self, ym: Monthy, /, engine: ParquetEngine = 'auto', **kwargs):
+    def __init__(
+        self,
+        ym: Monthy,
+        /,
+        engine: ParquetEngine = 'auto',
+        name_type: NameType = 1,
+    ):
         self.engine = engine
-        super().__init__(ym, **kwargs)
+        self.name_type = name_type
+        super().__init__(ym)
 
     def normalized_region(self, region: Region) -> Tables:
         ym = self.ym
-        csv = TripdataCsv(ym=ym, region=region, **self.kwargs)
-        return normalize_df(csv.df(), src=csv.url, region=region)
+        src = TripdataMonth(ym=ym, region=region, name_type=self.name_type)
+        return normalize_df(src.df(), src=src.zip_path, region=region)
 
     @property
     def checkpoint_kwargs(self):
@@ -307,11 +314,14 @@ class NormalizedMonths(MonthsDirTables, HasRootCLI):
     CHILD_CLS = NormalizedMonth
 
     def month(self, ym: Monthy) -> NormalizedMonth:
-        return NormalizedMonth(ym, **self.kwargs, **self.extra)
+        return NormalizedMonth(ym, **self.kwargs)
 
 
 NormalizedMonths.cli(
     help=f"Normalize \"tripdata\" CSVs (combine regions for each month, harmonize column names, etc. Populates directory `<root>/{DIR}/YYYYMM/` with files of the form `YYYYMM_YYYYMM.parquet`, for each pair of (start,end) months found in a given month's CSVs.",
     cmd_decos=[yms_arg],
-    create_decos=[parquet_engine_opt]
+    create_decos=[
+        parquet_engine_opt,
+        name_type_opt,
+    ]
 )

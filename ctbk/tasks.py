@@ -5,7 +5,6 @@ from typing import Type
 from utz import cached_property, Unset
 from utz.ym import YM, Monthy
 
-from ctbk.has_root import HasRoot
 from ctbk.table import Table
 from ctbk.tables_dir import Tables, TablesDir
 from ctbk.task import Task
@@ -13,14 +12,17 @@ from ctbk.util.df import DataFrame
 from ctbk.util.read import Read
 
 
-class Tasks(HasRoot, ABC):
+class Tasks(ABC):
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
     @cached_property
     def children(self):
         raise NotImplementedError
 
-    def create(self, read: Read | None | Type[Unset] = Unset):
+    def create(self):
         children = self.children
-        creates = [ child.create(read=read) for child in children ]
+        creates = [ child.create() for child in children ]
 
 
 class MonthsTasks(Tasks, ABC):

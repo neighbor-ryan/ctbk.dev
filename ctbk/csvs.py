@@ -4,7 +4,7 @@ from abc import ABC
 from os.path import basename, join
 from shutil import copyfileobj, move
 from tempfile import TemporaryDirectory
-from typing import Optional, Union, Iterator, IO, Tuple, Literal, TypeVar, Generic
+from typing import Optional, Union, Iterator, IO, Tuple, TypeVar, Generic
 from zipfile import ZipFile, BadZipFile
 
 import pandas as pd
@@ -16,6 +16,7 @@ from utz.ym import YM
 from ctbk.has_root_cli import HasRootCLI, yms_arg
 from ctbk.table import Table
 from ctbk.task import Task
+from ctbk.tripdata_month import NameType, READ_KWARGS
 from ctbk.util.constants import BKT
 from ctbk.util.df import DataFrame
 from ctbk.util.read import Read
@@ -24,8 +25,6 @@ from ctbk.zips import TripdataZips, TripdataZip
 
 DIR = f'{BKT}/csvs'
 
-NameType = Literal[1, 11, 2, 22, None]
-
 T = TypeVar("T")
 
 class ReadsTripdataZip(Task[T], ABC, Generic[T]):
@@ -33,7 +32,7 @@ class ReadsTripdataZip(Task[T], ABC, Generic[T]):
         self,
         ym: YM,
         region: Region,
-        name_type: NameType = None,
+        name_type: NameType = 1,
         **kwargs,
     ):
         if region not in REGIONS:
@@ -49,25 +48,6 @@ class ReadsTripdataZip(Task[T], ABC, Generic[T]):
 
 
 DEFAULT_COMPRESSION_LEVEL = 9
-READ_DTYPES = {
-    **{
-        c: str
-        for c in [
-            'start station id', 'end station id',
-            'Start Station ID', 'End Station ID',
-            'start_station_id', 'end_station_id',
-        ]
-    },
-    'birth year': 'Int16',
-    'Birth Year': 'Int16',
-    'gender': 'Int8',
-    'Gender': 'Int8',
-}
-READ_KWARGS = dict(
-    dtype=READ_DTYPES,
-    na_values=r'\N',
-    float_precision='round_trip',
-)
 
 
 class TripdataCsv(ReadsTripdataZip[DataFrame], Table):
@@ -84,6 +64,10 @@ class TripdataCsv(ReadsTripdataZip[DataFrame], Table):
 
     @property
     def basename(self) -> str:
+        if self.name == 'JC-202207':
+            return f'{self.name}-citbike-tripdata.csv'  # Typo: "citbike"
+        if self.name == 'JC-201708':
+            return f'{self.name} citibike-tripdata.csv'  # Typo: " citibike" (space)
         return f'{self.name}-citibike-tripdata.csv.gz'
 
     @cached_property
@@ -105,7 +89,6 @@ class TripdataCsv(ReadsTripdataZip[DataFrame], Table):
                 raise ValueError(f"Unsupported mode: {mode}")
         else:
             return open(path, mode)
-
 
     @classmethod
     def sort_and_write(cls, name, in_path, out_fd):
@@ -172,7 +155,7 @@ class TripdataCsv(ReadsTripdataZip[DataFrame], Table):
         if read is None:
             self.extract_csv_from_zip()
         else:
-            return self.checkpoint(read=read)
+            return self.save(read=read)
 
     def zip_csv_fds(self) -> Iterator[IO]:
         """Return a read fd for the single CSV in the source .zip."""
@@ -273,13 +256,6 @@ class TripdataCsv(ReadsTripdataZip[DataFrame], Table):
                 for name in csvs:
                     yield z.open(name, 'r')
 
-    def meta(self):
-        if self.exists():
-            return pd.read_csv(self.url, **READ_KWARGS, nrows=0)
-        else:
-            with next(self.zip_csv_fds()) as i:
-                return pd.read_csv(i, **READ_KWARGS, nrows=0)
-
     def _df(self) -> DataFrame:
         self._create(read=None)
         return pd.read_csv(self.url, **READ_KWARGS)
@@ -301,10 +277,10 @@ class TripdataCsv(ReadsTripdataZip[DataFrame], Table):
         return path_cols
 
     @property
-    def checkpoint_kwargs(self):
+    def save_kwargs(self):
         return dict(fmt='csv', read_kwargs=dict(dtype=str), write_kwargs=dict(index=False))
 
-    def _read(self) -> DataFrame:
+    def read(self) -> DataFrame:
         return pd.read_csv(self.url, **READ_KWARGS)
 
 
@@ -316,7 +292,7 @@ class TripdataCsvs(HasRootCLI):
         self,
         yms: list[YM],
         regions: Optional[list[str]] = None,
-        name_type: NameType = None,
+        name_type: NameType = 1,
         **kwargs,
     ):
         self.src = TripdataZips(yms=yms, regions=regions, roots=kwargs.get('roots'))
@@ -352,13 +328,15 @@ class TripdataCsvs(HasRootCLI):
             for m, r2csv in self.m2r2csv.items()
         }
 
+name_type_opt = option('-t', '--name-type', default=1, help='CSV "name-type" to search for within tripdata Zip files; 1: prefer type 1 (default), 2: prefer type 2, 11: require type 1, 22: require type 2')
+
 
 cli = TripdataCsvs.cli(
     help=f"Extract CSVs from \"tripdata\" .zip files. Writes to <root>/{DIR}.",
     cmd_decos=[
         yms_arg,
         region,
-        option('-t', '--name-type', type=int, help='1: prefer type 1, 2: prefer type 2, 11: require type 1, 22: require type 2'),
+        name_type_opt,
     ],
 )
 

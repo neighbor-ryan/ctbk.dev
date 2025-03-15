@@ -4,26 +4,25 @@ from typing import Optional
 
 import click
 import utz
-from click import option, pass_context, Group, argument
-from utz import decos, YM, DefaultDict
+from click import option, Group, argument
+from utz import decos, YM
 from utz.case import dash_case
 
 from ctbk.cli.base import ctbk, StableCommandOrder
-from ctbk.has_root import HasRoot
 from ctbk.task import Task
 from ctbk.tasks import Tasks
 from ctbk.util import GENESIS
 from ctbk.util.ym import parse_ym_ranges_str
 
 _default_end = None
-def default_end(roots: Optional[DefaultDict[str]]):
+def default_end():
     """Infer the last available month of data by checking which Tripdata Zips are present."""
     global _default_end
     if not _default_end:
         from ctbk.zips import TripdataZips
 
         yms = list(GENESIS.until(YM()))
-        zips = TripdataZips(yms=yms, roots=roots)
+        zips = TripdataZips(yms=yms)
         _default_end = zips.end
     return _default_end
 
@@ -36,7 +35,7 @@ def yms_param(deco):
             yms = parse_ym_ranges_str(
                 ym_ranges_str,
                 default_start=GENESIS,
-                default_end=lambda: default_end(roots=kwargs.get('roots') or kwargs.get('root')),
+                default_end=default_end,
             )
             return fn(*args, yms=yms, **kwargs)
 
@@ -49,7 +48,7 @@ yms_opt = yms_param(option('-d', '--dates', 'ym_ranges_str', help="Start and end
 yms_arg = yms_param(argument('ym_ranges_str', required=False))
 
 
-class HasRootCLI(Tasks, HasRoot, ABC):
+class HasRootCLI(Tasks, ABC):
     ROOT_DECOS = []
     CHILD_CLS: type[Task] = None
 
@@ -64,7 +63,7 @@ class HasRootCLI(Tasks, HasRoot, ABC):
     @classmethod
     def init_cli(
         cls,
-        group: click.Group,
+        group: Group,
         cmd_decos: list = None,
         create_decos: list = None,
         group_cls: type[click.Group] = None,
@@ -76,15 +75,13 @@ class HasRootCLI(Tasks, HasRoot, ABC):
         def cmd(help):
             return decos(
                 group.command(cls=group_cls, help=help),
-                pass_context,
                 *cmd_decos
             )
 
         if urls:
             @cmd(help="Print URLs for selected datasets")
-            def urls(ctx, **kwargs):
-                o = ctx.obj
-                tasks = cls(**o, **kwargs)
+            def urls(**kwargs):
+                tasks = cls(**kwargs)
                 children = tasks.children
                 for month in children:
                     print(month.url)
@@ -92,10 +89,9 @@ class HasRootCLI(Tasks, HasRoot, ABC):
         if create:
             @cmd(help="Create selected datasets")
             @decos(create_decos or [])
-            def create(ctx, **kwargs):
-                o = ctx.obj
-                tasks = cls(**o, **kwargs)
-                tasks.create(read=None)
+            def create(**kwargs):
+                tasks = cls(**kwargs)
+                tasks.create()
 
     @classmethod
     def cli(
@@ -111,11 +107,10 @@ class HasRootCLI(Tasks, HasRoot, ABC):
 
         @utz.decos(
             ctbk.group(dash_case(cls.name()), cls=command_cls, help=help),
-            pass_context,
             *decos
         )
-        def group(ctx, **kwargs):
-            ctx.obj = dict(**ctx.obj, **kwargs)
+        def group():
+            pass
 
         cls.init_cli(
             group,

@@ -70,16 +70,16 @@ class ConsolidatedMonth(MonthTable):
     DIR = DIR
     NAMES = [ 'consolidated', 'cons', 'con', ]
 
-    def __init__(self, ym: Monthy, /, engine: ParquetEngine = 'auto', **kwargs):
+    def __init__(self, ym: Monthy, /, engine: ParquetEngine = 'auto'):
         self.engine = engine
-        super().__init__(ym, **kwargs)
+        super().__init__(ym)
 
     @property
-    def checkpoint_kwargs(self):
+    def save_kwargs(self):
         return dict(write_kwargs=dict(index=False, engine=self.engine))
 
     def load_df(self) -> DataFrame:
-        norm_dfs = NormalizedMonth(self.ym, engine=self.engine, **self.kwargs).dfs()
+        norm_dfs = NormalizedMonth(self.ym, engine=self.engine).read()
         dfs = []
         for file, df in norm_dfs.items():
             df = df.assign(file=file)
@@ -98,8 +98,8 @@ class ConsolidatedMonth(MonthTable):
         return pd.concat(dfs)
 
     def _df(self) -> DataFrame:
-        d1 = self.load_df()
         ym = self.ym
+        d1 = load_dvc_parquets(ym)
         backfill_cols = DEFAULT_COLS
         if ym.y >= 2020 and ym <= YM(202101):
             # Earlier versions of Citi Bike data included "Gender", "Birth Year", and "Bike ID" columns for
@@ -226,7 +226,7 @@ class ConsolidatedMonths(MonthsTables, HasRootCLI):
     CHILD_CLS = ConsolidatedMonth
 
     def month(self, ym: Monthy) -> ConsolidatedMonth:
-        return ConsolidatedMonth(ym, **self.kwargs, **self.extra)
+        return ConsolidatedMonth(ym, **self.kwargs)
 
 
 ConsolidatedMonths.cli(

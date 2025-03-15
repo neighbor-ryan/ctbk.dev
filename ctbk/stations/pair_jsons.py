@@ -20,11 +20,11 @@ class StationPairsJson(MonthTable):
         return f'{self.dir}/{self.ym}/se_c.json'
 
     def _df(self) -> DataFrame:
-        mmj = ModesMonthJson(self.ym, **self.kwargs)
+        mmj = ModesMonthJson(self.ym)
         id2idx = mmj.id2idx
 
-        se_am = AggregatedMonth(self.ym, 'se', 'c', **self.kwargs)
-        se = se_am.df()
+        se_am = AggregatedMonth(self.ym, 'se', 'c')
+        se = se_am.read()
 
         se_ids = (
             se
@@ -40,10 +40,9 @@ class StationPairsJson(MonthTable):
         return se_ids
 
     @property
-    def checkpoint_kwargs(self):
+    def save_kwargs(self):
         return dict(
             fmt='json',
-            read_kwargs=self._read,
             write_kwargs=self._write,
         )
 
@@ -52,7 +51,7 @@ class StationPairsJson(MonthTable):
         with self.fd('w') as f:
             json.dump(se_ids_obj, f, separators=(',', ':'))
 
-    def _read(self) -> DataFrame:
+    def read(self) -> DataFrame:
         with self.fd('r') as f:
             se_ids_obj = json.load(f)
         return self.json_to_df(se_ids_obj)
@@ -80,7 +79,7 @@ class StationPairsJsons(HasRootCLI, MonthsTables):
     CHILD_CLS = StationPairsJson
 
     def month(self, ym: Monthy) -> StationPairsJson:
-        return StationPairsJson(ym, **self.kwargs)
+        return StationPairsJson(ym)
 
 
 StationPairsJsons.cli(

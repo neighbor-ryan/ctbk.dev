@@ -24,3 +24,7 @@ def yms(
     """
     for ym in reversed(yms) if reverse else yms:
         print(f"{prefix or ''}{ym}{suffix or ''}")
+
+
+if __name__ == '__main__':
+    yms()

@@ -1,40 +1,33 @@
 from abc import ABC
-from typing import Type, TypeVar, Generic
+from os.path import join
+from typing import TypeVar, Generic
 
-from utz import Unset, err
+from utz import err
 
-from ctbk.has_root import HasRoot
 from ctbk.has_url import HasURL
-from ctbk.util.read import Read
-from ctbk.util.write import Always, Never
+from ctbk.paths import S3
 
 T = TypeVar("T")
 
-class Task(HasRoot, HasURL, ABC, Generic[T]):
-    def __init__(self, **kwargs):
-        HasRoot.__init__(self, **kwargs)
+class Task(HasURL, ABC, Generic[T]):
+    DIR = None
+    NAMES = []
+
+    def __init__(self):
         HasURL.__init__(self)
 
-    def _create(self, read: Read | None | Type[Unset] = Unset) -> T | None:
+    def _create(self) -> T | None:
         raise NotImplementedError
 
-    def create(self, read: Read | None | Type[Unset] = Unset) -> T:
-        read = self.read if read is Unset else read
+    def create(self) -> T:
         url = self.url
-        if self.exists():
-            if self.write is Always:
-                err(f'Overwriting {url}')
-                return self._create(read=read)
-            elif read is None:
-                err(f'{url} already exists')
-            else:
-                err(f'Reading {url}')
-                return self._read()
-        elif self.write is Never:
-            raise RuntimeError(f"{url} doesn't exist, but `write` is `Never`")
-        else:
-            err(f'Writing {url}')
-            return self._create(read=read)
+        err(f'Writing {url}')
+        return self._create()
 
-    def _read(self) -> T:
+    def read(self) -> T:
         raise NotImplementedError
+
+    @property
+    def dir(self) -> str:
+        assert self.DIR
+        return join(S3, self.DIR)
