@@ -46,7 +46,7 @@ def load_dvc_parquets(ym: YM, subdir: str | None = None):
             err(f"Skipping {file} containing 1 known-dupe row")
         else:
             dfs.append(df)
-    df = pd.concat(dfs)
+    df = pd.concat(dfs, ignore_index=True)
     return df
 
 
