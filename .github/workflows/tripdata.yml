@@ -1,6 +1,8 @@
 name: 'Sync tripdata bucket'
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 9 * * *'
 permissions:
   contents: write
 env:
