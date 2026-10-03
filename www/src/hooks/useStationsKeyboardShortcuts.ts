@@ -12,6 +12,8 @@ interface UseStationsKeyboardShortcutsProps {
   monthSelectRef: React.RefObject<HTMLSelectElement | null>
   colorByAge: boolean
   setColorByAge: (v: boolean) => void
+  /** ←/→ month nav (off in time mode, where they step frames). */
+  monthNav?: boolean
 }
 
 export function useStationsKeyboardShortcuts({
@@ -25,12 +27,16 @@ export function useStationsKeyboardShortcuts({
   monthSelectRef,
   colorByAge,
   setColorByAge,
+  monthNav = true,
 }: UseStationsKeyboardShortcutsProps) {
   // Month navigation
   useAction('month:prev', {
     label: 'Previous month',
     group: 'Month',
-    defaultBindings: ['arrowleft'],
+    // Unbound (not just disabled) in time mode: use-kbd dispatches a key to
+    // the first action bound to it, enabled or not, so a disabled month
+    // action would swallow the time mode's ←/→.
+    defaultBindings: monthNav ? ['arrowleft'] : [],
     handler: () => {
       if (!month || availableMonths.length === 0) return
       const currentIdx = availableMonths.indexOf(month)
@@ -44,7 +50,7 @@ export function useStationsKeyboardShortcuts({
   useAction('month:next', {
     label: 'Next month',
     group: 'Month',
-    defaultBindings: ['arrowright'],
+    defaultBindings: monthNav ? ['arrowright'] : [],
     handler: () => {
       if (!month || availableMonths.length === 0) return
       const currentIdx = availableMonths.indexOf(month)

@@ -37,6 +37,26 @@
     backdrop-filter: blur(4px);
 }
 
+.tmToggle {
+    margin-left: 0.4em;
+    padding: 0.15em 0.6em;
+    vertical-align: 0.3em;
+    border: 1px solid currentColor;
+    border-radius: 100px;
+    background: transparent;
+    color: inherit;
+    font-size: 0.42em;
+    letter-spacing: 0;
+    white-space: nowrap;
+    cursor: pointer;
+    opacity: 0.8;
+}
+
+.tmToggle:hover,
+.tmToggle[aria-pressed='true'] {
+    opacity: 1;
+}
+
 .homeLink {
     color: inherit;
     text-decoration: none;

@@ -1,0 +1,50 @@
+/* `/stations` time mode: the timelapse control bar as a dock above the
+ * rides panel (`StationsTimeMode.tsx`). Internals reuse
+ * `timelapse.module.css`; this only places the dock. */
+.dock {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    z-index: 1100;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    font-size: 12px;
+    backdrop-filter: blur(4px);
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+@media (min-width: 768px) {
+    .dock {
+        left: 12px;
+        right: 84px;
+        max-width: 1100px;
+    }
+}
+
+.bar {
+    flex: 1;
+    min-width: 60px;
+    max-width: 260px;
+}
+
+.exit {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    margin-left: auto;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 50%;
+    background: transparent;
+    color: #fff;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+}

@@ -37,6 +37,7 @@ const sideParam: Param<'start' | 'end' | 'both'> = {
  *  MapLibre for the default GL map, leaflet for `?gl=0`). */
 const StationMapGL = lazy(() => import('../components/StationMapGL'))
 const StationMap = lazy(() => import('../components/StationMap'))
+const StationsTimeMode = lazy(() => import('../components/StationsTimeMode'))
 
 /** `?gl=`: the GL map (deck.gl + MapLibre) is the default; `?gl=0` falls back
  *  to the Leaflet `StationMap`. Old `?gl=1` (and bare `?gl`) links still
@@ -155,6 +156,12 @@ export default function Stations() {
   const [dir, setDir] = useUrlState('dir', codeParam<FlowDirection>('out', [['out', 'o'], ['in', 'i']]))
   const [fan, setFan] = useUrlState('fan', boolParam)
   const [gl] = useUrlState('gl', glParam)
+  // Time mode (GL only): `/api/tl` frames drive the circles, with the
+  // timelapse dock (`StationsTimeMode`, lazy); `b`/`d`/`tt`/`sp`/`st`/`lp`/`sz`
+  // hold its state (`tt`, not `t`: that's the tile code here).
+  const [tmParam, setTm] = useUrlState('tm', boolParam)
+  const tm = gl && tmParam
+  const [dockH, setDockH] = useState(0)
   // Mark style on the GL map: solid `fill` (default) or hollow `ring`.
   const [mark] = useUrlState('mark', codeParam<'fill' | 'ring'>('fill', [['fill', 'f'], ['ring', 'r']]))
   // Live hover-preview: on the GL map, hovering a station (when nothing is
@@ -352,7 +359,7 @@ export default function Stations() {
   // for the color channel; also drives the radius channel when `?lens=` asks.
   // Lens source: the pinned set, or (GL only, nothing pinned) the hovered
   // station for a live preview.
-  const lensSourceIds = sel.length ? sel : (gl && canHover && hoverPreviewId ? [hoverPreviewId] : [])
+  const lensSourceIds = tm ? [] : sel.length ? sel : (gl && canHover && hoverPreviewId ? [hoverPreviewId] : [])
   const flowStyle = useMemo(
     () => (lensSourceIds.length && effectiveStations
       ? flowLens(effectiveStations, pairCounts, lensSourceIds, lens, dir)
@@ -383,6 +390,7 @@ export default function Stations() {
     monthSelectRef,
     colorByAge,
     setColorByAge,
+    monthNav: !tm,
   })
 
   // Register omnibar endpoint for station search (uses already-loaded data)
@@ -433,7 +441,19 @@ export default function Stations() {
     <div className={css.container}>
       <main className={css.main}>
         <Suspense fallback={<div className={css.homeMap} />}>
-        {gl ? (
+        {tm ? (
+          <StationsTimeMode
+            sel={sel}
+            multi={multi}
+            onSelAction={onSelAction}
+            center={[view.lat, view.lng]}
+            zoom={view.zoom}
+            onMove={(la, ln, z) => setView({ lat: la, lng: ln, zoom: z })}
+            bottom={sel.length > 0 ? panelH : 0}
+            onHeight={setDockH}
+            onExit={() => setTm(false)}
+          />
+        ) : gl ? (
           <StationMapGL
             stations={effectiveStations ?? {}}
             pinnedIds={sel}
@@ -478,7 +498,7 @@ export default function Stations() {
           <div className={css.loading}>Loading...</div>
         )}
         {flowStyle && wide && lensLegend(false)}
-        {colorByAge && births && !flowStyle && <ColorLegend births={births} actualTheme={actualTheme} />}
+        {colorByAge && births && !flowStyle && !tm && <ColorLegend births={births} actualTheme={actualTheme} />}
         {(pies || api) && (
           <div className={css.piesControl}>
             <RangeWidthControl value={pieRange} onChange={setPieRange} />
@@ -508,7 +528,7 @@ export default function Stations() {
         <div className={wide ? css.titleContainer : css.phoneHeader} style={wide ? { color: currentColors.title } : undefined} data-testid="stations-header">
           <div className={css.title}>
             <Link to="/" className={css.homeLink}>Citi Bike</Link> rides by station,{' '}
-            {effectiveMonth && availableMonths.length > 0 ? (
+            {tm ? 'over time' : effectiveMonth && availableMonths.length > 0 ? (
               <FormControl variant="standard" className={css.monthSelect}>
                 <Select
                   inputRef={monthSelectRef}
@@ -528,6 +548,18 @@ export default function Stations() {
               </FormControl>
             ) : (
               effectiveMonth ? formatMonth(effectiveMonth) : '...'
+            )}
+            {gl && (
+              <button
+                type="button"
+                className={css.tmToggle}
+                onClick={() => setTm(!tm)}
+                aria-pressed={tm}
+                data-testid="tm-toggle"
+                title={tm ? 'Back to the monthly map' : 'Animate rides over time'}
+              >
+                {tm ? 'by month' : '▶ time'}
+              </button>
             )}
           </div>
           {subtitle && selectedId && (
@@ -554,7 +586,9 @@ export default function Stations() {
       {stations && (
         <SpeedDial
           ariaLabel="Search stations"
-          position={sel.length > 0 && panelH ? { bottom: panelH + 12, right: wide ? 20 : 12 } : undefined}
+          position={(sel.length > 0 && panelH) || (tm && dockH)
+            ? { bottom: (sel.length > 0 ? panelH : 0) + (tm ? dockH + 8 : 0) + 12, right: wide ? 20 : 12 }
+            : undefined}
         />
       )}
     </div>

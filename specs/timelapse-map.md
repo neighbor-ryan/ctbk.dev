@@ -130,7 +130,8 @@ RG pruning on `dt` stats works: consecutive frames are adjacent bytes, and a chu
 
 ### Route
 
-Add a new page `/timelapse` (`www/src/pages/Timelapse.tsx`), not a mode of `/stations`. It has its own controls, keyboard map and movie mode, and `/stations` already binds ←/→ to month nav (`hooks/useStationsKeyboardShortcuts.ts`). A later `/stations` → "▶ timelapse" link can carry `ll` and `sel` over.
+Add a new page `/timelapse` (`www/src/pages/Timelapse.tsx`), not a mode of `/stations`. It has its own controls, keyboard map and movie mode, and `/stations` already binds ←/→ to month nav (`hooks/useStationsKeyboardShortcuts.ts`). A later `/stations` → "▶ timelapse" link can carry `ll` and `sel` over. *Update (2026-10-03)*: `/timelapse` stays the fullscreen / movie route, and `/stations` now also has a time mode built from the same parts (see below).
+
 
 ### Layout
 
@@ -160,6 +161,23 @@ Original sketch:
   - A **scrubber** over the full range, with a **system totals strip** drawn inside it (a tiny area chart of Σ starts per bin from cached chunks; unloaded spans hatched). The strip shows weekday/weekend rhythm, storms and holidays at a glance, and where the playhead is.
 - Top-right: the preset's legend (the diverging ramp for `flow`, size key).
 - Hover drawer (reuse `css.hoverDrawer`): station name, plus starts / ends / net in the current bin. Click pins a station: its ring persists and the drawer shows its sparkline over the cached chunks. Nothing extra is fetched.
+
+### `/stations` time mode (`?tm`, built 2026-10-03)
+
+The same machinery on the main map, GL only (`gl=0` ignores `tm`).
+
+- **Shared parts** (factored out of `pages/Timelapse.tsx`; `/timelapse` behaves exactly as before):
+  - `components/timelapse/useTimelapse.ts`: URL-backed state (`b`, `d`, playhead, `sp`, `st`, `lp`, `sz`, `src`), the rAF playhead, scrubber peek, frames + prefetch, the frozen scale, per-frame attributes, range totals and the `tl:*` hotkeys. Options are `tKey` (the playhead's URL key), `mv` and `keysEnabled`.
+  - `components/timelapse/layers.ts`: `timelapseLayers` (preset layers + selection rings) and `pinIndices`.
+  - `components/timelapse/controls.tsx`: `TlTransport` (chevrons / play / scrubber with totals sparkline / ⚙), `TlSettings` (range, bin, speed, style, size, loop), `Legend` / `LegendBar`, `HoverCard`, `scaleNote`, `sparkPath`.
+- **Entry / exit**: a "▶ time" pill in the `/stations` title (the title reads "…rides by station, over time" and the pill becomes "by month" while on). The dock's × also exits. Both toggle `?tm`.
+- **Params**: the timelapse params are shared, except that the playhead is **`tt`**, because `/stations` already uses `t` for the tile code. Leaving time mode keeps `b`/`d`/`tt`/…, so re-entering resumes.
+- **Map**: `StationsTimeMode.tsx` (lazy) renders its own `GLMap` with `timelapseLayers` in place of `StationMapGL`. The flow lens, arc fan and color-by-age legend are off in time mode. Selection is the page's `sel=` via the shared `lib/mapSelection` gestures, so the rides panel and the "▶ timelapse" link keep working, and selected stations get the timelapse ring.
+- **Dock**: fixed above the rides panel (`bottom = panelH`). It shows the clock + legend bar (tap to expand the legend, with badges for loading, buffering and no data), then settings (always on wide screens, ⚙-gated on phones), then the transport row. Its height lifts the SpeedDial.
+- **Keys**: `tl:*` as on `/timelapse` (space, ←/→, shift+←/→, `[ ]`, `b`/shift+`b`, `s`, `l`, Home/End). Esc stays `/stations`' clear-selection. The month ←/→ actions are **unbound** (not just disabled) in time mode, because use-kbd dispatches a key to the first action bound to it even when that action is disabled (a use-kbd bug worth fixing upstream).
+- **Bundle**: the `/stations` chunk grew +0.34 KB gz. Time mode lazy-loads 1.7 KB gz of its own plus a 16 KB gz chunk shared with `/timelapse` (which went from 18.2 → 19.8 KB gz across two chunks).
+- **Tests**: `e2e/stations-time-mode.spec.ts` (toggle in, → steps `tt`, × out; phone: dock above the rides panel, ⚙ toggles settings) and `components/timelapse/timelapse.test.ts` (`pinIndices`, `scaleNote`).
+- **Later**: the fine-bins / four-linked-controls work (`timelapse-fine-bins.md`) lands in `useTimelapse` + `TlSettings`, so both routes get it. Open ideas: a playhead line on the rides chart, synced to `tt`; and whether time mode should default to a sub-day bin over a recent week rather than `1d` over a year.
 
 ### URL params (`use-prms`)
 
@@ -267,7 +285,7 @@ Pair data only exists **monthly** today (`pairs[ym].json` via `station-urls.json
 - **Chunk size `K` per tier**: 48 h / 32 d are guesses balancing request count against bytes; tune from P0 measurements (target ≤ ~1 MB compressed per chunk).
 - **Default range.** The last full year at `1d` is the best first impression ("the year in Citi Bike"). Alternatives: the last full week at `1h`, or the whole history at `1d` (~4,850 frames, ~150 chunks).
 - **Dims.** `rides-tl` sums away `user_type`/`bike_type`. An "e-bike share" color preset would need `bike_type` kept as a dim (~+50% rows). Decide after the P1 feel-read; adding it later is a config change and a rebuild.
-- **Entry points.** Link from `/stations` and the Home map embed, a SpeedDial action; eventually a "play" affordance on the unified page's shared time range (`unified-page-architecture.md`).
+- **Entry points.** Done: the `/stations` rides-panel "▶ timelapse" link and the `/stations` time mode (`?tm`). Still open: the Home map embed, a SpeedDial action; eventually a "play" affordance on the unified page's shared time range (`unified-page-architecture.md`).
 - **Canonical vs raw.** Frames are canonical, so merged clusters render as one dot; `?raw=1` exists for audit only.
 
 ## Non-goals
