@@ -38,6 +38,7 @@ interface Props {
   toS: number
   binS: number
   height?: number
+  playheadMs?: number | null
   onPan?: (minS: number, maxS: number) => void
   clampMinS?: number
   clampMaxS?: number
@@ -49,6 +50,7 @@ export default function StationRidesChart({
   toS,
   binS,
   height = 180,
+  playheadMs,
   onPan,
   clampMinS,
   clampMaxS,
@@ -57,6 +59,10 @@ export default function StationRidesChart({
   const plotRef = useRef<uPlot | null>(null)
   const { actualTheme } = useTheme()
   const [hover, setHover] = useState<Hover | null>(null)
+  const playheadRef = useRef(playheadMs)
+  playheadRef.current = playheadMs
+  const [marker, setMarker] = useState<{ left: number; top: number; height: number } | null>(null)
+  useEffect(() => { plotRef.current?.redraw() }, [playheadMs])
 
   useDragPan(plotRef, containerRef, {
     enabled: !!onPan,
@@ -116,6 +122,14 @@ export default function StationRidesChart({
         { label: 'Ends', stroke: ENDS_COLOR, paths: stepped, width: 2 },
       ],
       hooks: {
+        draw: [(u) => {
+          const s = playheadRef.current == null ? null : playheadRef.current / 1000
+          setMarker(s == null || s < fromS || s > xMax ? null : {
+            left: u.valToPos(s, 'x') + u.bbox.left / devicePixelRatio,
+            top: u.bbox.top / devicePixelRatio,
+            height: u.bbox.height / devicePixelRatio,
+          })
+        }],
         setCursor: [
           (u) => {
             const idx = u.cursor.idx
@@ -149,6 +163,7 @@ export default function StationRidesChart({
   const flip = hover != null && hover.left > (containerRef.current?.clientWidth ?? 1000) * 0.6
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%' }} onMouseLeave={() => setHover(null)}>
+      {marker && <div data-testid="rides-playhead" data-time={playheadMs} aria-label="Playback time" style={{ position: 'absolute', left: marker.left, top: marker.top, height: marker.height, width: 2, background: '#f5cf4b', pointerEvents: 'none' }} />}
       {hover && (
         <div
           data-testid="rides-tt"

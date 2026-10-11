@@ -105,6 +105,7 @@ export interface UseTimelapseOpts {
   /** URL key for the playhead: `t` on `/timelapse`; `/stations` uses `t` for
    *  its tile code, so its time mode passes `tt`. */
   tKey?: string
+  defaultBin?: Bin
   /** Movie mode (`/timelapse?mv=1`): no URL writes from the playhead, no
    *  range trim on mount, hotkeys off. */
   mv?: boolean
@@ -112,12 +113,14 @@ export interface UseTimelapseOpts {
   keysEnabled?: boolean
 }
 
-export function useTimelapse({ tKey = 't', mv = false, keysEnabled = true }: UseTimelapseOpts = {}) {
+export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEnabled = true }: UseTimelapseOpts = {}) {
   const qc = useQueryClient()
-  const [bin, setBin] = useUrlState('b', binParam)
+  const binP = useMemo(() => codeParam<Bin>(defaultBin, BINS.map((b) => [b, b])), [defaultBin])
+  const [bin, setBin] = useUrlState('b', binP)
   // Date bounds for the range picker (and the default range's end): the last
   // published day, falling back to yesterday until `station-urls.json` loads.
-  const lastDay = useTlLastDay() ?? todayMs() - DAY_MS
+  const publishedLastDay = useTlLastDay()
+  const lastDay = publishedLastDay ?? todayMs() - DAY_MS
   const rangeP = useMemo(() => rangeParam(bin, lastDay), [bin, lastDay])
   const [range, setRange] = useUrlState('d', rangeP)
   const [tUrl, setTUrl] = useUrlState(tKey, tParam)
@@ -155,6 +158,9 @@ export function useTimelapse({ tKey = 't', mv = false, keysEnabled = true }: Use
   // trimmed (`capRange`).
   const prevGrid = useRef<{ bin: Bin; iStart: number; iEnd: number } | null>(null)
   useEffect(() => {
+    // The default range follows asynchronously loaded data bounds. Never
+    // rewrite a deep-linked instant against the temporary wall-clock range.
+    if (publishedLastDay === null) return
     const p = prevGrid.current
     prevGrid.current = { bin, iStart, iEnd }
     if (!p && !mv) {
@@ -171,7 +177,7 @@ export function useTimelapse({ tKey = 't', mv = false, keysEnabled = true }: Use
       if (!mv) commitT(floor(tRef.current))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bin, iStart, iEnd])
+  }, [bin, iStart, iEnd, publishedLastDay])
 
   /** The playhead's day, for range presets / re-fits. */
   const tDay = useCallback(() => dayOf(frameStartMs(bin, floor(tRef.current))), [bin])

@@ -16,6 +16,7 @@
 !e2e/station-map-gl.spec.ts
 !e2e/station-map.spec.ts
 !e2e/station-page.spec.ts
+!e2e/stations-time-mode.spec.ts
 !e2e/timelapse.spec.ts
 !eslint.config.js
 !fix-mime-type.sh
@@ -151,6 +152,8 @@
 !src/components/StationSearch.module.css
 !src/components/StationSearch.tsx
 !src/components/StationTripsChart.tsx
+!src/components/StationsTimeMode.module.css
+!src/components/StationsTimeMode.tsx
 !src/components/ThemeToggle.module.css
 !src/components/ThemeToggle.tsx
 !src/components/TileStyleButton.tsx
@@ -174,6 +177,10 @@
 !src/components/smgBrush.tsx
 !src/components/smgStyle.ts
 !src/components/stationMapCommon.ts
+!src/components/timelapse/controls.tsx
+!src/components/timelapse/layers.ts
+!src/components/timelapse/timelapse.test.ts
+!src/components/timelapse/useTimelapse.ts
 !src/contexts/FlagsContext.tsx
 !src/contexts/ThemeContext.tsx
 !src/controls.module.css

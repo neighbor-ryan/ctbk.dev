@@ -12,7 +12,7 @@ const ttOf = (page: Page) => new URL(page.url()).searchParams.get('tt')
 test('toggle in, → steps `tt` by one day, × back to the monthly map', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
-  await page.goto('/stations?d=260604-260806&tt=260620')
+  await page.goto('/stations?b=1d&d=260604-260806&tt=260620')
   await page.getByTestId('tm-toggle').click()
   await expect(page.getByTestId('tm-dock')).toBeVisible()
   await expect(page.getByTestId('stations-header')).toHaveText('Citi Bike rides by station, over timeby month')
@@ -33,7 +33,7 @@ test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true })
 
   test('dock above the rides panel; ⚙ toggles settings', async ({ page }) => {
-    await page.goto('/stations?tm&sel=HB101&d=260604-260806&tt=260620')
+    await page.goto('/stations?tm&b=1d&sel=HB101&d=260604-260806&tt=260620')
     const dock = page.getByTestId('tm-dock')
     await expect(dock).toBeVisible()
     await expect(page.getByTestId('tl-clock')).toHaveText('Sat Jun 20, 2026')
@@ -47,4 +47,32 @@ test.describe('phone', () => {
     const p = (await panel.boundingBox())!
     expect(d.y + d.height).toBeLessThanOrEqual(p.y)
   })
+})
+
+test('time mode defaults to hourly, with a synced rides-chart playhead', async ({ page }) => {
+  await page.goto('/stations?tm&sel=HB101&d=260914-260920&tt=260920T12')
+  await expect(page.getByLabel('Bin', { exact: true })).toHaveValue('1h')
+  await expect(page.getByTestId('rides-playhead')).toHaveAttribute('data-time', String(Date.UTC(2026, 8, 20, 12)))
+  await page.getByRole('button', { name: 'Next hour', exact: true }).click()
+  await expect(page.getByTestId('rides-playhead')).toHaveAttribute('data-time', String(Date.UTC(2026, 8, 20, 13)))
+  const href = await page.getByRole('link', { name: '▶ timelapse', exact: true }).getAttribute('href')
+  const query = new URL(href!, 'http://localhost').searchParams
+  expect([query.get('b'), query.get('d'), query.get('t'), query.get('sel')]).toEqual(['1h', '260914-260920', '260920T13', 'HB101'])
+})
+
+test('preserves a deep-linked hour while default date bounds load', async ({ page }) => {
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  await page.route('**/assets/station-urls.json', async (route) => {
+    const response = await route.fetch()
+    const manifest = await response.json()
+    await gate
+    await route.fulfill({ response, json: { ...manifest, latestMonth: '202609' } })
+  })
+  await page.goto('/stations?tm&sel=HB101&tt=260928T12')
+  await expect(page.getByTestId('tm-dock')).toBeVisible()
+  expect(ttOf(page)).toBe('260928T12')
+  release()
+  await expect(page.getByTestId('rides-playhead')).toHaveAttribute('data-time', String(Date.UTC(2026, 8, 28, 12)))
+  expect(ttOf(page)).toBe('260928T12')
 })

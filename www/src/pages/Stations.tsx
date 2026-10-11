@@ -141,13 +141,6 @@ export default function Stations() {
   // back/forward is the selection undo/redo buffer. Hover (`s`) stays on the
   // default replaceState, so sweeping the map never spams history.
   const [sel, setSel] = useUrlState('sel', selParam, { push: true })
-  const timelapseHref = useMemo(() => {
-    const q = new URLSearchParams()
-    for (const [k, v] of [['sel', selParam.encode(sel)], ['ll', viewOutParam.encode(view)]] as const) {
-      if (v) q.set(k, v)
-    }
-    return `/timelapse?${q}`
-  }, [sel, view])
   // Flow-lens channel(s) for the selected source set (color / radius / both).
   const [lens] = useUrlState('lens', lensParam)
   // Flow direction: `out` = where riders from the set go; `in` = where they
@@ -161,6 +154,21 @@ export default function Stations() {
   // hold its state (`tt`, not `t`: that's the tile code here).
   const [tmParam, setTm] = useUrlState('tm', boolParam)
   const tm = gl && tmParam
+  const [playheadMs, setPlayheadMs] = useState<number | null>(null)
+  const timelapseParams = new URLSearchParams()
+  for (const [k, v] of [['sel', selParam.encode(sel)], ['ll', viewOutParam.encode(view)]] as const) {
+    if (v) timelapseParams.set(k, v)
+  }
+  if (tm) {
+    const current = new URLSearchParams(window.location.search)
+    for (const k of ['b', 'd', 'sp', 'st', 'lp', 'sz', 'src']) {
+      if (current.has(k)) timelapseParams.set(k, current.get(k)!)
+    }
+    timelapseParams.set('b', current.get('b') ?? '1h')
+    const instant = current.get('tt')
+    if (instant) timelapseParams.set('t', instant)
+  }
+  const timelapseHref = `/timelapse?${timelapseParams}`
   const [dockH, setDockH] = useState(0)
   // Mark style on the GL map: solid `fill` (default) or hollow `ring`.
   const [mark] = useUrlState('mark', codeParam<'fill' | 'ring'>('fill', [['fill', 'f'], ['ring', 'r']]))
@@ -452,6 +460,7 @@ export default function Stations() {
             bottom={sel.length > 0 ? panelH : 0}
             onHeight={setDockH}
             onExit={() => setTm(false)}
+            onTimeChange={setPlayheadMs}
           />
         ) : gl ? (
           <StationMapGL
@@ -581,6 +590,7 @@ export default function Stations() {
           compact={!wide}
           onHeight={setPanelH}
           timelapseHref={timelapseHref}
+          playheadMs={tm ? playheadMs : null}
         />
       )}
       {stations && (

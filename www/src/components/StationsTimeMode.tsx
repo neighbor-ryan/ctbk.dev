@@ -9,7 +9,7 @@
  * panel and the "▶ timelapse" link keep working. Lazy-loaded: none of this
  * ships with the plain `/stations` map.
  */
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import GLMap from './GLMap'
 import { HoverCard, Legend, LegendBar, scaleNote, TlSettings, TlTransport } from './timelapse/controls'
 import { pinIndices, timelapseLayers } from './timelapse/layers'
@@ -41,10 +41,11 @@ export interface StationsTimeModeProps {
   /** The dock's height (px), on every resize; 0 on unmount. */
   onHeight?: (px: number) => void
   onExit: () => void
+  onTimeChange?: (ms: number | null) => void
 }
 
-export default function StationsTimeMode({ sel, multi, onSelAction, center, zoom, onMove, bottom, onHeight, onExit }: StationsTimeModeProps) {
-  const tl = useTimelapse({ tKey: 'tt' })
+export default function StationsTimeMode({ sel, multi, onSelAction, center, zoom, onMove, bottom, onHeight, onExit, onTimeChange }: StationsTimeModeProps) {
+  const tl = useTimelapse({ tKey: 'tt', defaultBin: '1h' })
   const { bin, table, frame, frames, preset, sz, shown, playing, scale, scaleFrozen, peek } = tl
   const wide = useWide()
   const canHover = useCanHover()
@@ -105,6 +106,8 @@ export default function StationsTimeMode({ sel, multi, onSelAction, center, zoom
   const [settingsOpen, setSettingsOpen] = useState(false)
   const i = floor(shown)
   const iMs = frameStartMs(bin, i)
+  useEffect(() => { onTimeChange?.(iMs) }, [iMs, onTimeChange])
+  useEffect(() => () => onTimeChange?.(null), [onTimeChange])
   const stalled = playing && !frames.ready
 
   return (

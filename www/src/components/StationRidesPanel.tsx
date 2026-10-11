@@ -74,6 +74,7 @@ interface Props {
   onHeight?: (px: number) => void
   /** `/timelapse` URL for this set + map view: a "▶ timelapse" link. */
   timelapseHref?: string
+  playheadMs?: number | null
 }
 
 /** Which series the sheet shows for the set: rides (starts/ends) or the
@@ -82,7 +83,7 @@ interface Props {
 type PanelView = 'rides' | 'states'
 const PANEL_VIEWS: [PanelView, string][] = [['rides', 'r'], ['states', 's']]
 
-export default function StationRidesPanel({ shortNames, stations, onRemove, onClear, multi = false, onDone, compact = false, onHeight, timelapseHref }: Props) {
+export default function StationRidesPanel({ shortNames, stations, onRemove, onClear, multi = false, onDone, compact = false, onHeight, timelapseHref, playheadMs }: Props) {
   const canHover = useCanHover()
   const [range, setRange] = useUrlState('rr', timeRangeParam(YEAR_MS))
   const [binMs, setBinMs] = useUrlState('rb', intParam(0))
@@ -279,6 +280,7 @@ export default function StationRidesPanel({ shortNames, stations, onRemove, onCl
         {rows.length > 0 && binS != null && (
           <StationRidesChart
             rows={rows}
+            playheadMs={playheadMs}
             fromS={fromS}
             toS={toS}
             binS={binS}
