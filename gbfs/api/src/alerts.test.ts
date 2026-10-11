@@ -227,32 +227,65 @@ describe('DEFAULT_RULES on a full snapshot', () => {
 		const lost = fresh({ feed: { ...snap().feed, gaps: { ...gaps, missing: 31, unexplained: ['10:20'], cronSkips: 2 } } });
 		expect(firingIds(lost)).toEqual(['feed-missed-lus']);
 		expect(DEFAULT_RULES.find((r) => r.id === 'feed-missed-lus')!.firingText(lost)).toBe(
-			':rotating_light: *GBFS minutes possibly lost* — 1 WAL hole(s) today next to a skipped poller tick (10:20); 2 skipped tick(s), 30 upstream-skipped generation(s)',
+			':rotating_light: *GBFS minutes possibly lost* — 1 WAL hole(s) today next to a skipped poller tick (10:20); 2 skipped tick(s), 30 other unobserved generation(s) (upstream omission or cache)',
 		);
 	});
 
-	it('a stale-cache lag and a near-full D1 each fire', () => {
+	const withRecentLags = (lags: number[], pop = 'IAD12-P5') => {
 		const now = FIXED_NOW.getTime() / 1000;
-		const series: Array<[number, number]> = Array.from({ length: 30 }, (_, i) => [now - 60 * (30 - i), 45]);
-		expect(firingIds(fresh({
-			feed: { ...snap().feed, drift: { latestS: 45, ts: now, polledAt: now, series } },
-			d1: { sizeBytes: 8.5e9 },
-		}))).toEqual(['feed-lag', 'd1-size']);
+		return fresh({ feed: { ...snap().feed, drift: {
+			latestS: lags[lags.length - 1], ts: now, polledAt: now,
+			series: lags.map((lag, i) => [now - 60 * (lags.length - 1 - i), lag]), pop,
+		} } });
+	};
+
+	it('fresh non-US routing and borderline lag do not page', () => {
+		expect(firingIds(withRecentLags(Array(10).fill(37), 'BCN50-P1'))).toEqual([]);
+		expect(firingIds(withRecentLags([15], 'BCN50-P1'))).toEqual([]);
+		expect([isUsPop('IAD12-P5'), isUsPop('jfk50-c1'), isUsPop('NRT12-P9')]).toEqual([true, true, false]);
+	});
+
+	it('three generation-late observations warn on any POP; isolated slow samples do not', () => {
+		expect(firingIds(withRecentLags([20, 65, 20, 65, 20]))).toEqual([]);
+		const risk = withRecentLags([60, 61, 62], 'TPE53-P1');
+		expect(firingIds(risk)).toEqual(['feed-lag']);
+		expect(DEFAULT_RULES.find((r) => r.id === 'feed-lag')!.firingText(risk)).toBe(
+			':warning: *GBFS stale-cache loss risk* — 3 distinct observations first seen ≥ 60s late in the last 10 minutes; a feed generation lasts about a minute, so updates may be superseded before we see them (latest serving POP: TPE53-P1)',
+		);
+		expect(firingIds(fresh({ d1: { sizeBytes: 8.5e9 } }))).toEqual(['d1-size']);
 		expect(d1SizeGB(fresh({ d1: { sizeBytes: 4.01e9 } }))).toBe(4.01);
 	});
 
-	it('a non-US serving POP fires `feed-pop`; the lag text names the POP', () => {
-		const now = FIXED_NOW.getTime() / 1000;
-		const series: Array<[number, number]> = Array.from({ length: 30 }, (_, i) => [now - 60 * (30 - i), 45]);
-		const asia = fresh({ feed: { ...snap().feed, drift: { latestS: 45, ts: now, polledAt: now, series, pop: 'TPE53-P1' } } });
-		expect(firingIds(asia)).toEqual(['feed-lag', 'feed-pop']);
-		expect(DEFAULT_RULES.find((r) => r.id === 'feed-lag')!.firingText(asia)).toBe(
-			':warning: *GBFS feed lag* — p90 first-seen lag 45s over the last hour (threshold: 30s); the poller is likely reading a stale cache and can miss LUs (serving POP: TPE53-P1)',
-		);
-		const us = fresh({ feed: { ...snap().feed, drift: { latestS: 5, ts: now, polledAt: now, series: [[now, 5]], pop: 'IAD12-P5' } } });
-		expect(firingIds(us)).toEqual([]);
-		expect([isUsPop('IAD12-P5'), isUsPop('jfk50-c1'), isUsPop('NRT12-P9')]).toEqual([true, true, false]);
+	it('lag recovery uses 45s hysteresis and does not mistake missing samples for recovery', () => {
+		const rule = DEFAULT_RULES.find((r) => r.id === 'feed-lag')!;
+		const prior: FiringEntry = { firingSince: FIXED_NOW.toISOString(), threadTs: 'ts1', firingText: 'risk' };
+		const state = { firing: { 'feed-lag': prior } };
+		expect(diffRules([rule], state, withRecentLags([45, 45, 45]))).toEqual([]);
+		expect(diffRules([rule], state, withRecentLags([]))).toEqual([]);
+		expect(diffRules([rule], state, withRecentLags([44, 44, 44]))).toEqual([
+			{ rule, kind: 'resolved', priorEntry: prior },
+		]);
 	});
+
+	it('old, future, and duplicate observations cannot manufacture a lag incident', () => {
+		const s = withRecentLags([65]);
+		const now = FIXED_NOW.getTime() / 1000;
+		s.feed.drift!.series = [[now - 601, 65], [now + 1, 65], [now, 65], [now, 65], [now, 65]];
+		expect(firingIds(s)).toEqual([]);
+	});
+
+	it('coverage bursts page even with healthy ticks, and recover at at most one recent hole', () => {
+		const rule = DEFAULT_RULES.find((r) => r.id === 'feed-generation-gaps')!;
+		const gaps = { settled: 718, missing: 3, unexplained: [], cronSkips: 0, recentMissing: ['11:50', '11:51', '11:52'] };
+		const s = fresh({ feed: { ...snap().feed, gaps } });
+		expect(firingIds(s)).toEqual(['feed-generation-gaps']);
+		expect(rule.firingText(s)).toBe(':rotating_light: *GBFS generation coverage loss* — 3 missing WAL generations in the last 10 settled minutes (11:50, 11:51, 11:52); upstream omission, stale cache, or missed polls may be responsible. Running cron ticks alone do not prove coverage');
+		gaps.recentMissing = ['11:51', '11:52'];
+		expect([rule.check(s), rule.check(s, true)]).toEqual([false, true]);
+		gaps.recentMissing = ['11:52'];
+		expect(rule.check(s, true)).toBe(false);
+	});
+
 });
 
 /** In-memory R2 with etags and `onlyIf.etagMatches` (a failed precondition

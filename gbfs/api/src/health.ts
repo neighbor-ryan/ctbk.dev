@@ -48,6 +48,49 @@ export interface HealthR2 {
  *  poll wall-clock, for the latest poll plus a rolling 24h series (older
  *  history is derivable from the daily compaction parquets, which carry
  *  `ts` + `polled_at` per row). */
+export type FeedObservation = [polledAt: number, lagS: number, pop?: string | null];
+
+/** Sampled by health refreshes, not a census of every WAL generation. */
+export interface FeedDaySummary {
+	source: 'health-refresh';
+	date: string;
+	samples: number;
+	p50S: number;
+	p90S: number;
+	overGenerationCount: number;
+	popSamples: number;
+	nonUsSamples: number;
+	pops: Record<string, number>;
+}
+
+const US_POP_PREFIXES = new Set([
+	'IAD', 'JFK', 'EWR', 'BOS', 'PHL', 'BWI', 'PIT', 'CLT', 'RDU', 'ATL', 'MIA', 'TPA', 'JAX', 'MCO',
+	'ORD', 'DTW', 'CMH', 'IND', 'MSP', 'MCI', 'OMA', 'STL', 'BNA', 'MEM', 'DFW', 'IAH', 'AUS', 'SAT',
+	'DEN', 'SLC', 'PHX', 'LAS', 'LAX', 'SFO', 'SJC', 'SEA', 'PDX', 'HIO', 'ANC', 'HNL',
+]);
+
+export function isUsPop(pop: string): boolean {
+	return US_POP_PREFIXES.has(pop.slice(0, 3).toUpperCase());
+}
+
+export function summarizeFeedDay(date: string, series: FeedObservation[]): FeedDaySummary {
+	const points = series.filter(([t]) => utcDate(new Date(t * 1000)) === date);
+	const lags = points.map(([, lag]) => lag).sort((a, b) => a - b);
+	const pops: Record<string, number> = {};
+	for (const [, , pop] of points) if (pop) pops[pop] = (pops[pop] ?? 0) + 1;
+	return {
+		source: 'health-refresh',
+		date,
+		samples: points.length,
+		p50S: lags[Math.floor(lags.length * 0.5)] ?? 0,
+		p90S: lags[Math.floor(lags.length * 0.9)] ?? 0,
+		overGenerationCount: lags.filter((lag) => lag >= 60).length,
+		popSamples: Object.values(pops).reduce((n, count) => n + count, 0),
+		nonUsSamples: Object.entries(pops).reduce((n, [pop, count]) => n + (isUsPop(pop) ? 0 : count), 0),
+		pops,
+	};
+}
+
 export interface FeedDrift {
 	/** `polled_at - ts` of the latest WAL record, seconds. */
 	latestS: number;
@@ -55,8 +98,8 @@ export interface FeedDrift {
 	ts: number;
 	/** Poll wall-clock (epoch s) of the latest WAL record. */
 	polledAt: number;
-	/** `[polled_at epoch s, drift s]` points, ≤24h old, oldest first. */
-	series: Array<[number, number]>;
+	/** `[polled_at epoch s, drift s, optional POP]` health samples, ≤24h old, oldest first. */
+	series: FeedObservation[];
 	/** CloudFront POP that served the latest record (`x-amz-cf-pop`), when recorded. */
 	pop?: string | null;
 }
@@ -68,13 +111,15 @@ export interface FeedHealth {
 	todayExpected: number;
 	last7Days: Array<{ date: string; count: number; expected: number }>;
 	gaps?: FeedGaps;
+	/** Last seven UTC days of durable sampled lag/POP summaries. */
+	history?: FeedDaySummary[];
 }
 
 /** Today's missing WAL minutes, classified against the poller's per-tick
  *  heartbeats. A LU stamped in minute m stays live ~60s, into m+1, so ticks
- *  m and m+1 both sample it: a hole with both heartbeats present is an
- *  upstream-skipped generation (~4/day is normal; nothing was published to
- *  catch), while a hole next to a missing heartbeat is one the poller may
+ *  m and m+1 both sample it: a hole with both heartbeats present is a
+ *  generation not observed despite running ticks (upstream omission or
+ *  stale cache), while a hole next to a missing heartbeat is one the poller may
  *  have missed — possible permanent loss. (Heartbeats prove a tick ran, not
  *  that it saw fresh data; sampling through a stale cache shows up as
  *  first-seen lag in `drift`, alerted separately.) */
@@ -86,6 +131,9 @@ export interface FeedGaps {
 	unexplained: string[];
 	/** Settled minutes with no heartbeat (CF skipped the cron). */
 	cronSkips: number;
+	/** Missing WAL generations in the last ten settled minutes, across UTC midnight.
+	 *  Tick presence cannot distinguish upstream omission from stale-cache loss. */
+	recentMissing?: string[];
 }
 
 const pad2 = (n: number) => n.toString().padStart(2, '0');
@@ -301,7 +349,18 @@ export async function getFeedHealth(r2: HealthR2): Promise<FeedHealth> {
 
 	const gaps = classifyFeedGaps(minuteLabels(lists[0].objects), minuteLabels(heartbeats.objects), Math.max(0, todayExpected - 2));
 
-	return { latestPoll, drift, todayCount, todayExpected, last7Days: counts, gaps };
+	const walKeys = new Set(lists.slice(0, 2).flatMap((l) => l.objects.map((o) => o.key)));
+	const endMinute = Math.floor(Date.now() / 60_000) - 1;
+	gaps.recentMissing = Array.from({ length: 10 }, (_, i) => {
+		const iso = new Date((endMinute - 10 + i) * 60_000).toISOString();
+		return `gbfs/status/${iso.slice(0, 10)}/${iso.slice(11, 16).replace(':', '-')}.json`;
+	}).filter((key) => !walKeys.has(key)).map((key) => key.slice('gbfs/status/'.length, -5).replace('/', ' ').replace(/-(\d{2})$/, ':$1'));
+	const summaries = await Promise.all(dates.map(async (date) => {
+		const obj = await r2.get(`health/feed-history/${date}.json`);
+		return obj ? obj.json<FeedDaySummary>() : null;
+	}));
+	const history = summaries.filter((s): s is FeedDaySummary => s !== null).reverse();
+	return { latestPoll, drift, todayCount, todayExpected, last7Days: counts, gaps, history };
 }
 
 const FEED_DRIFT_KEY = 'health/feed-drift.json';
@@ -309,8 +368,9 @@ const FEED_DRIFT_WINDOW_S = 24 * 3600;
 
 /** Read the latest WAL record's `{ts, polled_at}`, fold the point into the
  *  rolling 24h series doc, and return both. Append is keyed on `polled_at`
- *  so re-computes (cron + on-demand snapshot refreshes) are idempotent; a
- *  concurrent lost-update just drops one point, which the next poll re-adds. */
+ *  so re-computes (cron + on-demand snapshot refreshes) are idempotent.
+ *  Overlapping refreshes can lose a sampled point, so these are sampled
+ *  diagnostics; WAL records remain the complete source for audits. */
 async function getFeedDrift(r2: HealthR2, latestKey: string): Promise<FeedDrift | null> {
 	const obj = await r2.get(latestKey);
 	if (!obj) return null;
@@ -319,14 +379,20 @@ async function getFeedDrift(r2: HealthR2, latestKey: string): Promise<FeedDrift 
 	const latestS = rec.polled_at - rec.ts;
 
 	const prev = await r2.get(FEED_DRIFT_KEY);
-	let series: Array<[number, number]> = prev
-		? await prev.json<Array<[number, number]>>()
+	let series: FeedObservation[] = prev
+		? await prev.json<FeedObservation[]>()
 		: [];
 	const cutoff = rec.polled_at - FEED_DRIFT_WINDOW_S;
 	series = series.filter(([t]) => t >= cutoff);
 	if (!series.length || series[series.length - 1][0] < rec.polled_at) {
-		series.push([rec.polled_at, latestS]);
-		if (r2.put) await r2.put(FEED_DRIFT_KEY, JSON.stringify(series));
+		series.push([rec.polled_at, latestS, rec.pop ?? null]);
+		if (r2.put) {
+			await r2.put(FEED_DRIFT_KEY, JSON.stringify(series));
+			// Only update the observed point's day: yesterday's archived summary
+			// must not shrink as yesterday's points age out of the rolling window.
+			const date = utcDate(new Date(rec.polled_at * 1000));
+			await r2.put(`health/feed-history/${date}.json`, JSON.stringify(summarizeFeedDay(date, series)));
+		}
 	}
 
 	return { latestS, ts: rec.ts, polledAt: rec.polled_at, series, pop: rec.pop ?? null };

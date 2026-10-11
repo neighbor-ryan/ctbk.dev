@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { classifyFeedGaps, getCompactionHealth, getFeedHealth, type HealthR2 } from './health';
+import { classifyFeedGaps, getCompactionHealth, getFeedHealth, summarizeFeedDay, type HealthR2 } from './health';
 
 /** In-memory `HealthR2` over a fixed key set: prefix listing (no delimiter
  *  support needed beyond the daily-parquet scan), single page. */
@@ -76,5 +76,59 @@ describe('classifyFeedGaps', () => {
 		// with "0 skipped tick(s)"; once 14:47's landed, an upstream skip.
 		expect(classifyFeedGaps(all(9, 7), all(8), 8)).toEqual({ settled: 8, missing: 1, unexplained: [], cronSkips: 0 });
 		expect(classifyFeedGaps(all(10, 7), all(10, 8), 9)).toEqual({ settled: 9, missing: 1, unexplained: ['00:07'], cronSkips: 1 });
+	});
+});
+
+describe('passive feed history', () => {
+	it('summarizes only the requested UTC day, separating unknown POPs from known ones', () => {
+		const t = Date.parse('2026-10-11T12:00:00Z') / 1000;
+		expect(summarizeFeedDay('2026-10-11', [
+			[t - 86400, 99, 'SIN1'], [t, 15, 'BCN50-P1'], [t + 60, 20, 'IAD12-P5'], [t + 120, 65],
+		])).toEqual({
+			source: 'health-refresh', date: '2026-10-11', samples: 3, p50S: 20, p90S: 65, overGenerationCount: 1,
+			popSamples: 2, nonUsSamples: 1, pops: { 'BCN50-P1': 1, 'IAD12-P5': 1 },
+		});
+	});
+
+	it('archives sampled days idempotently and preserves yesterday across midnight', async () => {
+		vi.useFakeTimers();
+		try {
+			const objects = new Map<string, string>();
+			const writes: string[] = [];
+			const r2: HealthR2 = {
+				...fakeR2([]),
+				get: async (key) => objects.has(key) ? { json: async <T>() => JSON.parse(objects.get(key)!) as T } : null,
+				put: async (key, value) => { objects.set(key, value); writes.push(key); },
+			};
+			const observe = async (iso: string, pop: string) => {
+				vi.setSystemTime(new Date(iso));
+				const t = Date.parse(iso) / 1000;
+				const key = `gbfs/status/${iso.slice(0, 10)}/${iso.slice(11, 16).replace(':', '-')}.json`;
+				objects.set(key, JSON.stringify({ ts: t - 15, polled_at: t, pop }));
+				r2.list = async ({ prefix = '' }) => ({
+					objects: [...objects.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key, uploaded: new Date(iso) })),
+					truncated: false,
+				});
+				return getFeedHealth(r2);
+			};
+			const first = await observe('2026-10-11T23:59:00Z', 'BCN50-P1');
+			expect(first.history).toEqual([{
+				source: 'health-refresh', date: '2026-10-11', samples: 1, p50S: 15, p90S: 15, overGenerationCount: 0,
+				popSamples: 1, nonUsSamples: 1, pops: { 'BCN50-P1': 1 },
+			}]);
+			await getFeedHealth(r2);
+			expect(writes).toEqual(['health/feed-drift.json', 'health/feed-history/2026-10-11.json']);
+			const yesterday = objects.get('health/feed-history/2026-10-11.json');
+			const next = await observe('2026-10-12T00:01:00Z', 'IAD12-P5');
+			expect(objects.get('health/feed-history/2026-10-11.json')).toBe(yesterday);
+			expect(next.history).toEqual([...first.history!, {
+				source: 'health-refresh', date: '2026-10-12', samples: 1, p50S: 15, p90S: 15, overGenerationCount: 0,
+				popSamples: 1, nonUsSamples: 0, pops: { 'IAD12-P5': 1 },
+			}]);
+			expect(next.gaps!.recentMissing).toEqual([
+				'2026-10-11 23:50', '2026-10-11 23:51', '2026-10-11 23:52', '2026-10-11 23:53',
+				'2026-10-11 23:54', '2026-10-11 23:55', '2026-10-11 23:56', '2026-10-11 23:57', '2026-10-11 23:58',
+			]);
+		} finally { vi.useRealTimers(); }
 	});
 });

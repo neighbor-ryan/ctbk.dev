@@ -1,0 +1,13 @@
+# GBFS alerts based on coverage and loss risk
+
+Implemented 2026-10-11. Harmless CDN POP changes and borderline lag should be observable without repeatedly paging Slack. Alerts prioritize possible permanent loss and conditions that can cause it.
+
+- Removed `feed-pop` paging. A non-US serving POP alone does not establish stale data or missed generations. Existing firing threads resolve through the retired-rule handling.
+- `feed-lag` fires on three distinct health observations first seen at least 60 seconds late within ten minutes. An LU remains live for about one minute, so these observations indicate cache/collection delay that risks superseding updates. Recovery requires at least three observations and a ten-minute p90 below 45 seconds. Missing samples cannot clear the incident.
+- `feed-generation-gaps` fires on three missing WAL generations in ten settled minutes and recovers with at most one. The window spans UTC midnight and excludes the current and previous minute, matching the existing settlement delay. It detects coverage deterioration even with every poller heartbeat present: running ticks do not prove that the cache served every generation. The alert distinguishes possible upstream omission, cache loss, and missed polls without claiming which occurred.
+- Existing immediate alerts for a stale WAL feed and holes adjacent to skipped cron ticks remain. Infrastructure and downstream freshness alerts remain.
+- `health/feed-drift.json` retains optional POP metadata alongside lag observations. `health/feed-history/YYYY-MM-DD.json` durably retains each observed day's sample count, p50/p90 lag, count at least 60 seconds late, known POP sample count, non-US sample count, and counts by POP. `/api/health` exposes the last seven available UTC summaries in `feed.history`. Old summaries stay archived after falling out of that window.
+
+Summaries explicitly identify their source as `health-refresh`. They are sampled diagnostics, not a census of all WAL generations: refreshes can skip observations, and the existing rolling-series updates can lose a point during overlapping refreshes. Old lag observations have no POP metadata; unknown POPs are excluded from POP counts rather than counted as US. WAL records remain the source for complete per-generation audits.
+
+Tests cover harmless routing, borderline lag, sustained generation-late observations, stale/future/duplicate samples, hysteretic recovery, missing-sample behavior, coverage loss with healthy ticks, midnight windows, daily summary filtering, idempotent archival, and preserving yesterday's summary. Existing overlapping-alert claim tests continue to pass.

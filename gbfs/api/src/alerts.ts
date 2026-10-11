@@ -21,11 +21,13 @@ import { SlackClient } from '@rdub/thrds';
 import type { HealthR2, HealthSnapshot } from './health';
 import { ALERTS_HEARTBEAT_KEY, getHealthSnapshot, HEALTH_SNAPSHOT_KEY } from './health';
 
+export { isUsPop } from './health';
+
 export interface Rule {
 	id: string;
 	description: string;
 	/** Pure function: given a snapshot, return `true` iff firing. */
-	check: (s: HealthSnapshot) => boolean;
+	check: (s: HealthSnapshot, wasFiring?: boolean) => boolean;
 	/** Slack message body when firing (rendered with mrkdwn). */
 	firingText: (s: HealthSnapshot) => string;
 }
@@ -75,27 +77,19 @@ export function unexplainedGaps(s: HealthSnapshot): string[] {
 	return s.feed.gaps?.unexplained ?? [];
 }
 
-/** p90 first-seen lag (`polled_at − ts`, s) over the trailing hour of the
- *  drift series; 0 with too few points to judge. Healthy sampling sees a new
- *  LU within ~15s; a lag near 60s means samples are hitting a stale cache,
- *  and LUs superseded before the cache refreshes are never seen (the
- *  2026-09 SIN CloudFront-cache gaps). */
-/** CloudFront POP codes are IATA airport codes + a suffix (`IAD12-P5`).
- *  From non-US POPs Lyft's 2.3 feed lags and skips updates, so the pollers
- *  fetch via a US-placed proxy (`gbfs/fetcher/`); a non-US serving POP means
- *  that path broke. */
-const US_POP_PREFIXES = new Set([
-	'IAD', 'JFK', 'EWR', 'BOS', 'PHL', 'BWI', 'PIT', 'CLT', 'RDU', 'ATL', 'MIA', 'TPA', 'JAX', 'MCO',
-	'ORD', 'DTW', 'CMH', 'IND', 'MSP', 'MCI', 'OMA', 'STL', 'BNA', 'MEM', 'DFW', 'IAH', 'AUS', 'SAT',
-	'DEN', 'SLC', 'PHX', 'LAS', 'LAX', 'SFO', 'SJC', 'SEA', 'PDX', 'HIO', 'ANC', 'HNL',
-]);
-
 export function feedPop(s: HealthSnapshot): string | null {
 	return s.feed.drift?.pop ?? null;
 }
 
-export function isUsPop(pop: string): boolean {
-	return US_POP_PREFIXES.has(pop.slice(0, 3).toUpperCase());
+/** Distinct health observations in the last ten minutes. Repeated reads of
+ *  one LU do not constitute sustained trouble; ignore future/invalid points. */
+export function recentFeedLags(s: HealthSnapshot): number[] {
+	const now = Date.now() / 1000;
+	const points = new Map<number, number>();
+	for (const [t, lag] of s.feed.drift?.series ?? []) {
+		if (t >= now - 600 && t <= now && Number.isFinite(lag) && lag >= 0) points.set(t, lag);
+	}
+	return [...points.values()].sort((a, b) => a - b);
 }
 
 export function feedLagP90Seconds(s: HealthSnapshot): number {
@@ -151,7 +145,11 @@ export function snapshotAgeMinutes(s: HealthSnapshot): number {
 
 /** Default rule set. To tweak thresholds, edit constants here. */
 const FEED_STALE_MIN = 5;
-const FEED_LAG_P90_MAX_S = 30;
+// An LU remains live for about a minute. Several first sightings already a
+// generation late indicate loss risk; POP location alone does not.
+const FEED_LAG_RISK_S = 60;
+const FEED_LAG_RECOVERY_S = 45;
+const FEED_LAG_RISK_SAMPLES = 3;
 /** Of D1's 10 GB hard cap (writes fail at the cap — the 2026-09 outage). */
 const D1_SIZE_MAX_GB = 8;
 const HOURLY_STALE_MIN = 90;
@@ -189,23 +187,27 @@ export const DEFAULT_RULES: Rule[] = [
 		firingText: (s) => {
 			const g = s.feed.gaps!;
 			const shown = g.unexplained.slice(0, 10).join(', ') + (g.unexplained.length > 10 ? ', …' : '');
-			return `:rotating_light: *GBFS minutes possibly lost* — ${g.unexplained.length} WAL hole(s) today next to a skipped poller tick (${shown}); ${g.cronSkips} skipped tick(s), ${g.missing - g.unexplained.length} upstream-skipped generation(s)`;
+			return `:rotating_light: *GBFS minutes possibly lost* — ${g.unexplained.length} WAL hole(s) today next to a skipped poller tick (${shown}); ${g.cronSkips} skipped tick(s), ${g.missing - g.unexplained.length} other unobserved generation(s) (upstream omission or cache)`;
 		},
 	},
 	{
 		id: 'feed-lag',
-		description: `p90 first-seen LU lag ≤ ${FEED_LAG_P90_MAX_S}s over the last hour`,
-		check: (s) => feedLagP90Seconds(s) > FEED_LAG_P90_MAX_S,
+		description: `At least 3 recent samples, with p90 first-seen lag < ${FEED_LAG_RECOVERY_S}s over the last 10 minutes`,
+		check: (s, wasFiring = false) => {
+			const lags = recentFeedLags(s);
+			if (wasFiring) return lags.length < 3 || lags[Math.floor(lags.length * 0.9)] >= FEED_LAG_RECOVERY_S;
+			return lags.filter((lag) => lag >= FEED_LAG_RISK_S).length >= FEED_LAG_RISK_SAMPLES;
+		},
 		firingText: (s) =>
-			`:warning: *GBFS feed lag* — p90 first-seen lag ${feedLagP90Seconds(s)}s over the last hour (threshold: ${FEED_LAG_P90_MAX_S}s); the poller is likely reading a stale cache and can miss LUs` +
-			(feedPop(s) ? ` (serving POP: ${feedPop(s)})` : ''),
+			`:warning: *GBFS stale-cache loss risk* — ${recentFeedLags(s).filter((lag) => lag >= FEED_LAG_RISK_S).length} distinct observations first seen ≥ ${FEED_LAG_RISK_S}s late in the last 10 minutes; a feed generation lasts about a minute, so updates may be superseded before we see them` +
+			(feedPop(s) ? ` (latest serving POP: ${feedPop(s)})` : ''),
 	},
 	{
-		id: 'feed-pop',
-		description: 'The 2.3 poller\'s latest snapshot came from a US CloudFront POP',
-		check: (s) => { const pop = feedPop(s); return pop !== null && !isUsPop(pop); },
+		id: 'feed-generation-gaps',
+		description: 'At most 1 missing WAL generation in the last 10 settled minutes',
+		check: (s, wasFiring = false) => (s.feed.gaps?.recentMissing?.length ?? 0) >= (wasFiring ? 2 : 3),
 		firingText: (s) =>
-			`:rotating_light: *GBFS poller reading a non-US edge* — latest snapshot served by CloudFront \`${feedPop(s)}\`; from non-US POPs Lyft's 2.3 feed skips updates. Check the \`ctbk-gbfs-fetch\` proxy + the pollers' \`FETCH\` binding`,
+			`:rotating_light: *GBFS generation coverage loss* — ${s.feed.gaps!.recentMissing!.length} missing WAL generations in the last 10 settled minutes (${s.feed.gaps!.recentMissing!.join(', ')}); upstream omission, stale cache, or missed polls may be responsible. Running cron ticks alone do not prove coverage`,
 	},
 	{
 		id: 'hourly-compaction-stale',
@@ -269,7 +271,7 @@ export function diffRules(
 	const transitions: Transition[] = [];
 	for (const rule of rules) {
 		const wasFiring = prev.firing[rule.id] !== undefined;
-		const isFiring = rule.check(snapshot);
+		const isFiring = rule.check(snapshot, wasFiring);
 		if (isFiring && !wasFiring) {
 			transitions.push({
 				rule,
