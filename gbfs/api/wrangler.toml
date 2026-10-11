@@ -56,7 +56,8 @@ binding = "PERF"
 dataset = "ctbk_perf"
 
 # Cron triggers (scheduled() handler in `index.ts`): refresh the
-# /api/health snapshot cache + Slack alerts (threshold rules, posts
+# narrow /api/health snapshot cache + Slack alerts each minute, with
+# historical inventory refreshed only on hourly slots (threshold rules, posts
 # firing/resolved transitions to `#ctbk-bot`; idempotent).
 [triggers]
 crons = ["* * * * *"]

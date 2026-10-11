@@ -1,0 +1,13 @@
+# GBFS health inventory LIST budget
+
+The minute health cron repeatedly enumerated historical WAL directories, 23 legacy cascade cells, and six pyramid prefixes to populate historical counts and segment-size tooltips. The crashes audit attributed approximately 240,000 R2 LIST calls/day to this path. This was an ongoing Class A cost rather than a one-time backfill.
+
+The minute snapshot now reads only today/yesterday's feed WAL, today's tick heartbeats, today/yesterday's hourly compactions, and exact-key diagnostic documents. D1 station freshness, pyramid tips, and database size remain live. Feed gap and lag alerts keep their minute cadence.
+
+Historical inventory lives separately in `health/inventory.json`, refreshed by the minute cron only when the trigger's scheduled UTC minute is zero. It contains seven-day WAL counts, daily compactions, legacy cascade inventories, full pyramid covers with segment bytes, and build-progress listings. The hourly task runs independently of the live refresh and alerts. A failed scan preserves the last good document; the next hourly slot retries. Duplicate scheduled deliveries can duplicate that hour's scan; HTTP requests cannot initiate it.
+
+`inventoryGeneratedAt` records inventory freshness separately from the live snapshot's `generatedAt`. Existing deployments reuse the old snapshot's inventory and original timestamp until the first hourly inventory write. A new empty bucket returns empty historical inventory with a null timestamp while live checks continue. During that initial interval, unscanned older feed days show zero counts; the inventory timestamp identifies that incomplete history.
+
+`/api/health?live=1` and stale-cache fallbacks execute only the narrow live checks, so public polling cannot amplify the broad scan cost. Normal single-page test fixtures require exactly five LIST prefixes; actual WAL/heartbeat day prefixes paginate (1,440 objects per complete day). Existing bounded pagination remains in the hourly scans, so historical inventories retain their earlier approximate/truncated limits.
+
+Validation: regression test failed against the old broad-scan implementation, then passed with an exact prefix budget. Tests cover cold starts, repeated migration fallback, persisted inventory across isolates, failed refresh retention, midnight feed checks, and hourly scheduled slots. Post-deploy billing analytics should verify the actual decrease; estimates are not substitutes for observed operation counts.

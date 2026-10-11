@@ -520,7 +520,7 @@ import {
 import { monthsInDashed } from './planQuery';
 import { R2Store } from '@rdub/file-tree/stores/r2';
 import { createHandlers } from '@rdub/file-tree/server';
-import { computeAndStoreHealthSnapshot, readCachedHealthSnapshot } from './health';
+import { computeAndStoreHealthSnapshot, readCachedHealthSnapshot, refreshHealthInventory, shouldRefreshHealthInventory } from './health';
 import { coverageKey, coverageRange, defaultCoverageRange, isDay, type CoverageDay } from './coverage';
 import { EMPTY_VOCAB_KEY, makeVocab, readSeries, type Bin, type OpenShard, type ShardBytes, type Vocab } from './empty';
 import { runAlerts } from './alerts';
@@ -1961,8 +1961,14 @@ export default {
 	/** Scheduled handler — every-minute cron: refresh the /api/health
 	 *  snapshot cache, reconcile shard registrations, then evaluate Slack
 	 *  alert rules (idempotent — only posts on state change). */
-	async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+	async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
 		configureServe(env);
+		// Inventory is decorative/historical; refresh independently so its
+		// latency or failure cannot block minute coverage checks and alerts.
+		if (shouldRefreshHealthInventory(event.scheduledTime)) {
+			ctx.waitUntil(refreshHealthInventory(env.R2, env.DB)
+				.catch((err) => console.error('health-inventory cron error:', err?.message ?? err)));
+		}
 		// Registration reconcile: register any ladder shard that exists on
 		// R2 but is missing from `pyramid_shards`. Shard *objects* are the
 		// source of truth (R2 is never forked); registration rows can go
@@ -1974,9 +1980,7 @@ export default {
 			reconcileRegistry(env)
 				.catch((err) => console.error('registry-reconcile cron error:', err?.message ?? err)),
 		);
-		// Refresh the /api/health snapshot cache (~7 s of R2 listings + D1
-		// scans, off the request path). Runs every minute; the route serves
-		// the cached object in ~100 ms.
+		// Refresh narrow live checks every minute, merging hourly inventory.
 		ctx.waitUntil(
 			computeAndStoreHealthSnapshot(env.R2, env.DB)
 				.catch((err) => console.error('health-snapshot cron error:', err?.message ?? err)),

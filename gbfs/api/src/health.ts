@@ -223,6 +223,9 @@ export const ALERTS_HEARTBEAT_KEY = 'gbfs/alerts/heartbeat.json';
 
 export interface HealthSnapshot {
 	generatedAt: number;
+	/** Hourly inventory freshness, independent of the minutely alert inputs.
+	 *  Null on a new bucket until its first hourly refresh. */
+	inventoryGeneratedAt?: number | null;
 	feed: FeedHealth;
 	compactions: CompactionHealth;
 	cascade: CascadeHealth;
@@ -311,20 +314,28 @@ async function listAllDelimited(
 	return { objects, delimitedPrefixes: [...delimitedPrefixes].sort(), truncated: true };
 }
 
-export async function getFeedHealth(r2: HealthR2): Promise<FeedHealth> {
+export async function getFeedHealth(
+	r2: HealthR2,
+	cachedCounts?: FeedHealth['last7Days'],
+): Promise<FeedHealth> {
 	// Last 7 days (today + 6 prior), newest first. Parallel listing, each
 	// paginated: R2's list caps at 1000 raw keys per page (wrangler-dev
 	// lower), and a full day has 1440 minute files.
 	const dates: string[] = Array.from({ length: 7 }, (_, i) => dateAtOffset(i));
 	const today = dates[0];
 	const todayExpected = minutesElapsedTodayUtc();
+	const liveDates = cachedCounts === undefined ? dates : dates.slice(0, 2);
 	const [lists, heartbeats] = await Promise.all([
-		Promise.all(dates.map((date) => listAll(r2, `gbfs/status/${date}/`, 3))),
+		Promise.all(liveDates.map((date) => listAll(r2, `gbfs/status/${date}/`, 3))),
 		listAll(r2, `gbfs/heartbeat/${today}/`, 3),
 	]);
 	const todayCount = lists[0].objects.length;
 	const counts = dates
-		.map((date, i) => ({ date, count: lists[i].objects.length, expected: date === today ? todayExpected : 1440 }))
+		.map((date, i) => ({
+			date,
+			count: lists[i]?.objects.length ?? cachedCounts?.find((c) => c.date === date)?.count ?? 0,
+			expected: date === today ? todayExpected : 1440,
+		}))
 		.reverse();
 
 	// Newest WAL key across the window, not just today's: right after 00:00Z
@@ -399,6 +410,11 @@ async function getFeedDrift(r2: HealthR2, latestKey: string): Promise<FeedDrift 
 }
 
 export async function getCompactionHealth(r2: HealthR2): Promise<CompactionHealth> {
+	const [daily, hourly] = await Promise.all([getDailyCompactionHealth(r2), getHourlyCompactionHealth(r2)]);
+	return { daily, hourly };
+}
+
+async function getDailyCompactionHealth(r2: HealthR2): Promise<CompactionHealth['daily']> {
 	// Daily: list `gbfs/status/` with delimiter so we only see top-level
 	// objects (the `*.parquet` daily compactions) not the per-date dirs.
 	// Cursor-follow required: the per-date dirs each contain 1440 minute
@@ -408,11 +424,13 @@ export async function getCompactionHealth(r2: HealthR2): Promise<CompactionHealt
 		.filter((o) => /gbfs\/status\/\d{4}-\d{2}-\d{2}\.parquet$/.test(o.key))
 		.map((o) => o.key.match(/(\d{4}-\d{2}-\d{2})\.parquet$/)![1])
 		.sort();
-	const daily = {
+	return {
 		latestDate: dailyParquets.length > 0 ? dailyParquets[dailyParquets.length - 1] : null,
 		count: dailyParquets.length,
 	};
+}
 
+async function getHourlyCompactionHealth(r2: HealthR2): Promise<CompactionHealth['hourly']> {
 	// Hourly h1: today's, falling back to yesterday's for `latestKey` — the
 	// first h1 of a UTC day lands ~1h after 00:00Z, and a today-only lookup
 	// read as "last shard ever" until then.
@@ -420,12 +438,10 @@ export async function getCompactionHealth(r2: HealthR2): Promise<CompactionHealt
 		[dateAtOffset(0), dateAtOffset(1)].map((date) => r2.list({ prefix: `gbfs/avail/h1/${date}/`, limit: 30 })),
 	);
 	const h1Latest = (h1Today.objects.length > 0 ? h1Today : h1Yesterday).objects.map((o) => o.key).sort();
-	const hourly = {
+	return {
 		latestKey: h1Latest.length > 0 ? h1Latest[h1Latest.length - 1] : null,
 		todayCount: h1Today.objects.length,
 	};
-
-	return { daily, hourly };
 }
 
 /** Cells deployed by the cascade worker. Mirrors `gbfs/lib/cascade.ts`'s
@@ -660,17 +676,75 @@ export async function getBuildsHealth(r2: HealthR2): Promise<BuildProgress[]> {
 	return cfwGetBuildsHealth(healthR2Storage(r2), { prefix: 'gbfs/build-progress/' });
 }
 
+export const HEALTH_INVENTORY_KEY = 'health/inventory.json';
+
+interface HealthInventory {
+	generatedAt: number | null;
+	feedCounts: FeedHealth['last7Days'];
+	daily: CompactionHealth['daily'];
+	cascade: CascadeHealth;
+	pyramids: PyramidsHealth;
+	builds: BuildProgress[];
+}
+
+/** Broad scans are only called by the hourly cron branch, never by HTTP
+ *  cache misses or live health requests. A failed refresh leaves the last
+ *  good inventory and its timestamp intact. */
+export async function refreshHealthInventory(r2: HealthR2, db?: D1Database): Promise<HealthInventory> {
+	const [feedCounts, daily, cascade, pyramids, builds] = await Promise.all([
+		Promise.all(Array.from({ length: 7 }, async (_, i) => {
+			const date = dateAtOffset(6 - i);
+			const { objects } = await listAll(r2, `gbfs/status/${date}/`, 3);
+			return { date, count: objects.length, expected: i === 6 ? minutesElapsedTodayUtc() : 1440 };
+		})),
+		getDailyCompactionHealth(r2),
+		getCascadeHealth(r2),
+		db ? getPyramidsHealth(db, r2) : Promise.resolve<PyramidsHealth>([]),
+		getBuildsHealth(r2),
+	]);
+	const inventory = { generatedAt: Math.floor(Date.now() / 1000), feedCounts, daily, cascade, pyramids, builds };
+	if (r2.put) await r2.put(HEALTH_INVENTORY_KEY, JSON.stringify(inventory));
+	return inventory;
+}
+
+async function readHealthInventory(r2: HealthR2): Promise<HealthInventory> {
+	const obj = await r2.get(HEALTH_INVENTORY_KEY);
+	if (obj) return obj.json<HealthInventory>();
+	// Preserve the pre-deploy inventory until the first hourly cron. Carry
+	// its original timestamp through successive minute snapshots.
+	const oldObj = await r2.get(HEALTH_SNAPSHOT_KEY);
+	const old = oldObj ? await oldObj.json<HealthSnapshot>() : null;
+	return {
+		generatedAt: old ? (old.inventoryGeneratedAt === undefined ? old.generatedAt : old.inventoryGeneratedAt) : null,
+		feedCounts: old?.feed.last7Days ?? [],
+		daily: old?.compactions.daily ?? { latestDate: null, count: 0 },
+		cascade: old?.cascade ?? {
+			cells: [],
+			expectedCells: [
+				...DEPLOYED_CELLS.map((c) => ({ ...c, deployed: true })),
+				...SPECCED_BUT_NOT_DEPLOYED.map((c) => ({ ...c, deployed: false })),
+			],
+		},
+		pyramids: old?.pyramids ?? [],
+		builds: old?.builds ?? [],
+	};
+}
+
+/** Use the trigger's scheduled time rather than delivery time (cron can
+ *  arrive late). Public requests cannot opt into an inventory scan. */
+export function shouldRefreshHealthInventory(scheduledTime: number): boolean {
+	return new Date(scheduledTime).getUTCMinutes() === 0;
+}
+
 export async function getHealthSnapshot(
 	r2: HealthR2,
 	db?: D1Database,
 ): Promise<HealthSnapshot> {
-	const [feed, compactions, cascade, pyramids, tripdata, builds, stations, alerts] = await Promise.all([
-		getFeedHealth(r2),
-		getCompactionHealth(r2),
-		getCascadeHealth(r2),
-		db ? getPyramidsHealth(db, r2) : Promise.resolve<PyramidsHealth>([]),
+	const inventory = await readHealthInventory(r2);
+	const [feed, hourly, tripdata, stations, alerts] = await Promise.all([
+		getFeedHealth(r2, inventory.feedCounts),
+		getHourlyCompactionHealth(r2),
 		getTripdataHealth(r2),
-		getBuildsHealth(r2),
 		db ? getStationsHealth(db) : Promise.resolve(null),
 		getAlertsHeartbeat(r2),
 	]);
@@ -679,13 +753,14 @@ export async function getHealthSnapshot(
 	const { DEFAULT_PYRAMID } = await import('./avail_geo');
 	return {
 		generatedAt: Math.floor(Date.now() / 1000),
+		inventoryGeneratedAt: inventory.generatedAt,
 		feed,
-		compactions,
-		cascade,
-		pyramids,
+		compactions: { daily: inventory.daily, hourly },
+		cascade: inventory.cascade,
+		pyramids: inventory.pyramids,
 		defaultPyramid: DEFAULT_PYRAMID,
 		tripdata,
-		builds,
+		builds: inventory.builds,
 		stations,
 		alerts,
 		pyramidTips,
@@ -714,11 +789,8 @@ async function getAlertsHeartbeat(r2: HealthR2): Promise<AlertsHeartbeat | null>
 	return obj ? obj.json<AlertsHeartbeat>() : null;
 }
 
-/** Where the cron-refreshed snapshot lives on R2. The full snapshot takes
- *  ~7 s to compute (R2 listings across feed/compaction prefixes + the D1
- *  pyramid scan); serving it live made `/api/health` a 7-second XHR. The
- *  worker's minute cron recomputes into this key; the route serves the
- *  cached object (~100 ms) as long as it's fresh. */
+/** Minutely alert inputs merged with the separately persisted hourly
+ *  inventory. HTTP refreshes perform only the narrow live checks. */
 export const HEALTH_SNAPSHOT_KEY = 'health/snapshot.json';
 
 /** Serve-stale threshold: a snapshot older than this falls back to live

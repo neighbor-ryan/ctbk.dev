@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { classifyFeedGaps, getCompactionHealth, getFeedHealth, summarizeFeedDay, type HealthR2 } from './health';
+import {
+	classifyFeedGaps, getCompactionHealth, getFeedHealth, getHealthSnapshot,
+	HEALTH_INVENTORY_KEY, HEALTH_SNAPSHOT_KEY, refreshHealthInventory,
+	shouldRefreshHealthInventory, summarizeFeedDay, type HealthR2,
+} from './health';
 
 /** In-memory `HealthR2` over a fixed key set: prefix listing (no delimiter
  *  support needed beyond the daily-parquet scan), single page. */
@@ -16,6 +20,70 @@ function fakeR2(keys: string[]): HealthR2 {
 		},
 	};
 }
+
+describe('health LIST budget', () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-10-11T12:15:00Z'));
+	});
+	afterEach(() => vi.useRealTimers());
+
+	it('refreshes live alert inputs without listing historical inventory, even with no cache', async () => {
+		const prefixes: string[] = [];
+		const r2 = fakeR2(['gbfs/status/2026-10-11/12-14.json']);
+		const list = r2.list;
+		r2.list = async (opts) => { prefixes.push(opts.prefix!); return list(opts); };
+		const snapshot = await getHealthSnapshot(r2);
+		expect(prefixes.sort()).toEqual([
+			'gbfs/avail/h1/2026-10-10/', 'gbfs/avail/h1/2026-10-11/',
+			'gbfs/heartbeat/2026-10-11/', 'gbfs/status/2026-10-10/', 'gbfs/status/2026-10-11/',
+		]);
+		expect(snapshot.feed.latestPoll?.time).toBe('12:14');
+		expect(snapshot.inventoryGeneratedAt).toBe(null);
+	});
+
+	it('preserves pre-deploy inventory and its age through repeated minute refreshes', async () => {
+		const r2 = fakeR2(['gbfs/status/2026-10-11/12-14.json']);
+		const old = {
+			generatedAt: 100, feed: { last7Days: [{ date: '2026-10-08', count: 123, expected: 1440 }] },
+			compactions: { daily: { latestDate: '2026-10-09', count: 180 } },
+			cascade: { cells: [], expectedCells: [] }, pyramids: [], builds: [],
+		};
+		const objects = new Map([[HEALTH_SNAPSHOT_KEY, JSON.stringify(old)]]);
+		r2.get = async (key) => objects.has(key) ? { json: async <T>() => JSON.parse(objects.get(key)!) as T } : null;
+		for (let i = 0; i < 2; i++) {
+			const snapshot = await getHealthSnapshot(r2);
+			expect([snapshot.inventoryGeneratedAt, snapshot.compactions.daily, snapshot.feed.last7Days[3]]).toEqual([
+				100, old.compactions.daily, { date: '2026-10-08', count: 123, expected: 1440 },
+			]);
+			expect(snapshot.generatedAt).toBe(Date.now() / 1000);
+			objects.set(HEALTH_SNAPSHOT_KEY, JSON.stringify(snapshot));
+			vi.advanceTimersByTime(60_000);
+		}
+	});
+
+	it('persists hourly inventory for another isolate; failed scans leave it intact', async () => {
+		const objects = new Map<string, string>();
+		const r2 = fakeR2(['gbfs/status/2026-10-10.parquet', 'gbfs/status/2026-10-08/01-00.json']);
+		r2.get = async (key) => objects.has(key) ? { json: async <T>() => JSON.parse(objects.get(key)!) as T } : null;
+		r2.put = async (key, value) => { objects.set(key, value); };
+		const inventory = await refreshHealthInventory(r2);
+		expect(JSON.parse(objects.get(HEALTH_INVENTORY_KEY)!)).toEqual(inventory);
+		vi.advanceTimersByTime(60_000);
+		const snapshot = await getHealthSnapshot({ ...r2 });
+		expect([snapshot.inventoryGeneratedAt, snapshot.compactions.daily, snapshot.feed.last7Days[3]]).toEqual([
+			inventory.generatedAt, { latestDate: '2026-10-10', count: 1 }, { date: '2026-10-08', count: 1, expected: 1440 },
+		]);
+		r2.list = async () => { throw new Error('inventory listing failed'); };
+		await expect(refreshHealthInventory(r2)).rejects.toThrow('inventory listing failed');
+		expect(JSON.parse(objects.get(HEALTH_INVENTORY_KEY)!)).toEqual(inventory);
+	});
+
+	it('refreshes inventory only for hourly scheduled slots, regardless of delivery delay', () => {
+		expect(['2026-10-11T12:00:00Z', '2026-10-11T12:01:00Z', '2026-10-12T00:00:00Z']
+			.map((t) => shouldRefreshHealthInventory(Date.parse(t)))).toEqual([true, false, true]);
+	});
+});
 
 describe('health just after 00:00Z (today has no keys yet)', () => {
 	beforeEach(() => {
