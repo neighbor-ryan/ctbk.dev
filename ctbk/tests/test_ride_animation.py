@@ -7,7 +7,7 @@ import pytest
 from click.testing import CliRunner
 
 from ctbk.ride_animation import CAP, Ride, build_month, decode_day, encode_day
-from ctbk.ride_animation_cli import animation_months, submit
+from ctbk.ride_animation_cli import animation_months, extend, submit
 
 GOLDEN = bytes.fromhex('43545241010003000300000001000000130a0514001e00302a000001000200010002000000000105')
 ROWS = [Ride(-10, 20, 0, 1, 0), Ride(0, 30, 1, 2, 1), Ride(5, CAP, 2, 0, 5)]
@@ -43,6 +43,19 @@ def test_batch_dry_run_is_an_exact_plan_without_aws_calls(monkeypatch):
     assert result.exit_code == 0
     assert loads(result.stdout) == {
         'queue': 'ctbk-reproc', 'image': image, 'months': 2, 'vcpus': 4, 'memory': 8192,
+        'command': ['script', 'exec ctbk rides-anim backfill -d 202512-202601 -k rides-anim-candidate/v1 -u'],
+    }
+
+
+def test_monthly_extend_refolds_the_previous_start_month_without_cloud_calls(monkeypatch):
+    def unexpected_client(*args, **kwargs):
+        raise AssertionError('dry run must not access AWS')
+    monkeypatch.setattr('boto3.client', unexpected_client)
+    result = CliRunner().invoke(extend, ['-d', '202601', '-n'])
+    assert result.exit_code == 0
+    assert loads(result.stdout) == {
+        'queue': 'ctbk-reproc', 'image': '688066488567.dkr.ecr.us-east-1.amazonaws.com/ctbk-reproc:de615adb',
+        'months': 2, 'vcpus': 4, 'memory': 8192,
         'command': ['script', 'exec ctbk rides-anim backfill -d 202512-202601 -k rides-anim-candidate/v1 -u'],
     }
 

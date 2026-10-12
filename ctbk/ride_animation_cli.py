@@ -278,7 +278,7 @@ def submit(
     dry_run: bool,
     image: str,
     vcpus: int,
-) -> None:
+) -> dict:
     import boto3
     import re
     from copy import deepcopy
@@ -293,7 +293,7 @@ def submit(
     plan = {'queue': 'ctbk-reproc', 'image': image, 'months': len(months), 'vcpus': vcpus, 'memory': memory, 'command': command}
     if dry_run:
         print(dumps(plan, indent=2))
-        return
+        return plan
     if boto3.client('sts').get_caller_identity()['Account'] != '688066488567':
         raise UsageError('submit requires the HCCS AWS account')
     batch = boto3.client('batch', region_name='us-east-1')
@@ -323,4 +323,41 @@ def submit(
         jobName=f'rides-anim-{months[0]}-{months[-1]}', jobQueue='ctbk-reproc',
         jobDefinition=definition['jobDefinitionArn'],
     )
-    print(dumps({'jobId': job['jobId'], 'jobDefinition': definition['jobDefinitionArn'], **plan}, indent=2))
+    result = {'jobId': job['jobId'], 'jobDefinition': definition['jobDefinitionArn'], **plan}
+    print(dumps(result, indent=2))
+    return result
+
+
+@rides_anim.command('extend')
+@option('-d', '--date', 'ym', required=True, help='Newly ingested end month, YYYYMM; rebuild its preceding start month too.')
+@option('-k', '--prefix', default='rides-anim-candidate/v1', show_default=True)
+@option('-n', '--dry-run', is_flag=True)
+@option('-s', '--image', default='688066488567.dkr.ecr.us-east-1.amazonaws.com/ctbk-reproc:de615adb', show_default=True)
+def extend(
+    ym: str,
+    prefix: str,
+    dry_run: bool,
+    image: str,
+) -> None:
+    from click import get_current_context
+    from .gbfs_cli import gbfs_engine_watch
+    if len(ym) != 6 or not ym.isdigit():
+        raise UsageError('date must be YYYYMM')
+    month = datetime.strptime(ym, '%Y%m')
+    previous = datetime(month.year - 1, 12, 1) if month.month == 1 else month.replace(month=month.month - 1)
+    date_range = f'{previous:%Y%m}-{month:%Y%m}'
+    if not dry_run:
+        import boto3
+        batch = boto3.client('batch', region_name='us-east-1')
+        # One writer merges the mutable candidate index. Monthly GHA is
+        # serialized too; detect independently submitted backfills here.
+        for status in ('SUBMITTED', 'PENDING', 'RUNNABLE', 'STARTING', 'RUNNING'):
+            pager = batch.get_paginator('list_jobs')
+            for page in pager.paginate(jobQueue='ctbk-reproc', jobStatus=status):
+                if any(job['jobName'].startswith('rides-anim-') for job in page['jobSummaryList']):
+                    raise UsageError('an animation writer is already active; retry after its completion')
+    result = submit.callback(date_range, prefix, 8192, dry_run, image, 4)
+    if dry_run:
+        return
+    get_current_context().invoke(gbfs_engine_watch, interval=20, timeout=3600, job_ids=(result['jobId'],))
+    check_index.callback('rides-tl-fine', date_range, prefix, Path('tmp/animation-extend-audit.json'))

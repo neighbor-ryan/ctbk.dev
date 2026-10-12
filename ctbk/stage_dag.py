@@ -26,6 +26,7 @@ STAGE_DEPS = {
     'smh': ['cons'],
     'sm': ['smh', 'agg'],
     'spj': ['sm', 'agg'],
+    'ra': ['cons'],
     'ymrgtb-cd': ['agg'],  # fan-in from all months
 }
 
@@ -39,6 +40,7 @@ STAGE_INFO = {
     'smh': ('StationMetaHist', 'Station metadata histograms', '🗺️', '#9C27B0'),
     'sm': ('ModesMonthJson', 'Canonical station info', '📍', '#E91E63'),
     'spj': ('StationPairsJson', 'Station pair JSONs', '🔗', '#00BCD4'),
+    'ra': ('RideAnimationMonth', 'Packed individual rides', '🚲', '#009688'),
     'ymrgtb-cd': ('YmrgtbCdJson', 'Dashboard aggregation', '📊', '#3F51B5'),
     'partition': ('Partition', 'Partition data', '✂️', '#607D8B'),
     'v0': ('V0 Legacy', 'Legacy v0 data', '📜', '#9E9E9E'),
@@ -47,6 +49,7 @@ STAGE_INFO = {
 
 # Path patterns to infer stage from file paths (for nodes without cmd)
 PATH_PATTERNS = [
+    (r's3/ctbk/rides-animation/', 'ra'),
     (r's3/ctbk/csvs/', 'csv'),
     (r's3/ctbk/zips/', 'zip'),
     (r'tripdata.*\.zip$', 'zip'),

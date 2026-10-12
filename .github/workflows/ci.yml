@@ -24,6 +24,9 @@ permissions:
   contents: write
   actions: write  # dispatch `www.yml`
   id-token: write  # HCCS AWS via OIDC (`.github/scripts/hccs-aws.sh`)
+concurrency:
+  group: ctbk-monthly-ingest
+  cancel-in-progress: false
 env:
   # R2 creds for the rides-pyramid builds in `ctbk update` (`rides-v1-build`
   # writes shards to R2; `r2_client()` prefers these over the local `cf` profile)
@@ -300,8 +303,8 @@ jobs:
       # The time-first transposes behind `/api/tl`: fill both anchors on
       # HCCS Batch, capped at the first of the next month (fill mode builds
       # only what's missing; the cap keeps the tip closed), then watch both
-      # jobs. Best-effort — nothing on prod serves `rides-tl` yet, so a
-      # failure warns in Slack but blocks neither the month nor the deploy.
+      # jobs. Best-effort — a failure warns about missing timelapse data
+      # in Slack but blocks neither the tripdata month nor the deploy.
       # After "Extend rides", which mirrors the month's `normalized/` key.
       - name: Extend rides-tl
         id: rides_tl
@@ -332,6 +335,28 @@ jobs:
               f"<{os.environ['RUN_URL']}|logs>"
           )
           PY
+
+      - name: Extend ride animation
+        id: ride_animation
+        if: steps.args.outputs.ym && steps.rides_tl.outcome == 'success'
+        continue-on-error: true
+        env:
+          HCCS_AWS_DURATION: '14400'
+        run: .github/scripts/hccs-aws.sh ctbk rides-anim extend -d ${{ steps.args.outputs.ym }}
+
+      - name: Preserve animation count audit
+        if: steps.ride_animation.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: monthly-animation-audit
+          path: tmp/animation-extend-audit.json
+
+      - name: Notify Slack — animation extend failed
+        if: steps.ride_animation.outcome == 'failure' && inputs.quiet != true
+        uses: ./.github/actions/slack-notify
+        with:
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          text: ":warning: *Ride animation update failed* for `${{ steps.args.outputs.ym }}` — new animation data may be missing. <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|logs>"
 
       # One prod deploy at the very end, after `rides` has the month (the
       # screenshots render it). `www.yml` skips this pipeline's own mid-run
