@@ -21,7 +21,9 @@ jobs:
         with:
           python-version: '3.13'
           enable-cache: true
-      - run: uv sync --frozen --no-dev
+      - run: |
+          uv sync --frozen --no-dev
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
       - name: Audit published counts and decode boundary-day samples
         env:
           MONTHS: ${{ inputs.months }}
@@ -45,7 +47,7 @@ jobs:
           .venv/bin/ctbk ride-animation create -w1 "$STAGE_MONTH"
           .venv/bin/ctbk rides-anim check -i "s3/ctbk/rides-animation/$STAGE_MONTH"
       - name: Preserve DVX stage metadata
-        if: inputs.stage_month != ''
+        if: always() && inputs.stage_month != ''
         uses: actions/upload-artifact@v4
         with:
           name: animation-dvx-stage
