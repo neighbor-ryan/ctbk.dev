@@ -1,0 +1,29 @@
+name: Bicycle routing image
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Resolve pinned image
+        id: image
+        env:
+          REF: ${{ github.sha }}
+        run: echo "name=688066488567.dkr.ecr.us-east-1.amazonaws.com/ctbk-reproc:routes-${REF:0:8}" >> "$GITHUB_OUTPUT"
+      - name: Build
+        env:
+          REF: ${{ github.sha }}
+          IMAGE: ${{ steps.image.outputs.name }}
+        run: docker build --platform linux/amd64 --build-arg REF="$REF" -t "$IMAGE" batch/routes/
+      - name: Push to HCCS ECR
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+        run: |
+          .github/scripts/hccs-aws.sh bash -c '
+            aws ecr get-login-password | docker login --username AWS --password-stdin 688066488567.dkr.ecr.us-east-1.amazonaws.com
+            docker push "$IMAGE"
+          '

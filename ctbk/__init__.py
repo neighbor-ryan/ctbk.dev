@@ -13,6 +13,7 @@ from . import gbfs_cli as _gbfs_cli  # noqa: F401 — registers `ctbk gbfs` grou
 from . import ride_animation_cli as _ride_animation_cli  # noqa: F401 — registers `ctbk rides-anim`
 from . import ride_animation_stage as _ride_animation_stage  # noqa: F401 — registers the DVX month stage
 from . import flow_routes as _flow_routes  # noqa: F401 — registers `ctbk flow-routes`
+from . import flow_routes_nj as _flow_routes_nj  # noqa: F401 — registers NJ routing builds
 from . import r2_credentials as _r2_credentials  # noqa: F401 — registers `ctbk r2-creds`
 from . import gbfs_empty as _gbfs_empty  # noqa: F401 — registers `ctbk gbfs empty` group
 from .stations import meta_hists, modes, pair_jsons, harmonize
