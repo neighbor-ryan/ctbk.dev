@@ -5,7 +5,11 @@ import { unpackRideDay, type RideDay } from './rideAnimation'
 const BASE = 'https://data.ctbk.dev/rides-anim-candidate/v1/'
 export interface AnimationStation { id: string; lat: number; lng: number }
 interface DayMeta { key: string; stations: string; rides: number; carry: number }
-interface AnimationIndex { version: number; days: Record<string, DayMeta> }
+interface AnimationIndex {
+  version: number
+  days: Record<string, DayMeta>
+  months?: Record<string, { invalidDuration: number; unmapped: number; final: boolean }>
+}
 export interface LoadedRideDay { rides: RideDay; stations: AnimationStation[] }
 
 async function get(path: string): Promise<Response> {
@@ -53,5 +57,6 @@ export function useRideAnimation(ms: number, enabled: boolean) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, date, seconds >= 43200, index.data, qc])
   const missing = enabled && !!index.data && !meta
-  return { day: day.data, ready: !enabled || missing || !!day.data, missing, error: index.error ?? day.error, seconds, date }
+  const month = index.data?.months?.[date.slice(0, 7).replace('-', '')]
+  return { day: day.data, ready: !enabled || missing || !!day.data, missing, error: index.error ?? day.error, seconds, date, month }
 }

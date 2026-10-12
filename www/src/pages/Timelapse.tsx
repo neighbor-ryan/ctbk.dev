@@ -274,6 +274,10 @@ export default function Timelapse() {
             {legendOpen && <>
             <div className={css.clockSub}>Animation preview · {routeMode ? <><span data-testid="ride-routed">{moving.routed.toLocaleString('en-US')} active rides on inferred bike routes</span> · sample coverage; other rides use straight paths</> : 'inferred straight paths'} · round-trip loops · rides over 3h fade out</div>
             <div className={css.clockSub}>{colorBy === 'bike' ? 'cyan: electric · orange: classic · gray: unknown' : 'green: member · pink: casual · gray: unknown'}</div>
+            {animation.month && (animation.month.invalidDuration > 0 || animation.month.unmapped > 0) && <div className={css.clockSub} data-testid="ride-exclusions">
+              This month excludes {animation.month.invalidDuration.toLocaleString('en-US')} invalid-duration records and {animation.month.unmapped.toLocaleString('en-US')} rides with unmapped stations.
+            </div>}
+            {animation.month && !animation.month.final && <div className={css.clockSub}>Provisional month · late-ending rides may be added with the next data release.</div>}
             {!mv && <div className={css.group}>
               <label><input type="checkbox" checked={routeMode} onChange={(e) => setFlow(e.target.checked ? 'routes' : undefined)} /> Inferred bike routes</label>
               <label>Color <select className={css.select} aria-label="Ride color" value={colorBy} onChange={(e) => setColorRaw(e.target.value)}><option value="bike">Bike type</option><option value="user">User type</option></select></label>
