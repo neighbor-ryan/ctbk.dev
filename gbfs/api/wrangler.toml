@@ -13,6 +13,7 @@ mode = "smart"
 CORS_ORIGIN = "*"
 # R2 bucket name (S3-compat presigned URL path-style addressing).
 R2_BUCKET_NAME = "ctbk"
+R2_S3_ENDPOINT = "https://2363642879f18d37d52dca114059937e.r2.cloudflarestorage.com"
 # r2.dev public URL — anonymous direct reads from R2. Used as a sync
 # `getUrl(path)` fallback when the browser opts out of presigning.
 R2_PUBLIC_BASE_URL = "https://pub-4b6c7e01aa2349b8b8d6ed788df2a9d1.r2.dev"
@@ -83,6 +84,7 @@ mode = "smart"
 [env.dev.vars]
 CORS_ORIGIN = "*"
 R2_BUCKET_NAME = "ctbk"
+R2_S3_ENDPOINT = "https://2363642879f18d37d52dca114059937e.r2.cloudflarestorage.com"
 R2_PUBLIC_BASE_URL = "https://pub-4b6c7e01aa2349b8b8d6ed788df2a9d1.r2.dev"
 # Candidate rollout (`src/serve_config.ts`; `specs/station-id-trailing-zero.md`
 # §Candidate rollout): point dev at candidate data, leave prod on the
