@@ -51,12 +51,51 @@ def test_monthly_extend_refolds_the_previous_start_month_without_cloud_calls(mon
     def unexpected_client(*args, **kwargs):
         raise AssertionError('dry run must not access AWS')
     monkeypatch.setattr('boto3.client', unexpected_client)
+    ref = '1234abcd' * 5
+    monkeypatch.setattr('ctbk.ride_animation_cli.animation_assets_ref', lambda: ref)
     result = CliRunner().invoke(extend, ['-d', '202601', '-n'])
     assert result.exit_code == 0
     assert loads(result.stdout) == {
         'queue': 'ctbk-reproc', 'image': '688066488567.dkr.ecr.us-east-1.amazonaws.com/ctbk-reproc:de615adb',
         'months': 2, 'vcpus': 4, 'memory': 8192,
-        'command': ['script', 'exec ctbk rides-anim backfill -d 202512-202601 -k rides-anim-candidate/v1 -u'],
+        'useExistingJobDefinition': True,
+        'assetsRef': ref,
+        'command': ['script', f'git fetch -q origin {ref} && git checkout -q FETCH_HEAD -- s3/ctbk/stations/station-id-map.json www/public/assets/station-luc.json gbfs/engine/station-geo.json && exec ctbk rides-anim backfill -d 202512-202601 -k rides-anim-candidate/v1 -u'],
+    }
+
+
+def test_existing_job_definition_submits_only_and_overrides_the_month_range(monkeypatch):
+    image = '688066488567.dkr.ecr.us-east-1.amazonaws.com/ctbk-reproc:1234abcd'
+    arn = 'arn:aws:batch:us-east-1:688066488567:job-definition/ctbk-reproc-animation:1'
+    calls = []
+    class Batch:
+        def describe_job_definitions(self, **kwargs):
+            assert kwargs == {'jobDefinitionName': 'ctbk-reproc-animation', 'status': 'ACTIVE'}
+            return {'jobDefinitions': [{'revision': 1, 'jobDefinitionArn': arn, 'containerProperties': {'image': image}}]}
+        def submit_job(self, **kwargs):
+            calls.append(kwargs)
+            return {'jobId': 'job-id'}
+        def register_job_definition(self, **kwargs):
+            raise AssertionError('monthly submission must not register definitions')
+    class STS:
+        def get_caller_identity(self):
+            return {'Account': '688066488567'}
+    def client(name, **kwargs):
+        if name == 'sts':
+            return STS()
+        assert (name, kwargs) == ('batch', {'region_name': 'us-east-1'})
+        return Batch()
+    monkeypatch.setattr('boto3.client', client)
+    result = CliRunner().invoke(submit, ['-d', '202512-202601', '-s', image, '-e'])
+    assert result.exit_code == 0
+    command = ['script', 'exec ctbk rides-anim backfill -d 202512-202601 -k rides-anim-candidate/v1 -u']
+    assert calls == [{
+        'jobName': 'rides-anim-202512-202601', 'jobQueue': 'ctbk-reproc', 'jobDefinition': arn,
+        'containerOverrides': {'command': command, 'resourceRequirements': [{'type': 'VCPU', 'value': '4'}, {'type': 'MEMORY', 'value': '8192'}]},
+    }]
+    assert loads(result.stdout) == {
+        'jobId': 'job-id', 'jobDefinition': arn, 'queue': 'ctbk-reproc', 'image': image,
+        'months': 2, 'vcpus': 4, 'memory': 8192, 'command': command, 'useExistingJobDefinition': True,
     }
 
 

@@ -13,6 +13,10 @@ from pyrmts.axis import nominal_delta_ms
 METRICS = ['count_n', 'count_sum', 'count_sumsq']
 
 
+class UncoveredTier(ValueError):
+    """The manifest has no complete closed-shard cover for this tier/range."""
+
+
 def epoch_ms(value: int | str) -> int:
     if isinstance(value, int):
         return value
@@ -63,7 +67,7 @@ def tier_cover(
                 next_need.append((hi, b))
         need = next_need
     if need:
-        raise ValueError(f'{tier}: uncovered intervals {need}')
+        raise UncoveredTier(f'{tier}: uncovered intervals {need}')
     return sorted(reads, key=lambda r: (r.start, r.end))
 
 
@@ -81,6 +85,25 @@ def hourly(frame: pl.DataFrame) -> pl.DataFrame:
     return frame.with_columns((pl.col('dt') // 3_600_000 * 3_600_000).alias('dt')).group_by(['cell', 'dt']).agg(
         pl.col(METRICS).sum(),
     ).sort(['cell', 'dt'])
+
+
+def daily_reference(
+    manifest: str,
+    start: int,
+    end: int,
+    get: Callable[[str], bytes],
+) -> tuple[str, pl.DataFrame]:
+    # Coarse day shards can still be open at a closed monthly tip. Finer
+    # dividing tiers provide the exact same day totals, like API routing.
+    for tier in ['1d', '1h', '15m', '1m']:
+        try:
+            reads = tier_cover(manifest, tier, start, end)
+        except UncoveredTier:
+            continue
+        frame = read_tier(reads, get)
+        totals = frame.with_columns((pl.col('dt') // 86400000 * 86400000).alias('dt')).group_by('dt').agg(pl.col('count_n').sum()).sort('dt')
+        return tier, totals
+    raise UncoveredTier(f'no exact daily reference cover for [{start}, {end})')
 
 
 def compare_anchor(

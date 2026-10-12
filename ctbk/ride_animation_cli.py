@@ -175,8 +175,7 @@ def backfill(
 @option('-b', '--baseline', default='rides-tl-fine', show_default=True)
 @option('-i', '--input', 'input_dir', required=True, type=ClickPath(path_type=Path), help='Local build directory containing month.json.')
 def check(baseline: str, input_dir: Path) -> None:
-    import polars as pl
-    from .pyramid_cascade.timelapse_check import read_tier, tier_cover
+    from .pyramid_cascade.timelapse_check import daily_reference
     report = loads((input_dir / 'month.json').read_text())
     dates = sorted(report['days'])
     start = int(datetime.fromisoformat(dates[0]).replace(tzinfo=timezone.utc).timestamp() * 1000)
@@ -185,13 +184,12 @@ def check(baseline: str, input_dir: Path) -> None:
     def get(key: str) -> bytes:
         return r2.get_object(Bucket=bucket, Key=key)['Body'].read()
     manifest = get(f'{baseline.rstrip("/")}/start/manifest.jsonl').decode()
-    frame = read_tier(tier_cover(manifest, '1d', start, end), get)
-    totals = frame.group_by('dt').agg(pl.col('count_n').sum()).sort('dt')
+    tier, totals = daily_reference(manifest, start, end, get)
     expected = {datetime.fromtimestamp(at / 1000, timezone.utc).strftime('%Y-%m-%d'): int(count) for at, count in totals.iter_rows()}
     actual = {day: meta['rides'] for day, meta in report['days'].items()}
     if actual != expected:
         raise ValueError(f'animation day counts differ: animation={actual}, pyramid={expected}')
-    print(dumps({'days': len(dates), 'rides': sum(actual.values()), 'exactDailyParity': True}, indent=2))
+    print(dumps({'days': len(dates), 'rides': sum(actual.values()), 'referenceTier': tier, 'exactDailyParity': True}, indent=2))
 
 
 @rides_anim.command('check-index')
@@ -205,13 +203,12 @@ def check_index(
     prefix: str,
     output: Path,
 ) -> None:
-    import polars as pl
     from calendar import monthrange
     from functools import lru_cache
     from gzip import decompress
     from .ride_animation import decode_day
     from .ride_animation_audit import count_gate
-    from .pyramid_cascade.timelapse_check import read_tier, tier_cover
+    from .pyramid_cascade.timelapse_check import daily_reference
     r2, bucket = _r2_client()
     @lru_cache(maxsize=4)
     def get(key: str) -> bytes:
@@ -236,8 +233,7 @@ def check_index(
                 raise ValueError(f'{ym}: input changed after animation build')
         start = int(datetime.fromisoformat(dates[0]).replace(tzinfo=timezone.utc).timestamp() * 1000)
         end = int(datetime.fromisoformat(dates[-1]).replace(tzinfo=timezone.utc).timestamp() * 1000) + 86400000
-        frame = read_tier(tier_cover(manifest, '1d', start, end), get)
-        totals = frame.group_by('dt').agg(pl.col('count_n').sum()).sort('dt')
+        tier, totals = daily_reference(manifest, start, end, get)
         expected = {datetime.fromtimestamp(at / 1000, timezone.utc).strftime('%Y-%m-%d'): int(count) for at, count in totals.iter_rows()}
         # Empty days must be present in the animation's continuous month.
         expected = {day: expected.get(day, 0) for day in dates}
@@ -255,7 +251,7 @@ def check_index(
             stations = loads(station_blob)
             if (nstations, carry, len(rows) - carry) != (len(stations), meta['carry'], meta['rides']):
                 raise ValueError(f'{day}: decoded counts disagree with index')
-        result.update(final=month['final'], decodedSampleDays=samples)
+        result.update(final=month['final'], referenceTier=tier, decodedSampleDays=samples)
         results[ym] = result
         err(f'{ym}: counts accounted; daily parity={result["exactDailyParity"]}; decoded {len(samples)} boundary days')
     report = {'version': 1, 'indexMd5': md5(raw_index).hexdigest(), 'prefix': prefix, 'baseline': baseline, 'months': results}
@@ -266,9 +262,12 @@ def check_index(
 
 @rides_anim.command('submit')
 @option('-d', '--date', 'date_range', required=True, help='Inclusive YYYYMM-YYYYMM source-start months.')
+@option('-e', '--existing', is_flag=True, help='Submit through a matching pre-provisioned job definition; never register one.')
+@option('-j', '--jobdef-only', is_flag=True, help='Provision the pinned job definition without submitting a build.')
 @option('-k', '--prefix', default='rides-anim-candidate/v1', show_default=True)
 @option('-m', '--memory', default=8192, type=int, show_default=True)
 @option('-n', '--dry-run', is_flag=True, help='Print the build plan; register and submit nothing.')
+@option('-r', '--assets-ref', default=None, help='Full commit SHA for current station-ID, registry, and geo assets; codec stays pinned.')
 @option('-s', '--image', required=True, help='Pinned HCCS ctbk-reproc image containing the animation CLI.')
 @option('-v', '--vcpus', default=4, type=int, show_default=True)
 def submit(
@@ -278,6 +277,9 @@ def submit(
     dry_run: bool,
     image: str,
     vcpus: int,
+    existing: bool = False,
+    jobdef_only: bool = False,
+    assets_ref: str | None = None,
 ) -> dict:
     import boto3
     import re
@@ -289,14 +291,41 @@ def submit(
         raise UsageError('invalid Fargate resource request')
     if not prefix or prefix.startswith('/') or '..' in Path(prefix).parts:
         raise UsageError('prefix must be a relative bucket path')
-    command = ['script', f'exec ctbk rides-anim backfill -d {quote(date_range)} -k {quote(prefix)} -u']
+    shell = f'exec ctbk rides-anim backfill -d {quote(date_range)} -k {quote(prefix)} -u'
+    if assets_ref:
+        if not re.fullmatch('[a-f0-9]{40}', assets_ref):
+            raise UsageError('assets-ref must be a full commit SHA')
+        shell = f'git fetch -q origin {assets_ref} && git checkout -q FETCH_HEAD -- s3/ctbk/stations/station-id-map.json www/public/assets/station-luc.json gbfs/engine/station-geo.json && {shell}'
+    command = ['script', shell]
     plan = {'queue': 'ctbk-reproc', 'image': image, 'months': len(months), 'vcpus': vcpus, 'memory': memory, 'command': command}
+    if existing and jobdef_only:
+        raise UsageError('existing and jobdef-only are mutually exclusive')
+    if existing:
+        plan['useExistingJobDefinition'] = True
+    if jobdef_only:
+        plan['provisionOnly'] = True
+    if assets_ref:
+        plan['assetsRef'] = assets_ref
     if dry_run:
         print(dumps(plan, indent=2))
         return plan
     if boto3.client('sts').get_caller_identity()['Account'] != '688066488567':
         raise UsageError('submit requires the HCCS AWS account')
     batch = boto3.client('batch', region_name='us-east-1')
+    if existing:
+        definitions = batch.describe_job_definitions(jobDefinitionName='ctbk-reproc-animation', status='ACTIVE')['jobDefinitions']
+        candidates = [definition for definition in definitions if definition['containerProperties']['image'] == image]
+        if not candidates:
+            raise UsageError('provision the pinned animation job definition with `rides-anim submit -j` first')
+        definition = max(candidates, key=lambda definition: definition['revision'])
+        job = batch.submit_job(
+            jobName=f'rides-anim-{months[0]}-{months[-1]}', jobQueue='ctbk-reproc',
+            jobDefinition=definition['jobDefinitionArn'],
+            containerOverrides={'command': command, 'resourceRequirements': [{'type': 'VCPU', 'value': str(vcpus)}, {'type': 'MEMORY', 'value': str(memory)}]},
+        )
+        result = {'jobId': job['jobId'], 'jobDefinition': definition['jobDefinitionArn'], **plan}
+        print(dumps(result, indent=2))
+        return result
     defs = batch.describe_job_definitions(jobDefinitionName='ctbk-reproc', status='ACTIVE')['jobDefinitions']
     latest = max(defs, key=lambda d: d['revision'])
     props = deepcopy(latest['containerProperties'])
@@ -312,13 +341,17 @@ def submit(
     ]
     props['command'] = command
     definition = batch.register_job_definition(
-        jobDefinitionName='ctbk-rides-animation', type='container', containerProperties=props,
+        jobDefinitionName='ctbk-reproc-animation', type='container', containerProperties=props,
         platformCapabilities=latest.get('platformCapabilities', ['FARGATE']),
         retryStrategy={'attempts': 3, 'evaluateOnExit': [
             {'onStatusReason': 'Your Spot Task*', 'action': 'RETRY'},
             {'onStatusReason': 'Host EC2*', 'action': 'RETRY'}, {'onReason': '*', 'action': 'EXIT'},
         ]},
     )
+    if jobdef_only:
+        result = {'jobDefinition': definition['jobDefinitionArn'], 'submitted': False, **plan}
+        print(dumps(result, indent=2))
+        return result
     job = batch.submit_job(
         jobName=f'rides-anim-{months[0]}-{months[-1]}', jobQueue='ctbk-reproc',
         jobDefinition=definition['jobDefinitionArn'],
@@ -326,6 +359,12 @@ def submit(
     result = {'jobId': job['jobId'], 'jobDefinition': definition['jobDefinitionArn'], **plan}
     print(dumps(result, indent=2))
     return result
+
+
+def animation_assets_ref() -> str:
+    from subprocess import check_output
+    from .pyramid_cascade.rides_assets import REPO
+    return check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip()
 
 
 @rides_anim.command('extend')
@@ -356,7 +395,7 @@ def extend(
             for page in pager.paginate(jobQueue='ctbk-reproc', jobStatus=status):
                 if any(job['jobName'].startswith('rides-anim-') for job in page['jobSummaryList']):
                     raise UsageError('an animation writer is already active; retry after its completion')
-    result = submit.callback(date_range, prefix, 8192, dry_run, image, 4)
+    result = submit.callback(date_range, prefix, 8192, dry_run, image, 4, existing=True, assets_ref=animation_assets_ref())
     if dry_run:
         return
     get_current_context().invoke(gbfs_engine_watch, interval=20, timeout=3600, job_ids=(result['jobId'],))
