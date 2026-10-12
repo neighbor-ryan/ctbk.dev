@@ -455,6 +455,7 @@
 
 .rangeLabel {
     flex: none;
+    width: 11ch;
     white-space: nowrap;
     opacity: 0.8;
     font-variant-numeric: tabular-nums;

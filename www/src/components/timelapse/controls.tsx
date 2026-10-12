@@ -477,7 +477,7 @@ export function TlTransport({ tl, wide, settingsOpen, onToggleSettings }: {
         onCommit={commitT}
         onPeek={onPeek}
       />
-      <span className={css.rangeLabel}>{formatT(iMs)}</span>
+      <span className={css.rangeLabel} data-testid="tl-timestamp">{formatT(iMs)}</span>
       {!wide && (
         <button type="button" className={css.gear} onClick={onToggleSettings} aria-expanded={settingsOpen} aria-label="Settings" data-testid="tl-gear">
           <GearIcon />

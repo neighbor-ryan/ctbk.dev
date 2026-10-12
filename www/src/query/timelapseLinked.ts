@@ -20,7 +20,7 @@ export function parseLength(raw: string | undefined): number | null {
   if (!raw) return null
   const numeric = Number(raw)
   if (Number.isFinite(numeric) && numeric >= 1) return numeric
-  const clock = /^(\d+):(\d{2}(?:\.\d+)?)$/.exec(raw)
+  const clock = /^(\d*):(\d{2}(?:\.\d+)?)$/.exec(raw)
   if (clock && Number(clock[2]) < 60) {
     const seconds = Number(clock[1]) * 60 + Number(clock[2])
     return seconds >= 1 ? seconds : null

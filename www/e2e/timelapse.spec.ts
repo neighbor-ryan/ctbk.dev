@@ -1,5 +1,29 @@
 import { test, expect } from '@playwright/test'
 
+test('accepts colon-only seconds and keeps footer geometry stable at hours and midnight', async ({ page }) => {
+  await page.goto('/timelapse?anim=1&b=1m&d=260929-260930&t=260929T1859&len=30')
+  const length = page.getByRole('textbox', { name: 'Movie length', exact: true })
+  await length.fill(':45')
+  await length.press('Enter')
+  await expect(length).toHaveValue('0:45')
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  const stamp = page.getByTestId('tl-timestamp')
+  const scrub = page.getByRole('slider', { name: 'Scrub', exact: true })
+  await expect(stamp).toHaveText('260929T1859')
+  const geometry = async () => [await stamp.boundingBox(), await scrub.boundingBox()]
+  const before = await geometry()
+  await page.getByRole('button', { name: 'Next minute', exact: true }).click()
+  await expect(stamp).toHaveText('260929T19')
+  expect(await geometry()).toEqual(before)
+
+  await page.goto('/timelapse?anim=1&b=1m&d=260929-260930&t=260929T2359&len=45')
+  await expect(stamp).toHaveText('260929T2359')
+  const beforeMidnight = await geometry()
+  await page.getByRole('button', { name: 'Next minute', exact: true }).click()
+  await expect(stamp).toHaveText('260930')
+  expect(await geometry()).toEqual(beforeMidnight)
+})
+
 /**
  * `/timelapse` (`specs/timelapse-map.md` P1): the GL surface mounts, the
  * clock shows the URL's `t`, and stepping writes `t` back (replace) after a
