@@ -1,0 +1,32 @@
+name: Annual bicycle route population
+on:
+  workflow_dispatch:
+    inputs:
+      months:
+        description: Inclusive animation start months
+        default: '202401-202412'
+        required: true
+permissions:
+  contents: read
+jobs:
+  census:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.13'
+          enable-cache: true
+      - run: uv sync --frozen --no-dev
+      - name: Count the yearly route population
+        env:
+          MONTHS: ${{ inputs.months }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: .venv/bin/ctbk flow-routes census -d "$MONTHS" -u
+      - uses: actions/upload-artifact@v4
+        with:
+          name: annual-route-population
+          path: tmp/routes-census/summary.json

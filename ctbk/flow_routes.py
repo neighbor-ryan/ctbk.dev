@@ -86,6 +86,94 @@ def flow_routes() -> None:
     """Measure inferred bicycle routes with a self-hosted routing engine."""
 
 
+def route_population(counts: Counter, stations: list[dict], minimum: int) -> dict:
+    pairs = [[a, b, count] for (a, b), count in sorted(counts.items()) if a != b and count >= minimum]
+    total = sum(count for (a, b), count in counts.items() if a != b)
+    selected = sum(p[2] for p in pairs)
+    regions = Counter()
+    for a, _, _ in pairs:
+        sid = stations[a]['id']
+        regions['JC' if sid.startswith('JC') else 'HB' if sid.startswith('HB') else 'NYC'] += 1
+    return {
+        'pairs': pairs, 'distinctPairs': sum(a != b for a, b in counts),
+        'nonRoundTripRides': total, 'selectedRides': selected,
+        'roundTrips': sum(count for (a, b), count in counts.items() if a == b),
+        'regions': dict(sorted(regions.items())),
+    }
+
+
+@flow_routes.command('census')
+@option('-d', '--date', 'date_range', required=True, help='Inclusive YYYYMM-YYYYMM animation months.')
+@option('-i', '--input-prefix', default='rides-anim-candidate/v1', show_default=True)
+@option('-k', '--prefix', default='routes-census/v1', show_default=True)
+@option('-n', '--minimum', default=10, type=int, show_default=True)
+@option('-o', '--output', type=ClickPath(path_type=Path), default=Path('tmp/routes-census'))
+@option('-u', '--upload', is_flag=True)
+def census(
+    date_range: str,
+    input_prefix: str,
+    prefix: str,
+    minimum: int,
+    output: Path,
+    upload: bool,
+) -> None:
+    from calendar import monthrange
+    from .ride_animation_cli import animation_months
+    if minimum < 1:
+        raise UsageError('minimum pair count must be positive')
+    if not prefix or prefix.startswith('/') or '..' in Path(prefix).parts:
+        raise UsageError('prefix must be a relative bucket path')
+    months = animation_months(date_range)
+    r2, bucket = _r2_client(rw=upload)
+    def get(key: str) -> bytes:
+        return r2.get_object(Bucket=bucket, Key=key)['Body'].read()
+    raw_index = get(f'{input_prefix.rstrip("/")}/index.json')
+    index = loads(raw_index)
+    if index['version'] != 1:
+        raise ValueError('unsupported animation index version')
+    dates = [f'{ym[:4]}-{ym[4:]}-{day:02d}' for ym in months for day in range(1, monthrange(int(ym[:4]), int(ym[4:]))[1] + 1)]
+    metadata = [index['days'][date] for date in dates]
+    tables = {meta['stations'] for meta in metadata}
+    if len(tables) != 1:
+        raise ValueError('route census requires a shared animation station table')
+    station_key, = tables
+    stations = loads(get(f'{input_prefix.rstrip("/")}/{station_key}'))
+    counts = Counter()
+    encoded = 0
+    for date, meta in zip(dates, metadata):
+        blob = get(f'{input_prefix.rstrip("/")}/{meta["key"]}')
+        if len(blob) != meta['bytes'] or md5(blob).hexdigest() != meta['md5']:
+            raise ValueError(f'{date}: census payload disagrees with indexed hash/size')
+        nstations, carry, rides = decode_day(decompress(blob))
+        if nstations != len(stations) or carry != meta['carry'] or len(rides) - carry != meta['rides']:
+            raise ValueError(f'{date}: census payload disagrees with index')
+        encoded += len(rides) - carry
+        counts.update((ride.source, ride.destination) for ride in rides[carry:])
+        if date.endswith('-01'):
+            err(f'{date}: counting route population')
+    if encoded != sum(index['months'][ym]['encodedRides'] for ym in months):
+        raise ValueError('census ride count disagrees with month accounting')
+    population = route_population(counts, stations, minimum)
+    payload = {'version': 1, 'dateRange': date_range, 'minimum': minimum, 'stations': stations, 'pairs': population['pairs']}
+    packed = compress(dumps(payload, separators=(',', ':'), sort_keys=True).encode() + b'\n', mtime=0)
+    key = f'objects/{md5(packed).hexdigest()}.json.gz'
+    summary = {k: v for k, v in population.items() if k != 'pairs'} | {
+        'version': 1, 'dateRange': date_range, 'days': len(dates), 'encodedRides': encoded,
+        'minimum': minimum, 'selectedPairs': len(population['pairs']), 'bytes': len(packed), 'key': key,
+        'indexMd5': md5(raw_index).hexdigest(),
+        'sourceRides': sum(index['months'][ym]['sourceRides'] for ym in months),
+        'invalidDuration': sum(index['months'][ym]['invalidDuration'] for ym in months),
+        'unmapped': sum(index['months'][ym]['unmapped'] for ym in months),
+    }
+    output.mkdir(parents=True, exist_ok=True)
+    (output / 'population.json.gz').write_bytes(packed)
+    (output / 'summary.json').write_text(dumps(summary, indent=2, sort_keys=True) + '\n')
+    if upload:
+        r2.put_object(Bucket=bucket, Key=f'{prefix.rstrip("/")}/{key}', Body=packed, ContentType='application/gzip', CacheControl='public, max-age=31536000, immutable')
+        r2.put_object(Bucket=bucket, Key=f'{prefix.rstrip("/")}/index.json', Body=dumps(summary, sort_keys=True).encode() + b'\n', ContentType='application/json', CacheControl='public, max-age=60')
+    print(dumps(summary, indent=2, sort_keys=True))
+
+
 def local_server(value: str) -> str:
     if urlparse(value).hostname not in ('localhost', '127.0.0.1', '::1'):
         raise UsageError('run the routing sample beside a self-hosted localhost engine')
