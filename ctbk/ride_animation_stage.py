@@ -1,5 +1,6 @@
 """DVX month-directory stage for deterministic packed ride animation."""
 from json import dumps, loads
+from os.path import relpath
 from pathlib import Path
 
 from utz.ym import Monthy
@@ -53,6 +54,7 @@ class RideAnimationMonth(MonthTask):
         sources = [Path(ConsolidatedMonth(ym).url) for ym in months]
         code = Path(__file__).parent
         deps = [*sources, ID_MAP_PATH, STATION_LUC_PATH, GEO_JSON_PATH, code / 'ride_animation.py', code / 'ride_animation_cli.py', Path(__file__), code / 'pyramid_cascade' / 'rides_assets.py', code / 'pyramid_cascade' / 'rides_source.py']
+        deps = [Path(relpath(path)) for path in deps]
         return [Artifact.from_dvc(path) or Artifact.from_path(path) for path in deps]
 
 

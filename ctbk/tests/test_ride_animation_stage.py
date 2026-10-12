@@ -1,4 +1,5 @@
 from json import dumps
+from os.path import relpath
 from pathlib import Path
 
 from ctbk.ride_animation_stage import RideAnimationMonth
@@ -7,6 +8,7 @@ from ctbk.ride_animation_stage import RideAnimationMonth
 def test_month_stage_records_deterministic_output_and_current_next_source_provenance(tmp_path, monkeypatch):
     from ctbk import consolidated, ride_animation_cli
     from ctbk.pyramid_cascade import rides_assets
+    monkeypatch.chdir(tmp_path)
     class Source:
         def __init__(self, ym):
             self.url = str(tmp_path / f'{ym}.parquet')
@@ -23,7 +25,7 @@ def test_month_stage_records_deterministic_output_and_current_next_source_proven
             return str(tmp_path / 'output')
     stage = Stage('202512')
     prepared = stage.to_artifact()
-    assert [Path(dep.path) for dep in prepared.computation.deps[:2]] == [tmp_path / '202512.parquet', tmp_path / '202601.parquet']
+    assert [Path(dep.path) for dep in prepared.computation.deps[:2]] == [Path('202512.parquet'), Path('202601.parquet')]
     def build(ym, input_dir, prefix, output, upload):
         assert (ym, input_dir, prefix, output, upload) == ('202512', tmp_path, 'rides-anim-candidate/v1', tmp_path / 'output', False)
         output.mkdir()
@@ -37,9 +39,10 @@ def test_month_stage_records_deterministic_output_and_current_next_source_proven
     artifact = stage.to_artifact()
     assert artifact.computation.cmd == 'ctbk ride-animation create -w0 202512'
     code = Path(ride_animation_cli.__file__).parent
-    assert [Path(dep.path) for dep in artifact.computation.deps] == [
+    expected_deps = [
         tmp_path / '202512.parquet', tmp_path / '202601.parquet',
         tmp_path / 'ID_MAP_PATH', tmp_path / 'STATION_LUC_PATH', tmp_path / 'GEO_JSON_PATH',
         code / 'ride_animation.py', code / 'ride_animation_cli.py', code / 'ride_animation_stage.py',
         code / 'pyramid_cascade' / 'rides_assets.py', code / 'pyramid_cascade' / 'rides_source.py',
     ]
+    assert [Path(dep.path) for dep in artifact.computation.deps] == [Path(relpath(path)) for path in expected_deps]
