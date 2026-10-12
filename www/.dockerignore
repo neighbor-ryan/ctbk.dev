@@ -163,6 +163,8 @@
 !src/components/TimeAgo.tsx
 !src/components/Tip.module.css
 !src/components/Tip.tsx
+!src/components/flowDirections.test.ts
+!src/components/flowDirections.ts
 !src/components/flowLens.test.ts
 !src/components/flowLens.ts
 !src/components/icons/Bluesky.tsx
