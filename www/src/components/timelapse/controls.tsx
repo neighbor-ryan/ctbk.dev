@@ -5,15 +5,17 @@
  * and the hover card. Presentational only; state lives in `useTimelapse`.
  */
 import { FloatingPortal, offset, shift, useFloating } from '@floating-ui/react'
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useCanHover } from '../../lib/useMediaQuery'
 import {
-  BIG_STEP, BIN_LABEL, dayOf, editRange, isoDay, parseIsoDay, RANGE_PRESETS, shortLabel, SOFT_FRAMES, spanRange, SPEEDS, speedLabel,
-  suggestBin, UNIT, type Range, type Span,
+  bigStep, binLabel, dayOf, editRange, isoDay, parseIsoDay, rangePresets, shortLabel, SOFT_FRAMES, spanRange, speedLabel,
+  suggestBin, binUnit, type Range, type Span,
 } from '../../query/timelapseControls'
 import {
-  ACT, BINS, binMs, COOL, DAY_MS, formatT, formatYmd, frameStartMs, GENESIS_MS, NEUTRAL, PRESETS, SPLIT, WARM, type Bin, type Preset,
+  ACT, BIN_OPTIONS, binMs, COOL, DAY_MS, formatT, formatYmd, frameStartMs, GENESIS_MS, NEUTRAL, PRESETS, SPLIT, WARM, type Bin, type Preset,
 } from '../../query/timelapseFrames'
+import { formatLength, parseLength } from '../../query/timelapseLinked'
+import { canonBin } from '../../lib/tlGrid'
 import { factorLabel, SIZES, zoomFactor } from '../../query/timelapseSize'
 import css from '../../timelapse.module.css'
 import { rampRgb } from '../flowLens'
@@ -172,13 +174,15 @@ export function edgeX(f: number, n: number): number {
 
 /** Range picker for `d=`: two native date inputs (genesis … the last
  *  published day) and the bin's quick presets (`RANGE_PRESETS`). */
-export function RangePicker({ bin, range, lastDay, tDay, onEdit, onSpan }: {
+export function RangePicker({ bin, range, lastDay, tDay, onEdit, onSpan, onTouch, derived }: {
   bin: Bin
   range: Range
   lastDay: number
   tDay: number
   onEdit: (r: Range, keep: 'start' | 'end') => void
   onSpan: (span: Span) => void
+  onTouch?: () => void
+  derived?: boolean
 }) {
   const lo = isoDay(GENESIS_MS)
   const hi = isoDay(lastDay)
@@ -187,11 +191,11 @@ export function RangePicker({ bin, range, lastDay, tDay, onEdit, onSpan }: {
     if (ms !== null) onEdit(editRange(range, side, ms, GENESIS_MS, lastDay), side)
   }
   return (
-    <div className={css.group} role="group" aria-label="Range">
-      <input type="date" className={css.date} value={isoDay(range[0])} min={lo} max={hi} aria-label="Range start" onChange={(e) => edit('start', e.target.value)} />
+    <div className={css.group} role="group" aria-label="Range" style={{ fontStyle: derived ? 'italic' : undefined }}>
+      <input type="date" className={css.date} value={isoDay(range[0])} min={lo} max={hi} aria-label="Range start" onFocus={onTouch} onChange={(e) => edit('start', e.target.value)} />
       <span className={css.dash}>–</span>
-      <input type="date" className={css.date} value={isoDay(range[1])} min={lo} max={hi} aria-label="Range end" onChange={(e) => edit('end', e.target.value)} />
-      {RANGE_PRESETS[bin].map(({ label, span }) => {
+      <input type="date" className={css.date} value={isoDay(range[1])} min={lo} max={hi} aria-label="Range end" onFocus={onTouch} onChange={(e) => edit('end', e.target.value)} />
+      {rangePresets(bin).map(({ label, span }) => {
         const r = spanRange(span, range, tDay, GENESIS_MS, lastDay)
         // A day span clamped at genesis / the last day doesn't count as picked.
         const active = r[0] === range[0] && r[1] === range[1] && (span === 'all' || span.u === 'mo' || r[1] - r[0] === (span.n - 1) * DAY_MS)
@@ -301,8 +305,18 @@ export function Scrubber({
 export function TlSettings({ tl }: { tl: Timelapse }) {
   const { bin, changeBin, range, setRangeEdit, applySpan, capNote, lastDay, iStart, iEnd, t, sp, setSp, preset, setPreset, sz, setSz, loop, setLoop } = tl
   const canHover = useCanHover()
-  const unit = UNIT[bin]
-  const big = BIG_STEP[bin]
+  const [customBin, setCustomBin] = useState('')
+  const [binError, setBinError] = useState<string | null>(null)
+  const [windowDraft, setWindowDraft] = useState(tl.windowCode)
+  const [windowError, setWindowError] = useState<string | null>(null)
+  const [fpsDraft, setFpsDraft] = useState(String(sp))
+  const [lengthDraft, setLengthDraft] = useState(formatLength(tl.length))
+  const [linkedError, setLinkedError] = useState<string | null>(null)
+  useEffect(() => setFpsDraft(String(sp)), [sp])
+  useEffect(() => setLengthDraft(formatLength(tl.length)), [tl.length])
+  useEffect(() => setWindowDraft(tl.windowCode), [tl.windowCode])
+  const unit = binUnit(bin)
+  const big = bigStep(bin)
   const nFramesRange = iEnd - iStart + 1
   // Sub-day bins only: `1d` over all of history (~4,850 frames) is a preset.
   const suggested = nFramesRange > SOFT_FRAMES && binMs(bin) < DAY_MS ? suggestBin(range) : null
@@ -316,25 +330,75 @@ export function TlSettings({ tl }: { tl: Timelapse }) {
         tDay={dayOf(frameStartMs(bin, floor(t)))}
         onEdit={setRangeEdit}
         onSpan={applySpan}
+        onTouch={() => tl.touch('R')}
+        derived={tl.derived.has('R')}
       />
-      <HTip content="Bin: time per frame (b = coarser, shift+b = finer)">
-        <label className={css.field}>
+      <HTip content={`Bin: time per frame (b = coarser, shift+b = finer). ${tl.derived.has('b') ? 'Derived; click to make it user-set.' : 'Editing bin derives the least recently edited control.'}`}>
+        <label className={css.field} style={{ fontStyle: tl.derived.has('b') ? 'italic' : undefined }}>
           <span className={css.fieldLabel}>bin</span>
-          <select className={css.select} value={bin} onChange={(e) => changeBin(e.target.value as Bin)} aria-label="Bin">
-            {BINS.map((b) => <option key={b} value={b}>{BIN_LABEL[b]}</option>)}
+          <select className={css.select} value={bin} onFocus={() => tl.touch('b')} onChange={(e) => changeBin(e.target.value as Bin)} aria-label="Bin">
+            {(BIN_OPTIONS.includes(bin) ? BIN_OPTIONS : [...BIN_OPTIONS, bin]).map((b) => <option key={b} value={b}>{binLabel(b)}</option>)}
           </select>
         </label>
       </HTip>
-      <HTip content={`Playback speed: ${sp} frame${sp === 1 ? '' : 's'}/s ([ slower, ] faster)`}>
-        <label className={css.field}>
-          <span className={css.fieldLabel}>speed</span>
-          <select className={css.select} value={sp} onChange={(e) => setSp(Number(e.target.value))} aria-label="Speed">
-            {(SPEEDS.includes(sp) ? SPEEDS : [...SPEEDS, sp].sort((a, b) => a - b)).map((v) => (
-              <option key={v} value={v}>{speedLabel(bin, v)}</option>
-            ))}
+      <form className={css.group} onSubmit={(e) => {
+        e.preventDefault()
+        try { changeBin(canonBin(customBin)); setBinError(null) } catch (err) { setBinError((err as Error).message) }
+      }}>
+        <HTip content="Custom bin: e.g. 20m, 45m, 2h, 4mo. Fixed bins divide a day or span whole days; calendar bins divide a year.">
+          <input className={css.date} style={{ width: 72 }} value={customBin} onChange={(e) => setCustomBin(e.target.value)} placeholder="20m" aria-label="Custom bin" />
+        </HTip>
+        <button type="submit" className={css.btn}>apply</button>
+        {binError && <span role="alert" className={css.note}>{binError}</span>}
+      </form>
+      <form className={css.group} onSubmit={(e) => {
+        e.preventDefault()
+        try { tl.changeWindow(windowDraft); setWindowError(null) } catch (err) { setWindowError((err as Error).message) }
+      }}>
+        <HTip content="Trailing window: sum whole bins ending at this frame. Must fit within one chunk.">
+          <label className={css.field}>
+            <span className={css.fieldLabel}>window</span>
+            <input className={css.date} style={{ width: 72 }} value={windowDraft} onChange={(e) => setWindowDraft(e.target.value)} aria-label="Trailing window" />
+          </label>
+        </HTip>
+        <button type="submit" className={css.btn}>apply</button>
+        <HTip content="Box weights every bin equally; triangle gives recent bins more weight, preserving the total window mass.">
+          <select className={css.select} value={tl.kernel} onChange={(e) => tl.setKernel(e.target.value as 'box' | 'tri')} aria-label="Window kernel">
+            <option value="box">box</option>
+            <option value="tri">triangle</option>
           </select>
-        </label>
-      </HTip>
+        </HTip>
+        {windowError && <span role="alert" className={css.note}>{windowError}</span>}
+      </form>
+      <form className={css.group} onSubmit={(e) => {
+        e.preventDefault()
+        const value = Number(fpsDraft)
+        if (!Number.isFinite(value) || value < .25 || value > 60) { setLinkedError('FPS must be between 0.25 and 60'); return }
+        try { setSp(value); setLinkedError(null) } catch (err) { setLinkedError((err as Error).message) }
+      }}>
+        <HTip content={`Playback: ${speedLabel(bin, sp)}. ${tl.derived.has('f') ? 'Derived from the other controls; edit to make fps user-set.' : 'Editing fps derives the least recently edited control.'}`}>
+          <label className={css.field} style={{ fontStyle: tl.derived.has('f') ? 'italic' : undefined }}>
+            <span className={css.fieldLabel}>fps</span>
+            <input className={css.date} style={{ width: 70 }} type="number" min="0.25" max="60" step="any" value={fpsDraft} onFocus={() => tl.touch('f')} onChange={(e) => setFpsDraft(e.target.value)} aria-label="Frames per second" />
+          </label>
+        </HTip>
+        <button type="submit" className={css.btn}>apply</button>
+      </form>
+      <form className={css.group} onSubmit={(e) => {
+        e.preventDefault()
+        const value = parseLength(lengthDraft)
+        if (value === null) { setLinkedError('Length must be at least 1 second (m:ss, seconds, or 1m30s)'); return }
+        try { tl.setLength(value); setLinkedError(null) } catch (err) { setLinkedError((err as Error).message) }
+      }}>
+        <HTip content={`Movie length = frames ÷ fps. ${tl.derived.has('L') ? 'Derived from the other controls; edit to hold the length while changing bin or range.' : 'Editing length derives the least recently edited control.'}`}>
+          <label className={css.field} style={{ fontStyle: tl.derived.has('L') ? 'italic' : undefined }}>
+            <span className={css.fieldLabel}>length</span>
+            <input className={css.date} style={{ width: 80 }} value={lengthDraft} onFocus={() => tl.touch('L')} onChange={(e) => setLengthDraft(e.target.value)} aria-label="Movie length" />
+          </label>
+        </HTip>
+        <button type="submit" className={css.btn}>apply</button>
+      </form>
+      {linkedError && <span role="alert" className={css.note}>{linkedError}</span>}
       <HTip content="Style preset (s)">
         <label className={css.field}>
           <span className={css.fieldLabel}>style</span>
@@ -359,7 +423,7 @@ export function TlSettings({ tl }: { tl: Timelapse }) {
         </label>
       </HTip>
       {suggested && suggested !== bin && (
-        <HTip content={`${fmt(nFramesRange)} frames at ${BIN_LABEL[bin]}: long to load and play. Switch to ${BIN_LABEL[suggested]} bins?`}>
+        <HTip content={`${fmt(nFramesRange)} frames at ${binLabel(bin)}: long to load and play. Switch to ${binLabel(suggested)} bins?`}>
           <button type="button" className={`${css.btn} ${css.hint}`} onClick={() => changeBin(suggested)} data-testid="tl-suggest-bin">
             {fmt(nFramesRange)} frames · use {suggested}
           </button>
@@ -384,8 +448,8 @@ export function TlTransport({ tl, wide, settingsOpen, onToggleSettings }: {
   onToggleSettings: () => void
 }) {
   const { bin, iStart, iEnd, t, tRef, setT, shown, playing, toggle, step, commitT, peek, onPeek, totals } = tl
-  const unit = UNIT[bin]
-  const big = BIG_STEP[bin]
+  const unit = binUnit(bin)
+  const big = bigStep(bin)
   const iMs = frameStartMs(bin, floor(shown))
   return (
     <div className={css.transportRow}>

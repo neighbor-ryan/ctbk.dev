@@ -42,12 +42,13 @@ import { asyncBufferFromUrl, parquetMetadataAsync, parquetRead, type AsyncBuffer
 import { API_BASE } from './stations'
 import { dbgFetch } from '../lib/dbg'
 import {
-  ANCHORS, chunkFromApi, chunkFromBlocks, chunkMs, chunkOf, chunksCovering, frameIndex, frameMissing, frameSlice,
+  ANCHORS, chunkFromApi, chunkFromBlocks, chunkIndexMap, chunkMs, chunkOf, chunksCovering, frameIndex, frameMissing, frameSlice, frameStartMs, GENESIS_MS,
   pairReady, pickShards, pivotBlock, prefetchOrder, stationSeries, synthChunk, TlUnavailable, ymOf,
-  type Anchor, type ApiChunk, type Bin, type Block, type Chunk, type ManifestRow, type Triple,
+  type Anchor, type ApiChunk, type Bin, type Block, type Chunk, type ManifestRow, type Triple, type StationTable,
 } from './timelapseFrames'
 import { lastDataDay } from './timelapseControls'
 import { fillOrder, PrefetchQueue } from './timelapsePrefetch'
+import { WindowAccumulator, type Kernel, type SparseFrame } from './timelapseWindow'
 
 export { TlUnavailable }
 export type SourceMode = 'auto' | 'api' | 'shard' | 'synth'
@@ -384,6 +385,53 @@ export function useTlFrames(src: SourceMode, bin: Bin, t: number, radius: number
     return { a, b, startA, startB, endA, endB, chunkA, chunkB, aMissing, bMissing, ready, error }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qc, src, bin, a, b, ka, kb, version])
+}
+
+/** Rolling windows use cached sparse frames directly, including pre-roll
+ *  before the range. At most the current and previous chunks are needed. */
+export function useTlWindow(src: SourceMode, bin: Bin, t: number, width: number, kernel: Kernel, table: StationTable | null) {
+  const qc = useQueryClient()
+  const version = useTlCacheVersion()
+  const i = Math.floor(t)
+  const first = Math.max(frameIndex(bin, GENESIS_MS), i - width + 1)
+  const keys = chunksCovering(bin, first, i + 1)
+  const keyList = keys.join(',')
+  useEffect(() => {
+    for (const k of keys) for (const anchor of ANCHORS) ensureChunk(qc, src, anchor, bin, k).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qc, src, bin, keyList])
+  const accumulators = useMemo(() => ANCHORS.map(() => [0, 1].map(() => new WindowAccumulator((table?.ids.length ?? 0) + 1, width, kernel))), [table, width, kernel, bin, src])
+  const maps = useMemo(() => new WeakMap<Chunk, Int32Array>(), [table])
+  return useMemo(() => {
+    if (!table) return { ready: false, missing: false, a: null, b: null }
+    const read = (anchor: Anchor, f: number): SparseFrame | null | undefined => {
+      if (frameStartMs(bin, f + 1) <= GENESIS_MS) return []
+      const chunk = getChunk(qc, src, anchor, bin, chunkOf(bin, f))
+      if (!chunk) return undefined
+      if (frameMissing(chunk, f)) return null
+      let map = maps.get(chunk)
+      if (!map) { map = chunkIndexMap(chunk, table); maps.set(chunk, map) }
+      const frame = f - chunk.i0
+      const entries: [number, number][] = []
+      const add = (s: number, value: number) => { if (value > 0) entries.push([map![s] < 0 ? table.ids.length : map![s], value]) }
+      if (chunk.csr) {
+        const { ptr, idx, val } = chunk.csr
+        for (let j = ptr[frame]; j < ptr[frame + 1]; j++) add(idx[j], val[j])
+      } else {
+        for (let s = 0; s < chunk.ids.length; s++) add(s, chunk.counts[frame * chunk.ids.length + s])
+      }
+      return entries
+    }
+    const sample = (f: number, next: number) => {
+      const start = accumulators[0][next].sample(f, (j) => read('start', j))
+      const end = accumulators[1][next].sample(f, (j) => read('end', j))
+      return start && end ? { start, end } : null
+    }
+    const a = sample(i, 0)
+    const b = sample(i + 1, 1)
+    return { ready: !!(a && b), missing: !!(a?.start.missing || a?.end.missing), a, b }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qc, src, bin, i, table, version, accumulators, maps])
 }
 
 /** Chunk fetches the idle fill keeps in flight (each = both anchors): low,

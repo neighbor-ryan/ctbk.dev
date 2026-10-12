@@ -8,7 +8,8 @@
  * `d=` param); a range covers the frames containing its first and last
  * instants, so a coarse bin's first/last frame may overhang the range.
  */
-import { BINS, binMs, DAY_MS, frameIndex, type Bin } from './timelapseFrames'
+import { BIN_OPTIONS, binMs, DAY_MS, frameIndex, type Bin } from './timelapseFrames'
+import { parseBin } from '../lib/tlGrid'
 
 export type Range = [number, number]
 
@@ -118,7 +119,7 @@ export const MIN_FRAMES = 4
 
 /** Longest range (days) allowed at `bin` by `HARD_FRAMES`. */
 export function maxDays(bin: Bin): number {
-  return Math.floor((HARD_FRAMES * binMs(bin)) / DAY_MS)
+  return Math.max(1, Math.floor((HARD_FRAMES * binMs(bin)) / DAY_MS))
 }
 
 /** Trim a range over `HARD_FRAMES` to `maxDays(bin)`, keeping the side
@@ -132,7 +133,7 @@ export function capRange(bin: Bin, range: Range, keep: 'start' | 'end'): { range
 
 /** The finest bin that plays `range` in ≤ `SOFT_FRAMES` frames. */
 export function suggestBin(range: Range): Bin {
-  return BINS.find((b) => frameCount(b, range) <= SOFT_FRAMES) ?? BINS[BINS.length - 1]
+  return BIN_OPTIONS.find((b) => frameCount(b, range) <= SOFT_FRAMES) ?? BIN_OPTIONS[BIN_OPTIONS.length - 1]
 }
 
 /** Range to use after switching `from` → `to`: unchanged unless it's too
@@ -143,7 +144,7 @@ export function fitRangeToBin(from: Bin, to: Bin, range: Range, tDay: number, lo
   const n = frameCount(to, range)
   const finer = binMs(to) < binMs(from)
   const coarser = binMs(to) > binMs(from)
-  if ((finer && n > SOFT_FRAMES) || (coarser && n < MIN_FRAMES)) return spanRange(DEFAULT_SPAN[to], range, tDay, lo, hi)
+  if ((finer && n > SOFT_FRAMES) || (coarser && n < MIN_FRAMES)) return spanRange(defaultSpan(to), range, tDay, lo, hi)
   return range
 }
 
@@ -156,14 +157,15 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 const MONTH = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
-const SUB_DAY_HOURS: Partial<Record<Bin, number>> = { '1h': 1, '3h': 3, '6h': 6, '12h': 12 }
-const MULTI_DAY: Partial<Record<Bin, number>> = { '3d': 3, '7d': 7, '14d': 14 }
 
 /** `18:00` (`1h`) or `18:00–21:00` (coarser sub-day bins). */
 function hoursLabel(bin: Bin, ms: number): string {
-  const h = new Date(ms).getUTCHours()
-  const w = SUB_DAY_HOURS[bin] ?? 1
-  return w === 1 ? `${pad2(h)}:00` : `${pad2(h)}:00–${pad2(h + w)}:00`
+  const t = new Date(ms)
+  const minutes = t.getUTCHours() * 60 + t.getUTCMinutes()
+  const spec = parseBin(bin)
+  const width = spec.kind === 'fixed' ? spec.minutes : 60
+  const fmt = (m: number) => `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`
+  return width <= 60 ? fmt(minutes) : `${fmt(minutes)}–${fmt(minutes + width)}`
 }
 
 /** `Jun 5–11, 2025` / `Jun 28 – Jul 4, 2025` / `Dec 29, 2025 – Jan 4, 2026`. */
@@ -183,10 +185,14 @@ function daysLabel(a: number, b: number): string {
 export function clockLabel(bin: Bin, ms: number): string {
   const t = new Date(ms)
   const day = `${DOW[t.getUTCDay()]}, ${MON[t.getUTCMonth()]} ${t.getUTCDate()}, ${t.getUTCFullYear()}`
-  if (SUB_DAY_HOURS[bin]) return `${day} · ${hoursLabel(bin, ms)}`
+  if (binMs(bin) < DAY_MS) return `${day} · ${hoursLabel(bin, ms)}`
   if (bin === '1d') return day
-  const n = MULTI_DAY[bin]
+  const parsed = parseBin(bin)
+  const n = parsed.kind === 'fixed' ? parsed.minutes / 1440 : undefined
   if (n) return daysLabel(ms, ms + (n - 1) * DAY_MS)
+  const spec = parseBin(bin)
+  if (spec.kind === 'calendar' && spec.months === 12) return String(t.getUTCFullYear())
+  if (spec.kind === 'calendar' && spec.months > 1) return `${MONTH[t.getUTCMonth()]}–${MONTH[t.getUTCMonth() + spec.months - 1]} ${t.getUTCFullYear()}`
   return `${MONTH[t.getUTCMonth()]} ${t.getUTCFullYear()}`
 }
 
@@ -194,9 +200,10 @@ export function clockLabel(bin: Bin, ms: number): string {
  *  (sub-day, no year), `Tue Jun 10, 2025` (`1d`), the day span, `Jun 2025`. */
 export function shortLabel(bin: Bin, ms: number): string {
   const t = new Date(ms)
-  if (SUB_DAY_HOURS[bin]) return `${DOW[t.getUTCDay()]} ${MON[t.getUTCMonth()]} ${t.getUTCDate()} · ${hoursLabel(bin, ms)}`
+  if (binMs(bin) < DAY_MS) return `${DOW[t.getUTCDay()]} ${MON[t.getUTCMonth()]} ${t.getUTCDate()} · ${hoursLabel(bin, ms)}`
   if (bin === '1d') return `${DOW[t.getUTCDay()]} ${MON[t.getUTCMonth()]} ${t.getUTCDate()}, ${t.getUTCFullYear()}`
-  const n = MULTI_DAY[bin]
+  const parsed = parseBin(bin)
+  const n = parsed.kind === 'fixed' ? parsed.minutes / 1440 : undefined
   if (n) return daysLabel(ms, ms + (n - 1) * DAY_MS)
   return `${MON[t.getUTCMonth()]} ${t.getUTCFullYear()}`
 }
@@ -232,11 +239,13 @@ export const SPEEDS = [1, 2, 4, 8, 16, 30]
 /** `sp` frames/s in the bin's units: `8 h/s` (`1h`), `24 h/s` (`3h` × 8),
  *  `8 d/s` (`1d`), `2 wk/s` (`14d` × 1), `8 mo/s` (`1mo`). */
 export function speedLabel(bin: Bin, sp: number): string {
-  const h = SUB_DAY_HOURS[bin]
-  if (h) return `${sp * h} h/s`
+  const spec = parseBin(bin)
+  if (spec.kind === 'fixed' && spec.minutes < 60) return `${Number((sp * spec.minutes).toFixed(3))} min/s`
+  const h = spec.kind === 'fixed' && spec.minutes < 1440 ? spec.minutes / 60 : null
+  if (h) return `${Number((sp * h).toFixed(3))} h/s`
   if (bin === '1d' || bin === '3d') return `${sp * (bin === '3d' ? 3 : 1)} d/s`
   if (bin === '7d' || bin === '14d') return `${sp * (bin === '14d' ? 2 : 1)} wk/s`
-  return `${sp} mo/s`
+  return spec.kind === 'calendar' ? `${sp * spec.months} mo/s` : `${sp * spec.minutes / 1440} d/s`
 }
 
 /** Next slower / faster speed from `sp` (which needn't be in `SPEEDS`). */
@@ -266,4 +275,27 @@ export function parseIsoDay(s: string): number | null {
 /** Midnight of the day containing `ms`. */
 export function dayOf(ms: number): number {
   return Math.floor(ms / DAY_MS) * DAY_MS
+}
+
+/** Derived-bin controls use the same calendar/fixed semantics as the grid. */
+export function binLabel(bin: Bin): string {
+  if (BIN_LABEL[bin]) return BIN_LABEL[bin]
+  const spec = parseBin(bin)
+  const n = spec.kind === 'calendar' ? (spec.months === 12 ? 1 : spec.months)
+    : spec.minutes >= 1440 ? spec.minutes / 1440 : spec.minutes >= 60 ? spec.minutes / 60 : spec.minutes
+  const unit = spec.kind === 'calendar' ? (spec.months === 12 ? 'year' : 'month')
+    : spec.minutes >= 1440 ? 'day' : spec.minutes >= 60 ? 'hour' : 'minute'
+  return `${n} ${unit}${n === 1 ? '' : 's'}`
+}
+export const binUnit = (bin: Bin): string => UNIT[bin] ?? binLabel(bin).replace(/^1 /, '')
+export const defaultSpan = (bin: Bin): Span => DEFAULT_SPAN[bin] ?? (binMs(bin) < 3_600_000 ? d(1) : binMs(bin) < DAY_MS ? d(7) : 'all')
+export const rangePresets = (bin: Bin): RangePreset[] => RANGE_PRESETS[bin] ?? (binMs(bin) < 3_600_000
+  ? [P('1d', d(1)), P('3d', d(3))] : RANGE_PRESETS[binMs(bin) < DAY_MS ? '1h' : '1mo'])
+export function bigStep(bin: Bin): { n: number; label: string } {
+  return BIG_STEP[bin] ?? (binMs(bin) < DAY_MS ? { n: Math.round(DAY_MS / binMs(bin)), label: 'day' } : { n: 1, label: binUnit(bin) })
+}
+
+export function stepBin(bin: Bin, direction: -1 | 1): Bin {
+  return direction === 1 ? BIN_OPTIONS.find((b) => binMs(b) > binMs(bin)) ?? BIN_OPTIONS[BIN_OPTIONS.length - 1]
+    : [...BIN_OPTIONS].reverse().find((b) => binMs(b) < binMs(bin)) ?? BIN_OPTIONS[0]
 }

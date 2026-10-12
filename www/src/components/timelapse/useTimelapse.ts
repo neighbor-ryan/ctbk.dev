@@ -11,25 +11,38 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAction } from 'use-kbd'
-import { boolParam, codeParam, intParam, stringParam, useUrlState, type Param } from 'use-prms'
+import { boolParam, codeParam, stringParam, useUrlState, type Param } from 'use-prms'
 import {
-  cachedChunks, useTlFrames, useTlLastDay, useTlPrefetch, useTlTotals, type SourceMode,
+  cachedChunks, useTlFrames, useTlLastDay, useTlPrefetch, useTlTotals, useTlWindow, type SourceMode,
 } from '../../query/timelapse'
 import {
-  BIG_STEP, BIN_LABEL, capRange, DEFAULT_SPAN, dayOf, fitRangeToBin, frameCount, rangeFrames, spanEnding, spanRange,
-  stepSpeed, UNIT, type Range, type Span,
+  bigStep, binLabel, capRange, defaultSpan, dayOf, fitRangeToBin, frameCount, rangeFrames, spanEnding, spanRange,
+  stepSpeed, stepBin, binUnit, type Range, type Span,
 } from '../../query/timelapseControls'
 import {
   accumulateFrame, actAttributes, buildStationTable, chunkIndexMap, chunkOf, chunksCovering, flowAttributes, formatT,
-  formatYmd, frameIndex, frameStartMs, parseT, parseYmd, scaleFromChunks, snapToCached, splitAttributes,
+  binMs, formatYmd, frameIndex, frameStartMs, parseT, parseYmd, scaleFromChunks, snapToCached, splitAttributes,
   type Bin, type Chunk, type Preset, type StationTable,
-  BINS, DAY_MS, DEFAULT_SCALE, GENESIS_MS, PRESETS,
+  DAY_MS, defaultScale, GENESIS_MS, PRESETS,
 } from '../../query/timelapseFrames'
+import { decodeOrder, encodeOrder, linkedModel, parseLength, rangeForFrames, type LinkedField } from '../../query/timelapseLinked'
+import { windowFrames, type Kernel } from '../../query/timelapseWindow'
+import { canonBin } from '../../lib/tlGrid'
 import { parseSize } from '../../query/timelapseSize'
 
 const { floor, max, min } = Math
 
-export const binParam = codeParam<Bin>('1d', BINS.map((b) => [b, b]))
+export function createBinParam(def: Bin): Param<Bin> {
+  return {
+    encode: (value) => canonBin(value) === def ? undefined : canonBin(value),
+    decode: (raw) => {
+      if (!raw) return def
+      // A malformed URL falls back to the default; free-form UI validates before writing.
+      try { return canonBin(raw) } catch { return def }
+    },
+  }
+}
+export const binParam = createBinParam('1d')
 export const presetParam = codeParam<Preset>('flow', [['flow', 'flow'], ['act', 'act'], ['split', 'split']])
 export const srcParam = codeParam<SourceMode>('auto', [['auto', 'a'], ['api', 'api'], ['shard', 'sh'], ['synth', 'sy']])
 
@@ -43,7 +56,7 @@ export function todayMs(): number {
 /** Default range: the bin's `DEFAULT_SPAN` (a week at `1h`, a year at
  *  `1d`, …) ending on the last published day. */
 function defaultRange(bin: Bin, lastDay: number): Range {
-  return spanFrom(DEFAULT_SPAN[bin], lastDay)
+  return spanFrom(defaultSpan(bin), lastDay)
 }
 
 function spanFrom(span: Span, end: number): Range {
@@ -115,7 +128,7 @@ export interface UseTimelapseOpts {
 
 export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEnabled = true }: UseTimelapseOpts = {}) {
   const qc = useQueryClient()
-  const binP = useMemo(() => codeParam<Bin>(defaultBin, BINS.map((b) => [b, b])), [defaultBin])
+  const binP = useMemo(() => createBinParam(defaultBin), [defaultBin])
   const [bin, setBin] = useUrlState('b', binP)
   // Date bounds for the range picker (and the default range's end): the last
   // published day, falling back to yesterday until `station-urls.json` loads.
@@ -124,10 +137,27 @@ export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEn
   const rangeP = useMemo(() => rangeParam(bin, lastDay), [bin, lastDay])
   const [range, setRange] = useUrlState('d', rangeP)
   const [tUrl, setTUrl] = useUrlState(tKey, tParam)
-  const [sp, setSp] = useUrlState('sp', intParam(8))
+  const [sp, setSpUrl] = useUrlState('sp', {
+    encode: (value: number) => value === 8 ? undefined : String(value),
+    decode: (raw: string | undefined) => { const value = Number(raw); return Number.isFinite(value) && value >= .25 && value <= 60 ? value : 8 },
+  })
+  const [lengthRaw, setLengthRaw] = useUrlState('len', stringParam())
+  const [lruRaw, setLruRaw] = useUrlState('lru', stringParam())
   const [preset, setPreset] = useUrlState('st', presetParam)
   const [loop, setLoop] = useUrlState('lp', boolParam)
   const [src] = useUrlState('src', srcParam)
+  const [windowRaw, setWindowRaw] = useUrlState('w', stringParam())
+  const [kernel, setKernel] = useUrlState('wk', codeParam<Kernel>('box', [['box', 'box'], ['tri', 'tri']]))
+  const windowSpec = useMemo(() => {
+    // Invalid or newly incompatible URL windows fall back to one frame.
+    try { const code = canonBin(windowRaw ?? bin); return { code, width: windowFrames(bin, code) } }
+    catch { return { code: bin, width: 1 } }
+  }, [bin, windowRaw])
+  const changeWindow = useCallback((raw: string) => {
+    const code = canonBin(raw)
+    windowFrames(bin, code)
+    setWindowRaw(code === bin ? undefined : code)
+  }, [bin, setWindowRaw])
   const [szRaw, setSzRaw] = useUrlState('sz', stringParam())
   const sz = parseSize(szRaw)
   const setSz = useCallback((v: number) => setSzRaw(v === 1 ? undefined : String(v)), [setSzRaw])
@@ -183,27 +213,64 @@ export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEn
   const tDay = useCallback(() => dayOf(frameStartMs(bin, floor(tRef.current))), [bin])
   // Set by a range edit the frame-count guard trimmed; cleared by the next edit.
   const [capNote, setCapNote] = useState<string | null>(null)
+  const linked = useMemo(() => linkedModel(bin, range, sp, parseLength(lengthRaw), decodeOrder(lruRaw ?? (lengthRaw !== undefined ? 'fdbL' : undefined)), lastDay), [bin, range, sp, lengthRaw, lruRaw, lastDay])
+  const length = frameCount(bin, range) / sp
+  const derived = linked.model.derived()
+  const editLinked = useCallback((field: LinkedField, value: number, targetRange: Range = range, extraBin?: Bin) => {
+    const { model, binFor } = linkedModel(bin, targetRange, sp, parseLength(lengthRaw), decodeOrder(lruRaw ?? (lengthRaw !== undefined ? 'fdbL' : undefined)), lastDay, extraBin)
+    const values = model.set(field, value)
+    const nb = binFor(values.b)
+    const currentFrames = frameCount(nb, targetRange)
+    const requestedFrames = values.R / values.b
+    const nextRange = Math.abs(currentFrames - requestedFrames) < 1e-6 ? targetRange : rangeForFrames(nb, targetRange[0], requestedFrames, lastDay)
+    if (nb !== bin) {
+      if (!mv) setTUrl(frameStartMs(bin, floor(tRef.current)))
+      setBin(nb)
+    }
+    if (nextRange[0] !== range[0] || nextRange[1] !== range[1]) setRange(nextRange)
+    setSpUrl(values.f)
+    if (lengthRaw !== undefined || field === 'L') setLengthRaw(String(Number((frameCount(nb, nextRange) / values.f).toPrecision(12))))
+    setLruRaw(encodeOrder(model.order()))
+  }, [bin, range, sp, lengthRaw, lruRaw, lastDay, mv, setTUrl, setBin, setRange, setSpUrl, setLengthRaw, setLruRaw])
+  useEffect(() => {
+    if (publishedLastDay === null || lengthRaw === undefined) return
+    const values = linked.model.values()
+    const nb = linked.binFor(values.b)
+    if (nb !== bin) setBin(nb)
+    const requested = values.R / values.b
+    if (Math.abs(frameCount(nb, range) - requested) > 1e-6) setRange(rangeForFrames(nb, range[0], requested, lastDay))
+    if (Math.abs(values.f - sp) > 1e-9) setSpUrl(values.f)
+    if (parseLength(lengthRaw) !== null && Math.abs(values.L - parseLength(lengthRaw)!) > 1e-9) setLengthRaw(String(values.L))
+  }, [linked, bin, range, lastDay, sp, lengthRaw, publishedLastDay, setBin, setRange, setSpUrl, setLengthRaw])
+  const setSp = useCallback((value: number) => editLinked('f', value), [editLinked])
+  const setLength = useCallback((value: number) => editLinked('L', value), [editLinked])
+  const touch = useCallback((field: LinkedField) => {
+    const value = field === 'b' ? binMs(bin) / 1000 : field === 'R' ? frameCount(bin, range) * binMs(bin) / 1000 : field === 'f' ? sp : Math.max(1, length)
+    editLinked(field, value)
+  }, [bin, range, sp, length, editLinked])
   const setRangeEdit = useCallback((r: Range, keep: 'start' | 'end') => {
     const c = capRange(bin, r, keep)
-    setCapNote(c.capped ? `capped to ${frameCount(bin, c.range).toLocaleString('en-US')} frames at ${BIN_LABEL[bin]}` : null)
-    setRange(c.range)
-  }, [bin, setRange])
+    setCapNote(c.capped ? `capped to ${frameCount(bin, c.range).toLocaleString('en-US')} frames at ${binLabel(bin)}` : null)
+    editLinked('R', frameCount(bin, c.range) * binMs(bin) / 1000, c.range)
+  }, [bin, editLinked])
   const applySpan = useCallback((span: Span) => {
     setCapNote(null)
-    setRange(spanRange(span, range, tDay(), GENESIS_MS, lastDay))
-  }, [range, tDay, lastDay, setRange])
+    const next = capRange(bin, spanRange(span, range, tDay(), GENESIS_MS, lastDay), 'end').range
+    editLinked('R', frameCount(bin, next) * binMs(bin) / 1000, next)
+  }, [range, tDay, lastDay, bin, editLinked])
   // Switching bins keeps `d`, unless it's too many frames at a finer bin or
   // too few at a coarser one (`fitRangeToBin`). The URL `t` is written first
   // (it isn't while playing), since the bin effect re-derives from it.
   const changeBin = useCallback((nb: Bin) => {
     if (nb === bin) return
     const td = tDay()
-    if (!mv) setTUrl(frameStartMs(bin, floor(tRef.current)))
-    const r = fitRangeToBin(bin, nb, range, td, GENESIS_MS, lastDay)
+    const r = capRange(nb, fitRangeToBin(bin, nb, range, td, GENESIS_MS, lastDay), 'end').range
     setCapNote(null)
-    setBin(nb)
-    if (r[0] !== range[0] || r[1] !== range[1]) setRange(r)
-  }, [bin, mv, range, lastDay, tDay, setBin, setRange, setTUrl])
+    if (windowRaw !== undefined) {
+      try { windowFrames(nb, windowRaw) } catch { setWindowRaw(undefined) }
+    }
+    editLinked('b', binMs(nb) / 1000, r, nb)
+  }, [bin, range, lastDay, tDay, editLinked, windowRaw, setWindowRaw])
 
   // Scrubber hover preview (`peek`): a frame shown on the map + clock
   // without moving the playhead or touching the URL. Hovering pauses
@@ -224,7 +291,10 @@ export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEn
   const tView = peek ?? t
 
   const table = useStationTable()
-  const frames = useTlFrames(src, bin, tView, 1)
+  const rawFrames = useTlFrames(src, bin, tView, 1)
+  const windows = useTlWindow(src, bin, tView, windowSpec.width, kernel, table)
+  const frames = { ...rawFrames, ready: rawFrames.ready && windows.ready }
+  const scaleFrames = useTlFrames(src, windowSpec.code, frameIndex(windowSpec.code, frameStartMs(bin, floor(tView))), 0)
   const readyRef = useRef(frames.ready)
   readyRef.current = frames.ready
   const rangeChunks = useMemo(() => chunksCovering(bin, iStart, iEnd), [bin, iStart, iEnd])
@@ -236,13 +306,13 @@ export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEn
   // exactly that chunk, so a movie URL always gets the same scale.
   const [scales, setScales] = useState<Partial<Record<Bin, number>>>({})
   useEffect(() => {
-    if (scales[bin] !== undefined) return
-    const { start, end } = frames.chunkA
+    if (scales[windowSpec.code] !== undefined) return
+    const { start, end } = scaleFrames.chunkA
     if (!start || !end) return
-    setScales((s) => ({ ...s, [bin]: scaleFromChunks([{ start, end }]) ?? DEFAULT_SCALE[bin] }))
-  }, [frames.chunkA, bin, scales])
-  const scale = scales[bin] ?? DEFAULT_SCALE[bin]
-  const scaleFrozen = scales[bin] !== undefined
+    setScales((s) => ({ ...s, [windowSpec.code]: scaleFromChunks([{ start, end }]) ?? defaultScale(windowSpec.code) }))
+  }, [scaleFrames.chunkA, windowSpec.code, scales])
+  const scale = scales[windowSpec.code] ?? defaultScale(windowSpec.code)
+  const scaleFrozen = scales[windowSpec.code] !== undefined
 
   const play = useCallback(() => {
     resumeRef.current = false
@@ -292,8 +362,8 @@ export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEn
 
   // Keyboard (`use-kbd`): all show up in the ShortcutsModal / Omnibar. Off in
   // movie mode (interaction disabled) and whenever the caller says so.
-  const unit = UNIT[bin]
-  const big = BIG_STEP[bin]
+  const unit = binUnit(bin)
+  const big = bigStep(bin)
   const on = !mv && keysEnabled
   useAction('tl:play', { label: 'Play / pause', group: 'Timelapse', defaultBindings: ['space'], handler: toggle, enabled: on })
   useAction('tl:prev', { label: `Previous ${unit}`, group: 'Timelapse', defaultBindings: ['arrowleft'], handler: () => step(-1), enabled: on })
@@ -304,8 +374,8 @@ export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEn
   useAction('tl:faster', { label: 'Faster', group: 'Timelapse', defaultBindings: [']'], handler: () => setSp(stepSpeed(sp, 1)), enabled: on })
   useAction('tl:home', { label: 'Jump to range start', group: 'Timelapse', defaultBindings: ['home'], handler: () => { setPlaying(false); commitT(iStart) }, enabled: on })
   useAction('tl:end', { label: 'Jump to range end', group: 'Timelapse', defaultBindings: ['end'], handler: () => { setPlaying(false); commitT(iEnd) }, enabled: on })
-  useAction('tl:bin', { label: 'Coarser bin', group: 'Timelapse', defaultBindings: ['b'], handler: () => changeBin(BINS[min(BINS.length - 1, BINS.indexOf(bin) + 1)]), enabled: on })
-  useAction('tl:bin-finer', { label: 'Finer bin', group: 'Timelapse', defaultBindings: ['shift+b'], handler: () => changeBin(BINS[max(0, BINS.indexOf(bin) - 1)]), enabled: on })
+  useAction('tl:bin', { label: 'Coarser bin', group: 'Timelapse', defaultBindings: ['b'], handler: () => changeBin(stepBin(bin, 1)), enabled: on })
+  useAction('tl:bin-finer', { label: 'Finer bin', group: 'Timelapse', defaultBindings: ['shift+b'], handler: () => changeBin(stepBin(bin, -1)), enabled: on })
   useAction('tl:style', { label: 'Cycle style (flow / activity / split)', group: 'Timelapse', defaultBindings: ['s'], handler: () => setPreset(PRESETS[(PRESETS.indexOf(preset) + 1) % PRESETS.length]), enabled: on })
   useAction('tl:loop', { label: 'Toggle loop', group: 'Timelapse', defaultBindings: ['l'], handler: () => setLoop(!loop), enabled: on })
 
@@ -318,6 +388,7 @@ export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEn
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frames, tView, qc, src, bin, rangeChunks])
   const shownFrames = useTlFrames(src, bin, shown, 0)
+  const shownWindows = useTlWindow(src, bin, shown, windowSpec.width, kernel, table)
 
   // Per-frame attributes: lerp starts/ends between frames ⌊t⌋ and ⌊t⌋+1
   // (frame ⌊t⌋ alone when ⌊t⌋+1 is past the pyramid's tip), then the
@@ -340,25 +411,36 @@ export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEn
       if (c && slice && w > 0) unmapped += accumulateFrame(out, slice, map(c), w)
     }
     const f = shownFrames
-    const wA = f.bMissing ? 1 : 1 - phi
-    add(starts, f.chunkA.start, f.startA, wA)
-    add(ends, f.chunkA.end, f.endA, wA)
-    if (phi > 0 && !f.bMissing) {
-      add(starts, f.chunkB.start, f.startB, phi)
-      add(ends, f.chunkB.end, f.endB, phi)
+    if (windowSpec.width > 1) {
+      const a = shownWindows.a
+      const b = shownWindows.b
+      const lerp = b && !b.start.missing && !b.end.missing ? phi : 0
+      for (let s = 0; s < n; s++) {
+        starts[s] = (a?.start.values[s] ?? 0) * (1 - lerp) + (b?.start.values[s] ?? 0) * lerp
+        ends[s] = (a?.end.values[s] ?? 0) * (1 - lerp) + (b?.end.values[s] ?? 0) * lerp
+      }
+      unmapped = (a?.start.values[n] ?? 0) + (a?.end.values[n] ?? 0)
+    } else {
+      const wA = f.bMissing ? 1 : 1 - phi
+      add(starts, f.chunkA.start, f.startA, wA)
+      add(ends, f.chunkA.end, f.endA, wA)
+      if (phi > 0 && !f.bMissing) {
+        add(starts, f.chunkB.start, f.startB, phi)
+        add(ends, f.chunkB.end, f.endB, phi)
+      }
     }
     const flow = preset === 'flow' ? flowAttributes(starts, ends, scale) : null
     const act = preset === 'act' ? actAttributes(starts, ends, scale) : null
     const split = preset === 'split' ? splitAttributes(starts, ends, scale) : null
-    return { starts, ends, flow, act, split, unmapped, source: f.chunkA.start?.source, missing: f.aMissing }
-  }, [table, shown, shownFrames, preset, scale])
+    return { starts, ends, flow, act, split, unmapped, source: f.chunkA.start?.source, missing: windowSpec.width > 1 ? shownWindows.missing : f.aMissing }
+  }, [table, shown, shownFrames, shownWindows, windowSpec.width, preset, scale])
 
   const totals = useTlTotals(src, bin, iStart, iEnd)
 
   return {
-    qc, src, bin, changeBin, range, setRangeEdit, applySpan, capNote, lastDay, iStart, iEnd, tUrl, tToI,
+    qc, src, bin, changeBin, windowCode: windowSpec.code, windowWidth: windowSpec.width, changeWindow, kernel, setKernel, range, setRangeEdit, applySpan, capNote, lastDay, iStart, iEnd, tUrl, tToI,
     tRef, t, setT, playing, play, pause, toggle, step, commitT, peek, onPeek, tView, table, frames, rangeChunks,
-    shown, shownFrames, frame, scale, scaleFrozen, preset, setPreset, sp, setSp, loop, setLoop, sz, setSz, totals,
+    shown, shownFrames, frame, scale, scaleFrozen, preset, setPreset, sp, setSp, length, setLength, derived, touch, loop, setLoop, sz, setSz, totals,
   }
 }
 

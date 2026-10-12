@@ -161,7 +161,7 @@ export default function Stations() {
   }
   if (tm) {
     const current = new URLSearchParams(window.location.search)
-    for (const k of ['b', 'd', 'sp', 'st', 'lp', 'sz', 'src']) {
+    for (const k of ['b', 'd', 'sp', 'st', 'lp', 'sz', 'src', 'w', 'wk', 'len', 'lru']) {
       if (current.has(k)) timelapseParams.set(k, current.get(k)!)
     }
     timelapseParams.set('b', current.get('b') ?? '1h')

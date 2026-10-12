@@ -17,16 +17,17 @@
  */
 
 import { rampRgb } from '../components/flowLens'
-import { chunkSize, frameStartMs } from '../lib/tlGrid'
+import { chunkSize, frameStartMs, nominalBinMs } from '../lib/tlGrid'
 export { frameOf as frameIndex, frameStartMs, originMs } from '../lib/tlGrid'
 
 export type Anchor = 'start' | 'end'
 export const ANCHORS: readonly Anchor[] = ['start', 'end']
 /** Every tier `/api/tl` serves (`TL_BINS` in `gbfs/api/src/tl.ts`); all of
  *  them are exposed (the selector + `b=`). */
-export type TlBin = '1h' | '3h' | '6h' | '12h' | '1d' | '3d' | '7d' | '14d' | '1mo'
+export type TlBin = string
 export type Bin = TlBin
 export const BINS: readonly Bin[] = ['1h', '3h', '6h', '12h', '1d', '3d', '7d', '14d', '1mo']
+export const BIN_OPTIONS: readonly Bin[] = ['1m', '2m', '5m', '10m', '15m', '20m', '30m', '45m', '1h', '2h', '3h', '4h', '6h', '8h', '12h', '1d', '2d', '3d', '7d', '14d', '1mo', '2mo', '3mo', '4mo', '6mo', '1y']
 export type Source = 'api' | 'shard' | 'synth'
 
 export const GENESIS_MS = Date.UTC(2013, 5, 1)
@@ -41,7 +42,7 @@ export const FIXED_MS: Record<FixedBin, number> = {
 /** Nominal bin width (`1mo` ≈ 30.44 days), for estimates (frame counts,
  *  synthetic per-bin rates), never for frame math. */
 export function binMs(bin: Bin): number {
-  return bin === '1mo' ? 30.436875 * DAY_MS : FIXED_MS[bin]
+  return nominalBinMs(bin)
 }
 /** Frames per chunk per tier, mirroring the worker's `TL_K`: `1h` → 2 days;
  *  every other fixed tier's `K·bin` is one of its shard rungs (`3h`→4d …
@@ -50,12 +51,12 @@ export const TL_K = Object.fromEntries(BINS.map((bin) => [bin, chunkSize(bin)]))
 export const CHUNK_K: Record<Bin, number> = TL_K
 
 export function chunkOf(bin: Bin, i: number): number {
-  return Math.floor(i / CHUNK_K[bin])
+  return Math.floor(i / chunkSize(bin))
 }
 
 /** `[i0, i1)` frame range of chunk `k`. */
 export function chunkFrames(bin: Bin, k: number): [number, number] {
-  const K = CHUNK_K[bin]
+  const K = chunkSize(bin)
   return [k * K, (k + 1) * K]
 }
 
@@ -171,7 +172,7 @@ export function pivotRows(
   triples: Iterable<Triple>,
   source: Source,
 ): Chunk {
-  const K = CHUNK_K[bin]
+  const K = chunkSize(bin)
   const [i0] = chunkFrames(bin, chunk)
   return { ...pivotBlock(anchor, bin, i0, K, triples, source), chunk, k: K }
 }
@@ -292,6 +293,7 @@ export function chunksCovering(bin: Bin, iA: number, iB: number): number[] {
  *  frame-major; `partial` means some frames of the chunk have no shard
  *  (`covered` lists the frame sub-ranges that do). */
 interface ApiChunkBase {
+  gv?: number
   anchor: Anchor
   bin: string
   chunk: number
@@ -323,12 +325,12 @@ export class TlUnavailable extends Error {
  *  reaches; the rest is known-missing), unless it covers nothing at all, in
  *  which case `TlUnavailable` lets `auto` try another source. */
 export function chunkFromApi(anchor: Anchor, bin: Bin, k: number, body: ApiChunk): Chunk {
-  const K = CHUNK_K[bin]
+  const K = chunkSize(bin)
   if (body.bin !== bin || body.chunk !== k || body.k !== K) {
     throw new Error(`/api/tl returned ${body.bin}/${body.chunk}/${body.k}, wanted ${bin}/${k}/${K}`)
   }
   if (body.anchor !== anchor) throw new Error(`/api/tl returned anchor ${body.anchor}, wanted ${anchor}`)
-  if (body.partial && !body.covered.length) throw new TlUnavailable(`/api/tl ${bin} chunk ${k}: no coverage`)
+  if (body.partial && !body.covered.length && body.gv !== 1) throw new TlUnavailable(`/api/tl ${bin} chunk ${k}: no coverage`)
   const S = body.ids.length
   let csr: Block['csr']
   let counts = new Uint32Array(0)
@@ -727,21 +729,25 @@ export function stationSeries(
 // URL codecs' pure halves: `YYMMDD` dates, `YYMMDD[THH]` instants (local-as-UTC).
 // ---------------------------------------------------------------------------
 
-/** `YYMMDD` or `YYMMDDTHH` → local-as-UTC ms, or null when malformed. */
+/** `YYMMDD`, `YYMMDDTHH`, or `YYMMDDTHHMM` → local-as-UTC ms, or null when malformed. */
 export function parseT(s: string): number | null {
-  const m = /^(\d{6})(?:T(\d{2}))?$/.exec(s)
+  const m = /^(\d{6})(?:T(\d{2})(\d{2})?)?$/.exec(s)
   if (!m) return null
   const day = parseYmd(m[1])
   if (day === null) return null
   const hh = m[2] === undefined ? 0 : Number(m[2])
-  if (hh > 23) return null
-  return day + hh * HOUR_MS
+  const mm = m[3] === undefined ? 0 : Number(m[3])
+  if (hh > 23 || mm > 59) return null
+  return day + hh * HOUR_MS + mm * 60_000
 }
 
-/** Local-as-UTC ms → `YYMMDD` at midnight, else `YYMMDDTHH` (whole hours). */
+/** Local-as-UTC ms → `YYMMDD` at midnight, else `YYMMDDTHH` (minutes appended only when nonzero). */
 export function formatT(ms: number): string {
-  const hh = new Date(ms).getUTCHours()
-  return hh === 0 ? formatYmd(ms) : `${formatYmd(ms)}T${String(hh).padStart(2, '0')}`
+  const t = new Date(ms)
+  const hh = t.getUTCHours()
+  const mm = t.getUTCMinutes()
+  const time = `${String(hh).padStart(2, '0')}${mm ? String(mm).padStart(2, '0') : ''}`
+  return hh === 0 && mm === 0 ? formatYmd(ms) : `${formatYmd(ms)}T${time}`
 }
 
 /** `YYMMDD` → local-as-UTC ms at midnight, or null when malformed. */
@@ -759,3 +765,5 @@ export function formatYmd(ms: number): string {
   const p = (n: number) => String(n).padStart(2, '0')
   return `${p(d.getUTCFullYear() % 100)}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}`
 }
+
+export const defaultScale = (bin: Bin): number => DEFAULT_SCALE[bin] ?? Math.max(2, 80 * (binMs(bin) / HOUR_MS) ** .8)

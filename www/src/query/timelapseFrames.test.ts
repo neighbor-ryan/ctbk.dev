@@ -169,6 +169,15 @@ describe('chunkFromApi', () => {
     expect(() => chunkFromApi('start', '1d', 2196, body())).toThrow('/api/tl returned 1h/2196/48, wanted 1d/2196/32')
     expect(() => chunkFromApi('start', '1h', 2196, body({ counts: [1] }))).toThrow('/api/tl 1h chunk 2196: 1 counts for 48×2')
   })
+  test('versioned missing coverage stays unknown instead of falling back to synthetic counts', () => {
+    const c = chunkFromApi('start', '1h', 2196, body({ gv: 1, partial: true, covered: [], ids: [], counts: [] }))
+    expect(c).toEqual({
+      anchor: 'start', bin: '1h', chunk: 2196, k: 48, i0: 2196 * 48, n: 48, t0: D(2025, 6, 9),
+      ids: [], counts: new Uint32Array(0), totals: new Float64Array(48), source: 'api', covered: [],
+    })
+    expect(frameMissing(c, c.i0)).toBe(true)
+    expect(frameSlice(c, c.i0)).toBeNull()
+  })
 })
 
 describe('pairReady', () => {

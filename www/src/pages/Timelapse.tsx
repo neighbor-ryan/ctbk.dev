@@ -39,7 +39,7 @@ import { useTimelapse } from '../components/timelapse/useTimelapse'
 import { selParam, stationsInRect, useSelection, useSelectionGestures, type Pt, type Rect } from '../lib/mapSelection'
 import { useCanHover, useMediaQuery } from '../lib/useMediaQuery'
 import { ensureChunk, useTlStationSeries, type SourceMode } from '../query/timelapse'
-import { clockLabel, shortLabel, UNIT } from '../query/timelapseControls'
+import { clockLabel, shortLabel, binUnit } from '../query/timelapseControls'
 import { ANCHORS, chunkOf, formatYmd, frameStartMs, type Bin, type StationTable } from '../query/timelapseFrames'
 import { radiusFactor } from '../query/timelapseSize'
 import css from '../timelapse.module.css'
@@ -199,11 +199,11 @@ export default function Timelapse() {
 
   const i = floor(shown)
   const stalled = playing && !frames.ready
-  const iMs = frameStartMs(bin, i)
-  const dateStr = wide || mv ? clockLabel(bin, iMs) : shortLabel(bin, iMs)
+  const iMs = frameStartMs(bin, i + (tl.windowWidth > 1 ? 1 : 0))
+  const dateStr = (wide || mv ? clockLabel(bin, iMs) : shortLabel(bin, iMs)) + (tl.windowWidth > 1 ? ` (last ${tl.windowCode})` : '')
   const nFramesRange = iEnd - iStart + 1
   const fmt = (n: number) => round(n).toLocaleString('en-US')
-  const unit = UNIT[bin]
+  const unit = binUnit(tl.windowCode)
   const note = scaleNote(scale, scaleFrozen, sz, view.zoom)
   const showSettings = wide || settingsOpen
 

@@ -104,8 +104,8 @@ describe('frame-count guard', () => {
     expect(frameCount('1h', capRange('1h', yr, 'start').range)).toBe(6000)
   })
   test('suggestBin: finest bin with ≤ 1500 frames', () => {
-    expect(suggestBin([D(2025, 6, 9), D(2025, 6, 10)])).toBe('1h')
-    expect(suggestBin([D(2025, 1, 1), D(2025, 3, 31)])).toBe('3h')
+    expect(suggestBin([D(2025, 6, 9), D(2025, 6, 10)])).toBe('2m')
+    expect(suggestBin([D(2025, 1, 1), D(2025, 3, 31)])).toBe('2h')
     expect(suggestBin([D(2025, 1, 1), D(2025, 12, 31)])).toBe('6h')
     expect(suggestBin([LO, HI])).toBe('7d')
   })

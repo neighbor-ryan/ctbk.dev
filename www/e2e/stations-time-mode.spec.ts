@@ -9,6 +9,16 @@ import { test, expect, type Page } from '@playwright/test'
 
 const ttOf = (page: Page) => new URL(page.url()).searchParams.get('tt')
 
+// These tests exercise controls and chart synchronization. Fixed chart
+// records remove cold Worker fetch latency from the playhead assertion;
+// real frame/ride rendering is also checked in the live Chrome preview.
+test.beforeEach(async ({ page }) => {
+  await page.route(/\/api\/rides\?/, (route) => route.fulfill({ json: {
+    records: [14, 20, 28].map((day) => ({ dt: Date.UTC(2026, 8, day), count: 23, duration: 600 })),
+    plan: { outputBin: '1d' },
+  } }))
+})
+
 test('toggle in, → steps `tt` by one day, × back to the monthly map', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
@@ -75,4 +85,35 @@ test('preserves a deep-linked hour while default date bounds load', async ({ pag
   release()
   await expect(page.getByTestId('rides-playhead')).toHaveAttribute('data-time', String(Date.UTC(2026, 8, 28, 12)))
   expect(ttOf(page)).toBe('260928T12')
+})
+
+test('custom minute bins preserve the instant, and windows survive fullscreen navigation', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await page.goto('/stations?tm&sel=HB101&b=15m&w=1h&wk=tri&d=250610-250610&tt=250610T1330')
+  await expect(page.getByTestId('tl-clock')).toHaveText('Tue, Jun 10, 2025 · 13:45 (last 1h)')
+  await page.getByLabel('Custom bin', { exact: true }).fill('45m')
+  await page.getByRole('button', { name: 'apply', exact: true }).nth(0).click()
+  await expect.poll(() => [new URL(page.url()).searchParams.get('b'), ttOf(page)]).toEqual(['45m', '250610T1330'])
+  await page.getByLabel('Trailing window', { exact: true }).fill('3h')
+  await page.getByRole('button', { name: 'apply', exact: true }).nth(1).click()
+  await expect(page.getByTestId('tl-clock')).toHaveText('Tue, Jun 10, 2025 · 14:15 (last 3h)')
+  const href = await page.getByRole('link', { name: '▶ timelapse', exact: true }).getAttribute('href')
+  const params = new URL(href!, 'http://localhost').searchParams
+  expect([params.get('b'), params.get('w'), params.get('wk'), params.get('t')]).toEqual(['45m', '3h', 'tri', '250610T1330'])
+  expect(errors).toEqual([])
+})
+
+test('a linked length derives fractional fps and stays held when the bin changes', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await page.goto('/stations?tm&sel=HB101&b=1h&d=250604-250610&tt=250610T13&len=60')
+  await expect(page.getByLabel('Frames per second', { exact: true })).toHaveValue('2.8')
+  await expect(page.getByLabel('Movie length', { exact: true })).toHaveValue('1:00')
+  await page.getByLabel('Bin', { exact: true }).selectOption('15m')
+  await expect(page.getByLabel('Frames per second', { exact: true })).toHaveValue('11.2')
+  await expect(page.getByLabel('Movie length', { exact: true })).toHaveValue('1:00')
+  const params = new URL(page.url()).searchParams
+  expect([params.get('len'), params.get('sp'), params.get('lru')]).toEqual(['60', '11.2', 'fdLb'])
+  expect(errors).toEqual([])
 })

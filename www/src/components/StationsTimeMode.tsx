@@ -16,7 +16,7 @@ import { pinIndices, timelapseLayers } from './timelapse/layers'
 import { useTimelapse } from './timelapse/useTimelapse'
 import { stationsInRect, useSelectionGestures, type Pt, type Rect, type SelAction } from '../lib/mapSelection'
 import { useCanHover, useWide } from '../lib/useMediaQuery'
-import { clockLabel, shortLabel, UNIT } from '../query/timelapseControls'
+import { clockLabel, shortLabel, binUnit } from '../query/timelapseControls'
 import { frameStartMs } from '../query/timelapseFrames'
 import { radiusFactor } from '../query/timelapseSize'
 import stationsCss from '../stations.module.css'
@@ -105,7 +105,7 @@ export default function StationsTimeMode({ sel, multi, onSelAction, center, zoom
   const [legendOpen, setLegendOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const i = floor(shown)
-  const iMs = frameStartMs(bin, i)
+  const iMs = frameStartMs(bin, i + (tl.windowWidth > 1 ? 1 : 0))
   useEffect(() => { onTimeChange?.(iMs) }, [iMs, onTimeChange])
   useEffect(() => () => onTimeChange?.(null), [onTimeChange])
   const stalled = playing && !frames.ready
@@ -139,7 +139,7 @@ export default function StationsTimeMode({ sel, multi, onSelAction, center, zoom
       </GLMap>
       <div ref={dockRef} className={css.dock} style={{ bottom }} data-testid="tm-dock" data-tl-frame={i}>
         <div className={tlCss.headRow}>
-          <span className={tlCss.clockDate} data-testid="tl-clock">{wide ? clockLabel(bin, iMs) : shortLabel(bin, iMs)}</span>
+          <span className={tlCss.clockDate} data-testid="tl-clock">{wide ? clockLabel(bin, iMs) : shortLabel(bin, iMs)}{tl.windowWidth > 1 && ` (last ${tl.windowCode})`}</span>
           <button type="button" className={`${tlCss.barBtn} ${css.bar}`} onClick={() => setLegendOpen(!legendOpen)} aria-expanded={legendOpen} aria-label="Toggle legend">
             <LegendBar preset={preset} />
           </button>
@@ -154,7 +154,7 @@ export default function StationsTimeMode({ sel, multi, onSelAction, center, zoom
         </div>
         {legendOpen && (
           <div className={tlCss.legendBody} data-testid="tl-legend">
-            <Legend preset={preset} unit={UNIT[bin]} note={scaleNote(scale, scaleFrozen, sz, zoom)} />
+            <Legend preset={preset} unit={binUnit(tl.windowCode)} note={scaleNote(scale, scaleFrozen, sz, zoom)} />
             {peek !== null && <div className={tlCss.clockSub}>preview</div>}
           </div>
         )}

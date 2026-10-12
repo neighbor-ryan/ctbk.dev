@@ -200,6 +200,8 @@
 !src/lib/apiBase.ts
 !src/lib/dataBase.ts
 !src/lib/dbg.ts
+!src/lib/lruConstraints.test.ts
+!src/lib/lruConstraints.ts
 !src/lib/mapSelection/gesture.test.ts
 !src/lib/mapSelection/gesture.ts
 !src/lib/mapSelection/hooks.ts
@@ -241,10 +243,14 @@
 !src/query/timelapseControls.ts
 !src/query/timelapseFrames.test.ts
 !src/query/timelapseFrames.ts
+!src/query/timelapseLinked.test.ts
+!src/query/timelapseLinked.ts
 !src/query/timelapsePrefetch.test.ts
 !src/query/timelapsePrefetch.ts
 !src/query/timelapseSize.test.ts
 !src/query/timelapseSize.ts
+!src/query/timelapseWindow.test.ts
+!src/query/timelapseWindow.ts
 !src/stations.module.css
 !src/theme.ts
 !src/time-range.test.ts
