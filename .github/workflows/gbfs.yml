@@ -11,6 +11,7 @@ on:
       - 'gbfs/cascade/**'
       - 'gbfs/fetcher/**'
       - 'gbfs/lib/**'
+      - 'www/src/lib/tlGrid.ts'
       - '.github/workflows/gbfs.yml'
   workflow_dispatch:
     inputs:
@@ -57,6 +58,7 @@ jobs:
               - 'gbfs/lib/**'
             api:
               - 'gbfs/api/**'
+              - 'www/src/lib/tlGrid.ts'
             compactor:
               - 'gbfs/compactor/**'
             cascade:

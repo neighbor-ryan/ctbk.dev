@@ -3,7 +3,7 @@ import { memStorage } from 'pyrmts';
 import { parseCanonMap } from './canon';
 import {
 	chunkRange, coveredFrames, finerTiers, frameOf, frameStartMs, latestShards, originMs, pivotFrames, planCover,
-	resolveCell, serveTl, TL_GENESIS_MS, type TlShard,
+	completeFrames, encodeBlock, pivotEncoded, resolveCell, serveTl, TL_GENESIS_MS, type TlShard,
 } from './tl';
 
 const D = (y: number, m: number, d: number, h = 0) => Date.UTC(y, m - 1, d, h);
@@ -43,13 +43,13 @@ describe('frame grid', () => {
 		expect(chunkRange('1mo', 0)).toEqual([D(2012, 1, 1), D(2014, 1, 1)]);
 	});
 	it('finerTiers: dividing fixed tiers, coarsest first; whole-day-nesting tiers for 1mo', () => {
-		expect(finerTiers('1h')).toEqual([]);
-		expect(finerTiers('3h')).toEqual(['1h']);
-		expect(finerTiers('1d')).toEqual(['12h', '6h', '3h', '1h']);
-		expect(finerTiers('3d')).toEqual(['1d', '12h', '6h', '3h', '1h']);
-		expect(finerTiers('7d')).toEqual(['1d', '12h', '6h', '3h', '1h']);
-		expect(finerTiers('14d')).toEqual(['7d', '1d', '12h', '6h', '3h', '1h']);
-		expect(finerTiers('1mo')).toEqual(['1d', '12h', '6h', '3h', '1h']);
+		expect(finerTiers('1h')).toEqual(['15m', '1m']);
+		expect(finerTiers('3h')).toEqual(['1h', '15m', '1m']);
+		expect(finerTiers('1d')).toEqual(['12h', '6h', '3h', '1h', '15m', '1m']);
+		expect(finerTiers('3d')).toEqual(['1d', '12h', '6h', '3h', '1h', '15m', '1m']);
+		expect(finerTiers('7d')).toEqual(['1d', '12h', '6h', '3h', '1h', '15m', '1m']);
+		expect(finerTiers('14d')).toEqual(['7d', '1d', '12h', '6h', '3h', '1h', '15m', '1m']);
+		expect(finerTiers('1mo')).toEqual(['1d', '12h', '6h', '3h', '1h', '15m', '1m']);
 	});
 });
 
@@ -253,5 +253,66 @@ describe('serveTl', () => {
 			covered: [],
 			plan: { reads: [], gaps: [['2022-02-17T00:00:00', '2022-03-21T00:00:00']] },
 		});
+	});
+});
+
+describe('versioned any-bin responses', () => {
+	it('keeps partially covered derived frames unknown and combines adjacent reads', () => {
+		const [t0] = chunkRange('45m', 0);
+		const reads = [[0, 15], [30, 60], [60, 90]].map(([a, b]) => ({
+			shard: P0B[0], from: t0 + a * 60_000, to: t0 + b * 60_000,
+		}));
+		const plan = { reads, gaps: [[t0 + 15 * 60_000, t0 + 30 * 60_000] as [number, number]] };
+		expect(coveredFrames(plan, '45m', 0)).toEqual([[0, 2]]);
+		expect(completeFrames(plan, '45m', 0)).toEqual([[1, 2]]);
+	});
+
+	it('pivots minute rows directly to sparse counts with exact canonical sums', () => {
+		const [t0] = chunkRange('45m', 0);
+		const rows = [
+			{ cell: 's:a', dt: t0, count: 2 },
+			{ cell: 's:a', dt: t0 + 30 * 60_000, count: 3 },
+			{ cell: 's:b', dt: t0 + 45 * 60_000, count: 4 },
+			{ cell: 'unknown', dt: t0 + 60 * 60_000, count: 7 },
+		];
+		const expectedUnmapped = new Array<number>(64).fill(0);
+		expectedUnmapped[1] = 7;
+		expect(pivotEncoded(rows, '45m', 0, null, 'raw', false)).toEqual({
+			ids: ['a', 'b'], unmapped: expectedUnmapped, fmt: 'csr',
+			ptr: [0, 1, ...new Array<number>(63).fill(2)], idx: [0, 1], val: [5, 4],
+		});
+		const dense = pivotFrames(rows, '45m', 0, null, 'raw', false);
+		expect(encodeBlock(dense, 64)).toEqual({
+			fmt: 'csr', ptr: [0, 1, ...new Array<number>(63).fill(2)], idx: [0, 1], val: [5, 4],
+		});
+	});
+	it('selects the coarsest nesting tier for derived fixed and calendar bins', () => {
+		expect(finerTiers('20m')).toEqual(['1m']);
+		expect(finerTiers('45m')).toEqual(['15m', '1m']);
+		expect(finerTiers('2h')).toEqual(['1h', '15m', '1m']);
+		expect(finerTiers('4mo')).toEqual(['2mo', '1mo', '1d', '12h', '6h', '3h', '1h', '15m', '1m']);
+	});
+
+	it('CSR encodes sparse counts exactly, preserving zero frames and sorted station indices', () => {
+		expect(encodeBlock({ ids: ['a', 'b', 'c'], counts: [2,0,0, 0,0,0, 0,0,0, 0,0,3], unmapped: [0,0,0,0] }, 4)).toEqual({
+			fmt: 'csr', ptr: [0,1,1,1,2], idx: [0,2], val: [2,3],
+		});
+		expect(encodeBlock({ ids: ['a'], counts: [2,0,3,0], unmapped: [0,0,0,0] }, 4)).toEqual({ fmt: 'dense', counts: [2,0,3,0] });
+		expect(encodeBlock({ ids: [], counts: [], unmapped: [0,0] }, 2)).toEqual({ fmt: 'csr', ptr: [0,0,0], idx: [], val: [] });
+	});
+
+	it('sums three quarter-hour rows into an exact 45-minute frame', () => {
+		const [t0] = chunkRange('45m', 0);
+		const rows = [0,15,30,45].map((m, i) => ({ cell: 's:a', dt: t0 + m * 60_000, count: i + 1 }));
+		const block = pivotFrames(rows, '45m', 0, null, 'raw', false);
+		const expected = new Array(64).fill(0);
+		expected[0] = 6;
+		expected[1] = 4;
+		expect(block).toEqual({ ids: ['a'], counts: expected, unmapped: new Array(64).fill(0) });
+	});
+
+	it('rejects unsupported grid versions before touching storage', async () => {
+		const response = await serveTl(memStorage(), new Request('https://x/api/tl?gv=2&bin=20m&chunk=0'), '', { prefix: 'p', canonicalized: false });
+		expect([response.status, await response.json()]).toEqual([400, { error: "unsupported grid version '2'" }]);
 	});
 });

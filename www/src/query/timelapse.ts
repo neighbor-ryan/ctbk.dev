@@ -138,6 +138,7 @@ function monthEnds(qc: QueryClient, url: string): Promise<Record<string, number>
 
 async function fetchApiChunk(_qc: QueryClient, anchor: Anchor, bin: Bin, k: number): Promise<Chunk> {
   const url = new URL(`${API_BASE}/api/tl`)
+  url.searchParams.set('gv', '1')
   url.searchParams.set('anchor', anchor)
   url.searchParams.set('bin', bin)
   url.searchParams.set('chunk', String(k))

@@ -32,20 +32,22 @@
  */
 import { parquetMetadataAsync, parquetReadObjects, type FileMetaData } from 'hyparquet';
 import { nominalMs, type Storage } from 'pyrmts';
+import { canonBin, chunkRange, chunkSize, frameOf, frameStartMs, originMs, parseBin, TL_GENESIS_MS, TL_GRID_VERSION, type TlBin } from '../../../www/src/lib/tlGrid';
+export { chunkRange, frameOf, frameStartMs, originMs, TL_GENESIS_MS } from '../../../www/src/lib/tlGrid';
+export type { TlBin } from '../../../www/src/lib/tlGrid';
 import { loadCanonMapWith, type CanonMap, type LeafMode } from './canon';
 import { pruneRgRuns, storageBuffer } from './rg_manifest';
 
-export const TL_GENESIS_MS = Date.UTC(2013, 5, 1);
 export const TL_ANCHORS = ['start', 'end'] as const;
 export type TlAnchor = typeof TL_ANCHORS[number];
 /** Served tiers: the `rides-tl` ladder below `2mo` (`configs/pyramids/rides-tl-*.yaml`). */
 export const TL_BINS = ['1h', '3h', '6h', '12h', '1d', '3d', '7d', '14d', '1mo'] as const;
-export type TlBin = typeof TL_BINS[number];
-type FixedBin = Exclude<TlBin, '1mo'>;
+type FixedBin = string;
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 const FIXED_MS: Record<FixedBin, number> = {
+	'1m': 60_000, '15m': 900_000,
 	'1h': HOUR_MS, '3h': 3 * HOUR_MS, '6h': 6 * HOUR_MS, '12h': 12 * HOUR_MS,
 	'1d': DAY_MS, '3d': 3 * DAY_MS, '7d': 7 * DAY_MS, '14d': 14 * DAY_MS,
 };
@@ -64,47 +66,19 @@ const CLOSED_SLACK_MS = 300_000;
 
 // ─── Frame grid ──────────────────────────────────────────────────────────
 
-const monthIdx = (ms: number): number => {
-	const d = new Date(ms);
-	return d.getUTCFullYear() * 12 + d.getUTCMonth();
-};
-const monthMs = (idx: number): number => Date.UTC(Math.floor(idx / 12), ((idx % 12) + 12) % 12);
-
-/** Frame 0's start: genesis floored to the `K·bin` grid (see module doc). */
-export function originMs(bin: TlBin): number {
-	const K = TL_K[bin];
-	if (bin === '1mo') return monthMs(Math.floor(monthIdx(TL_GENESIS_MS) / K) * K);
-	const grid = K * FIXED_MS[bin];
-	return Math.floor(TL_GENESIS_MS / grid) * grid;
-}
-
-/** Frame index containing `ms`. */
-export function frameOf(bin: TlBin, ms: number): number {
-	if (bin === '1mo') return monthIdx(ms) - monthIdx(originMs(bin));
-	return Math.floor((ms - originMs(bin)) / FIXED_MS[bin]);
-}
-
-/** Start of frame `i`. */
-export function frameStartMs(bin: TlBin, i: number): number {
-	if (bin === '1mo') return monthMs(monthIdx(originMs(bin)) + i);
-	return originMs(bin) + i * FIXED_MS[bin];
-}
-
-/** `[t0, t1)` of chunk `k` (frames `[k·K, (k+1)·K)`). */
-export function chunkRange(bin: TlBin, k: number): [number, number] {
-	const K = TL_K[bin];
-	return [frameStartMs(bin, k * K), frameStartMs(bin, (k + 1) * K)];
-}
-
-/** Tiers finer than `bin` whose bins nest inside its frames, coarsest
- *  first: fixed tiers dividing a fixed `bin` (both epoch-aligned, so
- *  divisibility ⇒ nesting); for `1mo`, the tiers dividing a day (month
- *  boundaries are whole days; `3d`/`7d`/`14d` straddle them). */
-export function finerTiers(bin: TlBin): FixedBin[] {
-	const unit = bin === '1mo' ? DAY_MS : FIXED_MS[bin];
-	return (Object.keys(FIXED_MS) as FixedBin[])
-		.filter((t) => t !== bin && FIXED_MS[t] <= unit && unit % FIXED_MS[t] === 0)
+/** Built tiers that nest inside the requested bin, coarsest first. */
+export function finerTiers(bin: TlBin): string[] {
+	const spec = parseBin(bin);
+	const fixedUnit = spec.kind === 'calendar' ? DAY_MS : spec.minutes * 60_000;
+	const fixed = Object.keys(FIXED_MS)
+		.filter((t) => t !== bin && FIXED_MS[t] <= fixedUnit && fixedUnit % FIXED_MS[t] === 0)
 		.sort((a, b) => FIXED_MS[b] - FIXED_MS[a]);
+	const calendar = spec.kind === 'calendar'
+		? ['1y', '6mo', '3mo', '2mo', '1mo'].filter((t) => {
+			const source = parseBin(t);
+			return t !== bin && source.kind === 'calendar' && source.months <= spec.months && spec.months % source.months === 0;
+		}) : [];
+	return [...calendar, ...fixed];
 }
 
 // ─── Manifest ────────────────────────────────────────────────────────────
@@ -212,6 +186,80 @@ export interface TlBlock {
 	unmapped: number[];
 }
 
+/** CSR keeps minute chunks sparse on the wire and in the client. Legacy
+ *  requests retain their dense response shape. */
+export function encodeBlock(block: TlBlock, frames: number):
+	| { fmt: 'dense'; counts: number[] }
+	| { fmt: 'csr'; ptr: number[]; idx: number[]; val: number[] } {
+	const nnz = block.counts.reduce((n, value) => n + (value > 0 ? 1 : 0), 0);
+	if (block.counts.length && nnz / block.counts.length >= .25) return { fmt: 'dense', counts: block.counts };
+	const ptr = [0];
+	const idx: number[] = [];
+	const val: number[] = [];
+	const stations = block.ids.length;
+	for (let f = 0; f < frames; f++) {
+		for (let s = 0; s < stations; s++) {
+			const value = block.counts[f * stations + s];
+			if (value > 0) { idx.push(s); val.push(value); }
+		}
+		ptr.push(idx.length);
+	}
+	return { fmt: 'csr', ptr, idx, val };
+}
+
+async function readFinalThrough(storage: Storage, prefix: string, anchor: TlAnchor): Promise<number | null> {
+	const bytes = await storage.get(`${prefix}/${anchor}/final.json`);
+	if (!bytes) return null;
+	const record = JSON.parse(new TextDecoder().decode(bytes)) as { finalThrough: string };
+	const time = Date.parse(record.finalThrough);
+	if (!Number.isFinite(time)) throw new Error('invalid timelapse finality watermark');
+	return time;
+}
+
+/** Accumulate versioned chunks sparsely; a minute chunk never allocates a
+ *  station × frame matrix unless its density warrants a dense response. */
+export function pivotEncoded(
+	rows: Iterable<TlRow>,
+	bin: TlBin,
+	k: number,
+	canon: CanonMap | null,
+	mode: LeafMode,
+	canonicalized: boolean,
+) {
+	const K = chunkSize(bin);
+	const frames = Array.from({ length: K }, () => new Map<string, number>());
+	const stations = new Set<string>();
+	const unmapped = new Array<number>(K).fill(0);
+	for (const { cell, dt, count } of rows) {
+		const f = frameOf(bin, dt) - k * K;
+		if (f < 0 || f >= K || !(count > 0)) continue;
+		const id = resolveCell(cell, canon, mode, canonicalized);
+		if (id === undefined) continue;
+		if (id === null) { unmapped[f] += count; continue; }
+		stations.add(id);
+		frames[f].set(id, (frames[f].get(id) ?? 0) + count);
+	}
+	const ids = [...stations].sort();
+	const slots = new Map(ids.map((id, s) => [id, s]));
+	const nnz = frames.reduce((n, frame) => n + frame.size, 0);
+	if (ids.length && nnz / (K * ids.length) >= .25) {
+		const counts = new Array<number>(K * ids.length).fill(0);
+		frames.forEach((frame, f) => {
+			for (const [id, value] of frame) counts[f * ids.length + slots.get(id)!] = value;
+		});
+		return { ids, unmapped, fmt: 'dense' as const, counts };
+	}
+	const ptr = [0];
+	const idx: number[] = [];
+	const val: number[] = [];
+	for (const frame of frames) {
+		const entries = [...frame].map(([id, value]) => [slots.get(id)!, value]).sort((a, b) => a[0] - b[0]);
+		for (const [s, value] of entries) { idx.push(s); val.push(value); }
+		ptr.push(idx.length);
+	}
+	return { ids, unmapped, fmt: 'csr' as const, ptr, idx, val };
+}
+
 /** Station id for a `cell`, or `null` for an unmapped cell, or `undefined`
  *  for a row to skip (counted elsewhere).
  *
@@ -241,7 +289,7 @@ export function pivotFrames(
 	mode: LeafMode,
 	canonicalized: boolean,
 ): TlBlock {
-	const K = TL_K[bin];
+	const K = chunkSize(bin);
 	const f0 = k * K;
 	const perId = new Map<string, number[]>();
 	const unmapped = new Array<number>(K).fill(0);
@@ -274,7 +322,7 @@ export function pivotFrames(
 /** Frame sub-ranges `[f0, f1)` of chunk `k` the plan's reads cover, merged
  *  and sorted (the response's `covered`). */
 export function coveredFrames(plan: TlPlan, bin: TlBin, k: number): [number, number][] {
-	const K = TL_K[bin];
+	const K = chunkSize(bin);
 	const base = k * K;
 	const spans = plan.reads
 		.map((r): [number, number] => [
@@ -288,6 +336,30 @@ export function coveredFrames(plan: TlPlan, bin: TlBin, k: number): [number, num
 		const last = out[out.length - 1];
 		if (last && a <= last[1]) last[1] = Math.max(last[1], b);
 		else out.push([a, b]);
+	}
+	return out;
+}
+
+/** A derived frame is known only when its entire interval is covered. */
+export function completeFrames(plan: TlPlan, bin: TlBin, k: number): [number, number][] {
+	const intervals: [number, number][] = [];
+	for (const read of [...plan.reads].sort((a, b) => a.from - b.from)) {
+		const last = intervals[intervals.length - 1];
+		if (last && read.from <= last[1]) last[1] = Math.max(last[1], read.to);
+		else intervals.push([read.from, read.to]);
+	}
+	const K = chunkSize(bin);
+	const out: [number, number][] = [];
+	let interval = 0;
+	for (let f = 0; f < K; f++) {
+		const from = frameStartMs(bin, k * K + f);
+		const to = frameStartMs(bin, k * K + f + 1);
+		while (interval < intervals.length && intervals[interval][1] <= from) interval++;
+		const span = intervals[interval];
+		if (!span || span[0] > from || span[1] < to) continue;
+		const last = out[out.length - 1];
+		if (last && last[1] === f) last[1] = f + 1;
+		else out.push([f, f + 1]);
 	}
 	return out;
 }
@@ -386,23 +458,33 @@ export async function serveTl(
 		return errorResponse(400, `bad anchor '${anchorRaw}'; one of ${TL_ANCHORS.join('|')}`, cors);
 	}
 	const anchor = anchorRaw as TlAnchor;
+	const gvRaw = url.searchParams.get('gv') ?? '0';
+	if (gvRaw !== '0' && gvRaw !== String(TL_GRID_VERSION)) {
+		return errorResponse(400, `unsupported grid version '${gvRaw}'`, cors);
+	}
+	const gv = Number(gvRaw);
 	const binRaw = url.searchParams.get('bin') ?? '1d';
-	if (!TL_BINS.includes(binRaw as TlBin)) {
+	if (gv === 0 && !(TL_BINS as readonly string[]).includes(binRaw)) {
 		return errorResponse(400, `bad bin '${binRaw}'; one of ${TL_BINS.join('|')}`, cors);
 	}
-	const bin = binRaw as TlBin;
+	let bin: TlBin;
+	try { bin = canonBin(binRaw); } catch (err) {
+		return errorResponse(400, (err as Error).message, cors);
+	}
 	const chunkRaw = url.searchParams.get('chunk');
 	if (chunkRaw === null || !/^\d+$/.test(chunkRaw)) {
 		return errorResponse(400, `chunk query param required (non-negative integer); got '${chunkRaw}'`, cors);
 	}
 	const k = Number(chunkRaw);
+	if (!Number.isSafeInteger(k)) return errorResponse(400, 'chunk must be a safe integer', cors);
 	const rawParam = url.searchParams.get('raw');
 	if (rawParam !== null && rawParam !== '0' && rawParam !== '1') {
 		return errorResponse(400, `bad raw '${rawParam}'; expected 0|1`, cors);
 	}
 	const mode: LeafMode = rawParam === '1' ? 'raw' : 'canonical';
-	const K = TL_K[bin];
+	const K = chunkSize(bin);
 	const [t0, t1] = chunkRange(bin, k);
+	if (!Number.isFinite(new Date(t1).getTime())) return errorResponse(400, 'chunk outside supported date range', cors);
 	const t = now();
 
 	let shards: TlShard[];
@@ -421,9 +503,13 @@ export async function serveTl(
 		})
 		: null;
 	const perRead = await Promise.all(plan.reads.map((r) => readShardRows(storage, r)));
-	const block = pivotFrames(perRead.flat(), bin, k, canon, mode, cfg.canonicalized);
+	const rows = function* () { for (const read of perRead) yield* read; };
+	const block = gv ? pivotEncoded(rows(), bin, k, canon, mode, cfg.canonicalized)
+		: pivotFrames(rows(), bin, k, canon, mode, cfg.canonicalized);
 	const partial = plan.gaps.length > 0;
-	const closed = !partial && plan.reads.every((r) => r.shard.tier === bin) && t1 <= t - CLOSED_SLACK_MS;
+	const finalThrough = gv ? await readFinalThrough(storage, cfg.prefix, anchor) : null;
+	const closed = !partial && (gv ? finalThrough !== null && t1 <= finalThrough
+		: plan.reads.every((r) => r.shard.tier === bin) && t1 <= t - CLOSED_SLACK_MS);
 
 	const headers: Record<string, string> = {
 		'Content-Type': 'application/json',
@@ -437,11 +523,10 @@ export async function serveTl(
 		k: K,
 		t0: iso(t0),
 		t1: iso(t1),
-		ids: block.ids,
-		counts: block.counts,
-		unmapped: block.unmapped,
+		...block,
+		...(gv ? { gv } : {}),
 		partial,
-		covered: coveredFrames(plan, bin, k),
+		covered: gv ? completeFrames(plan, bin, k) : coveredFrames(plan, bin, k),
 		plan: {
 			reads: plan.reads.map((r) => ({ tier: r.shard.tier, shard: r.shard.shard_dur, key: r.shard.key, from: iso(r.from), to: iso(r.to) })),
 			gaps: plan.gaps.map(([a, b]) => [iso(a), iso(b)]),

@@ -208,6 +208,7 @@
 !src/lib/mapSelection/selection.ts
 !src/lib/mergeReview.ts
 !src/lib/s2geo.ts
+!src/lib/tlGrid.ts
 !src/lib/useMediaQuery.ts
 !src/main.tsx
 !src/mdx.d.ts

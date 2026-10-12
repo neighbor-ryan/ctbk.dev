@@ -2570,3 +2570,43 @@ def gbfs_feed_stats(paths: tuple[str, ...]) -> None:
 		if ages:
 			ages.sort()
 			print(f'  Age header (s): min={ages[0]:.0f} p50={ages[len(ages) // 2]:.0f} max={ages[-1]:.0f}')
+
+
+@gbfs_engine.command('tl-check', help='Check candidate minute/quarter-hour sums against its hourly tier and a baseline hourly pyramid, using exact manifest covers. Read-only; cache immutable shards locally.')
+@option('-a', '--anchor', 'anchors', multiple=True, default=('start', 'end'), type=click.Choice(['start', 'end']))
+@option('-b', '--baseline', default='rides-tl', show_default=True)
+@option('-c', '--candidate', required=True)
+@option('-o', '--out', type=click.Path(path_type=Path), default=None)
+@option('-r', '--range', 'range_', required=True, help='Half-open FROM/TO UTC ISO range.')
+def gbfs_engine_tl_check(
+	anchors: tuple[str, ...],
+	baseline: str,
+	candidate: str,
+	out: Path | None,
+	range_: str,
+) -> None:
+	from ctbk.pyramid_cascade.timelapse_check import compare_anchor, epoch_ms
+	from pathlib import PurePosixPath
+	start, end = (epoch_ms(s + 'T00:00:00Z' if len(s) == 10 else s) for s in range_.split('/'))
+	if end <= start:
+		raise click.UsageError('range end must follow start')
+	r2, bucket = _r2_client()
+	cache = Path('tmp/tl-check')
+	def get(key: str) -> bytes:
+		if '..' in PurePosixPath(key).parts or key.startswith('/'):
+			raise ValueError(f'invalid manifest key {key!r}')
+		immutable = re.search(r'\.[0-9a-f]{12}\.parquet$', key) is not None
+		path = cache / key
+		if immutable and path.exists():
+			return path.read_bytes()
+		data = r2.get_object(Bucket=bucket, Key=key)['Body'].read()
+		if immutable:
+			path.parent.mkdir(parents=True, exist_ok=True)
+			path.write_bytes(data)
+		return data
+	report = [compare_anchor(candidate.rstrip('/'), baseline.rstrip('/'), anchor, start, end, get) for anchor in anchors]
+	text = json.dumps(report, indent=2) + '\n'
+	if out:
+		out.parent.mkdir(parents=True, exist_ok=True)
+		out.write_text(text)
+	print(text, end='')

@@ -17,6 +17,8 @@
  */
 
 import { rampRgb } from '../components/flowLens'
+import { chunkSize, frameStartMs } from '../lib/tlGrid'
+export { frameOf as frameIndex, frameStartMs, originMs } from '../lib/tlGrid'
 
 export type Anchor = 'start' | 'end'
 export const ANCHORS: readonly Anchor[] = ['start', 'end']
@@ -44,37 +46,8 @@ export function binMs(bin: Bin): number {
 /** Frames per chunk per tier, mirroring the worker's `TL_K`: `1h` → 2 days;
  *  every other fixed tier's `K·bin` is one of its shard rungs (`3h`→4d …
  *  `14d`→448d); `1mo` → 24 months, rung-aligned to the `2y` shards. */
-export const TL_K: Record<TlBin, number> = {
-  '1h': 48, '3h': 32, '6h': 32, '12h': 32, '1d': 32, '3d': 32, '7d': 32, '14d': 32, '1mo': 24,
-}
+export const TL_K = Object.fromEntries(BINS.map((bin) => [bin, chunkSize(bin)])) as Record<TlBin, number>
 export const CHUNK_K: Record<Bin, number> = TL_K
-
-const monthIdx = (ms: number): number => {
-  const d = new Date(ms)
-  return d.getUTCFullYear() * 12 + d.getUTCMonth()
-}
-const monthMs = (idx: number): number => Date.UTC(Math.floor(idx / 12), ((idx % 12) + 12) % 12)
-
-/** Frame 0's start: genesis floored to the `K·bin` grid (see module doc);
- *  months floor on a year-0 month grid, as the worker's `originMs`. */
-export function originMs(bin: Bin): number {
-  const K = CHUNK_K[bin]
-  if (bin === '1mo') return monthMs(Math.floor(monthIdx(GENESIS_MS) / K) * K)
-  const grid = K * FIXED_MS[bin]
-  return Math.floor(GENESIS_MS / grid) * grid
-}
-
-/** Frame index containing `ms` (a local-as-UTC instant). */
-export function frameIndex(bin: Bin, ms: number): number {
-  if (bin === '1mo') return monthIdx(ms) - monthIdx(originMs(bin))
-  return Math.floor((ms - originMs(bin)) / FIXED_MS[bin])
-}
-
-/** Start instant (local-as-UTC ms) of frame `i`. */
-export function frameStartMs(bin: Bin, i: number): number {
-  if (bin === '1mo') return monthMs(monthIdx(originMs(bin)) + i)
-  return originMs(bin) + i * FIXED_MS[bin]
-}
 
 export function chunkOf(bin: Bin, i: number): number {
   return Math.floor(i / CHUNK_K[bin])
@@ -110,6 +83,8 @@ export interface Block {
   /** Canonical station ids with ≥1 count in the block, sorted. */
   ids: string[]
   counts: Uint32Array
+  /** Sparse API chunks keep counts empty; use frameSlice/valueAt to read them. */
+  csr?: { ptr: Uint32Array; idx: Uint32Array; val: Uint32Array }
   totals: Float64Array
   source: Source
   /** Block-relative frame ranges `[f0, f1)` that carry data (a full block is
@@ -208,7 +183,7 @@ export function* blockTriples(block: Block, iA: number, iB: number): Generator<T
   const fB = Math.min(block.n, iB - block.i0)
   for (let f = fA; f < fB; f++) {
     for (let s = 0; s < S; s++) {
-      const count = block.counts[f * S + s]
+      const count = valueAt(block, f, s)
       if (count > 0) yield { id: block.ids[s], frame: block.i0 + f, count }
     }
   }
@@ -238,7 +213,24 @@ export function frameSlice(block: Block, i: number): Uint32Array | null {
   const f = i - block.i0
   if (f < 0 || f >= block.n || !isCovered(block.covered, f)) return null
   const S = block.ids.length
-  return block.counts.subarray(f * S, (f + 1) * S)
+  if (!block.csr) return block.counts.subarray(f * S, (f + 1) * S)
+  const out = new Uint32Array(S)
+  const { ptr, idx, val } = block.csr
+  for (let j = ptr[f]; j < ptr[f + 1]; j++) out[idx[j]] = val[j]
+  return out
+}
+
+function valueAt(block: Block, f: number, s: number): number {
+  if (!block.csr) return block.counts[f * block.ids.length + s]
+  const { ptr, idx, val } = block.csr
+  let lo = ptr[f]
+  let hi = ptr[f + 1]
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2)
+    if (idx[mid] < s) lo = mid + 1
+    else hi = mid
+  }
+  return lo < ptr[f + 1] && idx[lo] === s ? val[lo] : 0
 }
 
 /** Whether `block` holds frame `i` but has no data for it (a tip frame the
@@ -299,18 +291,22 @@ export function chunksCovering(bin: Bin, iA: number, iB: number): number[] {
 /** `GET /api/tl?anchor=&bin=&chunk=` body. `counts` is `k × ids.length`
  *  frame-major; `partial` means some frames of the chunk have no shard
  *  (`covered` lists the frame sub-ranges that do). */
-export interface ApiChunk {
+interface ApiChunkBase {
   anchor: Anchor
   bin: string
   chunk: number
   k: number
   t0: string
   ids: string[]
-  counts: number[]
   unmapped: number[]
   partial: boolean
   covered: [number, number][]
 }
+
+export type ApiChunk = ApiChunkBase & (
+  | { fmt?: 'dense'; counts: number[] }
+  | { fmt: 'csr'; ptr: number[]; idx: number[]; val: number[] }
+)
 
 /** Thrown when a source can't serve a chunk (no covering shard, partial
  *  API coverage); `auto` falls through to the next source on it. */
@@ -331,19 +327,34 @@ export function chunkFromApi(anchor: Anchor, bin: Bin, k: number, body: ApiChunk
   if (body.bin !== bin || body.chunk !== k || body.k !== K) {
     throw new Error(`/api/tl returned ${body.bin}/${body.chunk}/${body.k}, wanted ${bin}/${k}/${K}`)
   }
+  if (body.anchor !== anchor) throw new Error(`/api/tl returned anchor ${body.anchor}, wanted ${anchor}`)
   if (body.partial && !body.covered.length) throw new TlUnavailable(`/api/tl ${bin} chunk ${k}: no coverage`)
   const S = body.ids.length
-  if (body.counts.length !== K * S) throw new Error(`/api/tl ${bin} chunk ${k}: ${body.counts.length} counts for ${K}×${S}`)
-  const counts = Uint32Array.from(body.counts)
+  let csr: Block['csr']
+  let counts = new Uint32Array(0)
   const totals = new Float64Array(K)
-  for (let f = 0; f < K; f++) {
-    let sum = 0
-    for (let s = 0; s < S; s++) sum += counts[f * S + s]
-    totals[f] = sum
+  if (body.fmt === 'csr') {
+    const { ptr, idx, val } = body
+    if (ptr.length !== K + 1 || ptr[0] !== 0 || ptr[K] !== idx.length || idx.length !== val.length) throw new Error('invalid timelapse CSR shape')
+    for (let f = 0; f < K; f++) {
+      if (!Number.isSafeInteger(ptr[f + 1]) || ptr[f + 1] < ptr[f] || ptr[f + 1] > idx.length) throw new Error('invalid timelapse CSR pointer')
+      let previous = -1
+      for (let j = ptr[f]; j < ptr[f + 1]; j++) {
+        if (!Number.isSafeInteger(idx[j]) || idx[j] <= previous || idx[j] >= S) throw new Error('invalid timelapse CSR station index')
+        if (!Number.isSafeInteger(val[j]) || val[j] < 0 || val[j] > 0xffffffff) throw new Error('invalid timelapse CSR count')
+        previous = idx[j]
+        totals[f] += val[j]
+      }
+    }
+    csr = { ptr: Uint32Array.from(ptr), idx: Uint32Array.from(idx), val: Uint32Array.from(val) }
+  } else {
+    if (body.counts.length !== K * S) throw new Error(`/api/tl ${bin} chunk ${k}: ${body.counts.length} counts for ${K}×${S}`)
+    counts = Uint32Array.from(body.counts)
+    for (let f = 0; f < K; f++) for (let s = 0; s < S; s++) totals[f] += counts[f * S + s]
   }
   const i0 = k * K
   const covered: [number, number][] = body.partial ? body.covered.map(([a, b]) => [a, b]) : [[0, K]]
-  return { anchor, bin, chunk: k, k: K, i0, n: K, t0: frameStartMs(bin, i0), ids: body.ids, counts, totals, source: 'api', covered }
+  return { anchor, bin, chunk: k, k: K, i0, n: K, t0: frameStartMs(bin, i0), ids: body.ids, counts, ...(csr ? { csr } : {}), totals, source: 'api', covered }
 }
 
 // ---------------------------------------------------------------------------
@@ -531,12 +542,12 @@ export function scaleFromChunks(pairs: readonly { start: Chunk; end: Chunk }[], 
       for (let s = 0; s < S; s++) {
         const e = endIdx.get(start.ids[s])
         if (e !== undefined) seen.add(e)
-        const total = start.counts[f * S + s] + (e === undefined ? 0 : end.counts[f * E + e])
+        const total = valueAt(start, f, s) + (e === undefined ? 0 : valueAt(end, f, e))
         if (total > 0) values.push(total)
       }
       for (let e = 0; e < E; e++) {
         if (seen.has(e)) continue
-        const total = end.counts[f * E + e]
+        const total = valueAt(end, f, e)
         if (total > 0) values.push(total)
       }
     }
@@ -703,12 +714,10 @@ export function stationSeries(
     if (!start || !end) continue
     const s = start.ids.indexOf(id)
     const e = end.ids.indexOf(id)
-    const S = start.ids.length
-    const E = end.ids.length
     for (let f = 0; f < start.n; f++) {
       const i = start.i0 + f
       if (i < iA || i > iB || !isCovered(start.covered, f) || !isCovered(end.covered, f)) continue
-      out[i - iA] = (s < 0 ? 0 : start.counts[f * S + s]) + (e < 0 ? 0 : end.counts[f * E + e])
+      out[i - iA] = (s < 0 ? 0 : valueAt(start, f, s)) + (e < 0 ? 0 : valueAt(end, f, e))
     }
   }
   return out

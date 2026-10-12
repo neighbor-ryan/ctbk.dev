@@ -112,7 +112,7 @@ describe('chunkFromBlocks', () => {
 })
 
 describe('chunkFromApi', () => {
-  const body = (o: Partial<ApiChunk> = {}): ApiChunk => ({
+  const body = (o: Partial<Extract<ApiChunk, { counts: number[] }>> = {}): Extract<ApiChunk, { counts: number[] }> => ({
     anchor: 'start', bin: '1h', chunk: 2196, k: 48, t0: '2025-06-09T00:00:00',
     ids: ['a', 'b'], counts: new Array<number>(96).fill(0), unmapped: new Array<number>(48).fill(0),
     partial: false, covered: [[0, 48]], ...o,
@@ -132,6 +132,29 @@ describe('chunkFromApi', () => {
       ids: ['a', 'b'], counts: Uint32Array.from(counts), totals, source: 'api', covered: [[0, 48]],
     })
     expect(frameSlice(c, 105440)).toEqual(new Uint32Array([5, 7]))
+  })
+  test('CSR stays sparse in the cache and supplies exact frames, triples, series and scale', () => {
+    const { counts: _counts, ...base } = body()
+    const ptr = [0, ...new Array<number>(48).fill(2)]
+    const c = chunkFromApi('start', '1h', 2196, { ...base, fmt: 'csr', ptr, idx: [0, 1], val: [5, 7] })
+    const totals = new Float64Array(48)
+    totals[0] = 12
+    expect(c.counts).toEqual(new Uint32Array(0))
+    expect(c.csr).toEqual({ ptr: Uint32Array.from(ptr), idx: new Uint32Array([0, 1]), val: new Uint32Array([5, 7]) })
+    expect(c.totals).toEqual(totals)
+    expect(frameSlice(c, c.i0)).toEqual(new Uint32Array([5, 7]))
+    expect(frameSlice(c, c.i0 + 1)).toEqual(new Uint32Array([0, 0]))
+    const end = chunkFromApi('end', '1h', 2196, body({ anchor: 'end' }))
+    expect(stationSeries([{ start: c, end }], 'a', c.i0, c.i0 + 1)).toEqual(new Float64Array([5, 0]))
+    expect(scaleFromChunks([{ start: c, end }])).toBe(7)
+  })
+  test('CSR rejects malformed pointers, duplicate indices and negative counts', () => {
+    const { counts: _counts, ...base } = body()
+    const sparse: ApiChunk = { ...base, fmt: 'csr', ptr: [0, ...new Array<number>(48).fill(2)], idx: [0, 1], val: [5, 7] }
+    expect(() => chunkFromApi('start', '1h', 2196, { ...sparse, ptr: [0] })).toThrow(new Error('invalid timelapse CSR shape'))
+    expect(() => chunkFromApi('start', '1h', 2196, { ...sparse, idx: [0, 0] })).toThrow(new Error('invalid timelapse CSR station index'))
+    expect(() => chunkFromApi('start', '1h', 2196, { ...sparse, val: [-1, 7] })).toThrow(new Error('invalid timelapse CSR count'))
+    expect(() => chunkFromApi('end', '1h', 2196, sparse)).toThrow(new Error('/api/tl returned anchor start, wanted end'))
   })
   test('partial keeps its covered frames; the rest are known-missing', () => {
     const c = chunkFromApi('start', '1h', 2196, body({ partial: true, covered: [[0, 14]] }))

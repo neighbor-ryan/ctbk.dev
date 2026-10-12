@@ -123,7 +123,7 @@ At `1m`, a chunk is **3–5% dense** (53 k nonzeros in a 720 × 2,161 grid). The
 
 ### FE mirror
 
-`timelapseFrames.ts` gains the same pure functions (`parseBin`, `canonBin`, `spanOf`, `K`, `originMs`, `frameOf`, `frameStartMs`) in place of the `TL_K` table and the `'1h' | '1d'` `Bin` type. To keep the worker and FE from drifting, both import one module, `gbfs/lib/tlGrid.ts`. `gbfs/lib` already holds shared TS (`grid.ts`, `period.ts`); the only work is the `www` import path. A golden-vector test (`tlGrid.test.ts`: bin → canonical, K, origin, frame/chunk of a few instants, including DST days and `4mo`) runs in both packages.
+`timelapseFrames.ts` gains the same pure functions (`parseBin`, `canonBin`, `spanOf`, `K`, `originMs`, `frameOf`, `frameStartMs`) in place of the `TL_K` table and the `'1h' | '1d'` `Bin` type. To keep the worker and FE from drifting, both import one module, `www/src/lib/tlGrid.ts`. The pure shared module lives inside the website Docker context; the Worker imports it from the same checkout. The GBFS deploy path filter watches this source too. A golden-vector test (`tlGrid.test.ts`: bin → canonical, K, origin, frame/chunk of a few instants, including DST days and `4mo`) runs in both packages.
 
 ## Sliding window
 
@@ -200,13 +200,15 @@ mortgage-viz's constraints are not all monomial. The purchase triangle `P = D + 
 
 F1 implementation: `MonthlyRidesSource` truncates to the first/finest configured tier, with pyrmts minute units translated for Polars. Separate `rides-tl-fine-{start,end}` configs preserve the existing serving prefix and monthly cadence during validation. Source tests cover both anchors at minute and quarter-hour boundaries, exact hourly parity, and candidate Batch factory/sort selection; the full pyramid suite passes (104 tests). The first candidate build covers June 2025 at `rides-tl-f1/{start,end}`. Image/build identifiers and measured gates will be recorded here before adoption.
 
+June 2025 F1 gates passed for both anchors on 2026-10-11. Image `ctbk-engine:789dc78a`, HCCS Batch revision 10; start job `49183149-139c-4073-8bf3-b12ba54f5588`, end job `e7dced3c-6dbc-408e-91cf-b0e862622899`, both succeeded. `ctbk gbfs engine tl-check -c rides-tl-f1 -r 2025-06-01/2025-07-01` verifies all three count-monoid columns over exact manifest-selected covers: minute→hour, quarter-hour→hour, and candidate hourly→production hourly all equal for every cell-hour. Actual bytes are approximately 11.1 MB (`1m`) and 7.2 MB (`15m`) per anchor, within the ±20% budget. Immutable input shards are cached under `tmp/tl-check` for repeatability; the report is in root `tmp/fine-parity.json`. Full-history builds remain at the candidate `rides-tl-fine` prefix, capped at 2026-10-01, until full validation and serving adoption.
+
 - **F1: config + source + scratch build** (Batch, **needs approval to submit**). Truncate to the base-tier bin; `1m`/`15m` tiers with the rungs above; a one-month scratch build (2025-06, `rides-tl-f1/`). Gates:
   - `1h` cascaded from `15m` equals the existing P4 `1h` shards row for row (ideally md5-equal);
   - Σ `1m` per hour equals `1h` on every station-hour;
   - measured bytes are within ±20% of the table.
 
   Then the full-history build and `rides-tl-extend` picking up the new tiers.
-- **F2: `/api/tl` any bin**. `gbfs/lib/tlGrid.ts` (parse/canon/span/K/origin plus golden vectors), source-tier selection, CSR encoding, `gv`, the `final.json` watermark, and e2e checks: `20m` = Σ of `1m` ×20, and `45m` = `15m` ×3, compared against built tiers.
+- **F2: `/api/tl` any bin**. `www/src/lib/tlGrid.ts` (parse/canon/span/K/origin plus golden vectors), source-tier selection, CSR encoding, `gv`, the `final.json` watermark, and e2e checks: `20m` = Σ of `1m` ×20, and `45m` = `15m` ×3, compared against built tiers.
 - **F3: FE bin picker + window**. `Bin` becomes a string code, plus `w`/`wk`, the running-sum window, `windowReady`-aware prefetch, and the CSR reader.
 - **F4: LRU controls**. `lruConstraints.ts` with tests, the four-field panel, `len`/`lru` params, and movie mode taking `len` to set the frame count.
 
@@ -220,3 +222,5 @@ F1 implementation: `MonthlyRidesSource` truncates to the first/finest configured
 
 [`timelapse-map.md`]: timelapse-map.md
 [`rides-tl-start.yaml`]: ../configs/pyramids/rides-tl-start.yaml
+
+Full-history candidate jobs: start `6e8e891d-ea69-4728-a74a-dc89fb09e96f`, end `f26efd86-9a55-44f9-bbb1-83dfd675f55d` (8 vCPU / 32 GiB each, image `789dc78a`, cap 2026-10-01). F2 grid and CSR serving are implemented behind `gv=1`; legacy grid ranges are preserved. Sparse responses accumulate directly without a dense minute matrix. A derived frame is covered only when its whole interval is available. API validation: 301 tests and TypeScript passed; client: 139 tests and TypeScript passed. Watermark publication and fine-prefix serving adoption remain pending.
