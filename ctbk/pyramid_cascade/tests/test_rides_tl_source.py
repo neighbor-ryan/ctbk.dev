@@ -7,7 +7,8 @@ coarsest fallback row per unmapped ride.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 
 import polars as pl
 import pytest
@@ -137,6 +138,53 @@ def test_real_rides_tl_configs_drive_the_source():
         src = make_tl_source(pyramid, {'202606': RIDES[:1]}, anchor=anchor, identity_only=True)
         cell = {'start': 's:101', 'end': 's:102'}[anchor]
         assert read_sorted(src, JUN, JUL) == count_rows(cell, H9, 1)
+
+
+@pytest.mark.parametrize('anchor, bin_name, expected', [
+    ('start', '1min', [('09:14', 1), ('09:15', 1), ('09:59', 1)]),
+    ('end', '1min', [('09:15', 2), ('10:00', 1)]),
+    ('start', '15min', [('09:00', 1), ('09:15', 1), ('09:45', 1)]),
+    ('end', '15min', [('09:15', 2), ('10:00', 1)]),
+])
+def test_config_bin_preserves_subhour_counts(
+    anchor: str,
+    bin_name: str,
+    expected: list[tuple[str, int]],
+) -> None:
+    yaml = TL_YAML.replace('name: 1h, bin: 1h', f'name: fine, bin: {bin_name}')
+    pyramid = pyramid_from_config(parse_pyramid_yaml(yaml), MemStorage())
+    starts = [datetime(2026, 6, 10, h, m, s, tzinfo=timezone.utc) for h, m, s in [(9, 14, 59), (9, 15, 1), (9, 59, 59)]]
+    rows = [ride(t, t + timedelta(seconds=10)) for t in starts]
+    src = make_tl_source(pyramid, {'202606': rows}, anchor=anchor, identity_only=True)
+    cell = {'start': 's:101', 'end': 's:102'}[anchor]
+    actual = read_sorted(src, JUN, JUL)
+    assert actual == sorted([
+        row for hhmm, n in expected
+        for row in count_rows(cell, ms(datetime.fromisoformat(f'2026-06-10T{hhmm}:00+00:00')), n)
+    ])
+    # Rebinning the fine rows reproduces the independent hourly source,
+    # including anchor-specific rides that cross the hour boundary.
+    hourly = pyramid_from_config(parse_pyramid_yaml(TL_YAML), MemStorage())
+    coarse = make_tl_source(hourly, {'202606': rows}, anchor=anchor, identity_only=True)
+    totals = defaultdict(float)
+    for cell, dt, metric, tag, value in actual:
+        totals[(cell, dt // 3_600_000 * 3_600_000, metric, tag)] += value
+    assert sorted((*key, value) for key, value in totals.items()) == read_sorted(coarse, JUN, JUL)
+
+
+@pytest.mark.parametrize('anchor', ['start', 'end'])
+def test_fine_candidate_configs(anchor: str) -> None:
+    cfg = parse_pyramid_yaml((CONFIG_DIR / f'rides-tl-fine-{anchor}.yaml').read_text())
+    assert cfg.keyTemplate == f'rides-tl-fine/{anchor}/{{tier}}/{{shard}}/{{period}}.{{hash:12}}.parquet'
+    assert [(t.name, t.bin, list(t.shards)) for t in cfg.tiers[:2]] == [
+        ('1m', '1min', ['6h', '12h', '1d', '2d', '4d']),
+        ('15m', '15min', ['1d', '2d', '4d', '8d', '16d']),
+    ]
+    pyramid = pyramid_from_config(cfg, MemStorage())
+    src = make_tl_source(pyramid, {'202606': RIDES[:1]}, anchor=anchor, identity_only=True)
+    cell = {'start': 's:101', 'end': 's:102'}[anchor]
+    instant = {'start': T9, 'end': T9.replace(minute=15)}[anchor]
+    assert read_sorted(src, JUN, JUL) == count_rows(cell, ms(instant), 1)
 
 
 def test_missing_tile_empty_frame_matches_schema(tl_pyramid):

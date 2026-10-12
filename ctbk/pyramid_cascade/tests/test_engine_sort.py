@@ -12,6 +12,8 @@ from ctbk.pyramid_cascade.engine_check import _rides_anchor, _rides_tl, config_r
 @pytest.mark.parametrize('config_name, expected', [
     ('rides-tl-start', 'dt,cell'),
     ('rides-tl-end', 'dt,cell'),
+    ('rides-tl-fine-start', 'dt,cell'),
+    ('rides-tl-fine-end', 'dt,cell'),
     ('rides-start', 'cell,dt,gender,user_type,bike_type'),
     ('rides-end', 'cell,dt,gender,user_type,bike_type'),
     ('avail-v6', 's2_cell,dt'),
@@ -27,6 +29,8 @@ def test_engine_sort(config_name: str, expected: str):
     ('rides-end', 'end', False),
     ('rides-tl-start', 'start', True),
     ('rides-tl-end', 'end', True),
+    ('rides-tl-fine-start', 'start', True),
+    ('rides-tl-fine-end', 'end', True),
     ('avail-v6', None, False),
     ('rides-tl-start-engine-check', None, False),
 ])
@@ -50,6 +54,8 @@ def test_anchor_spec_tables():
     ('rides-start', 'rides/start', 'rides_start', 'cell,dt,gender,user_type,bike_type', 2048),
     ('rides-tl-start', 'rides-tl/start', 'rides_tl_start', 'dt,cell', 32768),
     ('rides-tl-end', 'rides-tl/end', 'rides_tl_end', 'dt,cell', 32768),
+    ('rides-tl-fine-start', 'rides-tl-fine/start', 'rides_tl_start', 'dt,cell', 32768),
+    ('rides-tl-fine-end', 'rides-tl-fine/end', 'rides_tl_end', 'dt,cell', 32768),
 ])
 def test_engine_submit_real_prefix_dry_run(config_name: str, prefix: str, factory: str, sort: str, rg: int):
     # `engine submit -R` derives the prefix from the config's keyTemplate

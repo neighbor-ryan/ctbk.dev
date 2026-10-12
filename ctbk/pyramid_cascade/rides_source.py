@@ -39,6 +39,7 @@ from typing import Callable, Literal, Sequence
 import polars as pl
 
 from pyrmts import Pyramid, ShardPeriod
+from pyrmts.axis import nominal_delta_ms, parse_duration
 from pyrmts_engine.longform import long_schema
 from pyrmts_engine.source import Tile, TiledSource
 
@@ -162,6 +163,12 @@ class MonthlyRidesSource(TiledSource):
     ) -> None:
         super().__init__(pyramid)
         self.anchor: Anchor = anchor
+        raw_bin = pyramid.tiers[0].bin
+        if any(nominal_delta_ms(t.bin) < nominal_delta_ms(raw_bin) for t in pyramid.tiers):
+            raise ValueError(f'first tier must have the finest bin, got {raw_bin!r}')
+        span = parse_duration(raw_bin)
+        # pyrmts spells minutes `min`; Polars uses `m` (`mo` = months).
+        self._raw_bin = f"{span.count}{'m' if span.unit == 'min' else span.unit}"
         self._dims = [d.name for d in pyramid.dims] if dims is None else list(dims)
         if not self._dims or self._dims[0] != CELL_DIM:
             raise ValueError(f'dims must start with {CELL_DIM!r}, got {self._dims!r}')
@@ -252,7 +259,7 @@ class MonthlyRidesSource(TiledSource):
             ],
         )
         exprs = [
-            pl.col(cols['time']).dt.truncate('1h').dt.epoch('ms').alias('dt'),
+            pl.col(cols['time']).dt.truncate(self._raw_bin).dt.epoch('ms').alias('dt'),
             pl.col(cols['sid']).cast(pl.Utf8).alias('sid'),
             *(RIDER_DIM_EXPRS[d] for d in self._rider_dims),
         ]

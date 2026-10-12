@@ -1,6 +1,6 @@
 # Timelapse fine bins: any bin, sub-hour tiers, sliding windows, linked controls
 
-Status: draft (2026-09-29)
+Status: F1 implementation and candidate build in progress (2026-10-11; user authorized the full roadmap).
 Author: Ryan + Claude
 Builds on: [`timelapse-map.md`] (the `rides-tl-{start,end}` time-first pyramids, `/api/tl`, frame grid, P0/P4 measurements); [`rides-tl-start.yaml`].
 
@@ -197,6 +197,8 @@ mortgage-viz's constraints are not all monomial. The purchase triangle `P = D + 
 - (c) publish it as an npm package (with the `use-prms` binding as an optional helper), and port mortgage-viz to it, which fixes its `annualRate` gap.
 
 ## Phases
+
+F1 implementation: `MonthlyRidesSource` truncates to the first/finest configured tier, with pyrmts minute units translated for Polars. Separate `rides-tl-fine-{start,end}` configs preserve the existing serving prefix and monthly cadence during validation. Source tests cover both anchors at minute and quarter-hour boundaries, exact hourly parity, and candidate Batch factory/sort selection; the full pyramid suite passes (104 tests). The first candidate build covers June 2025 at `rides-tl-f1/{start,end}`. Image/build identifiers and measured gates will be recorded here before adoption.
 
 - **F1: config + source + scratch build** (Batch, **needs approval to submit**). Truncate to the base-tier bin; `1m`/`15m` tiers with the rungs above; a one-month scratch build (2025-06, `rides-tl-f1/`). Gates:
   - `1h` cascaded from `15m` equals the existing P4 `1h` shards row for row (ideally md5-equal);

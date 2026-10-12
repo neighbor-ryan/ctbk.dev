@@ -102,14 +102,14 @@ def _rides_anchor(config_name: str) -> str | None:
     """`rides-start` → 'start', `rides-end` → 'end' (likewise the
     `rides-tl-*` time-first variants, `specs/timelapse-map.md`); None for
     avail configs (`specs/rides-v5.md`)."""
-    m = re.fullmatch(r'rides-(?:tl-)?(start|end)', config_name)
+    m = re.fullmatch(r'rides-(?:tl-(?:fine-)?)?(start|end)', config_name)
     return m.group(1) if m else None
 
 
 def _rides_tl(config_name: str) -> bool:
     """`rides-tl-{start,end}`: the identity-only, `cell`-dim-only,
     time-first transposes of the rides pyramids (`specs/timelapse-map.md`)."""
-    return re.fullmatch(r'rides-tl-(start|end)', config_name) is not None
+    return re.fullmatch(r'rides-tl-(?:fine-)?(start|end)', config_name) is not None
 
 
 def engine_sort_cols(config_name: str) -> list[str]:

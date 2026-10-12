@@ -1351,6 +1351,13 @@ RIDES_TL_ANCHOR_SPECS = (
 	('rides-tl-end', 'rides-tl/end', 'ctbk_engine_src:rides_tl_end'),
 )
 
+# Candidate minute-first builds; leave the monthly serving cadence on
+# RIDES_TL_ANCHOR_SPECS until parity and read-cost gates pass.
+RIDES_TL_FINE_ANCHOR_SPECS = (
+	('rides-tl-fine-start', 'rides-tl-fine/start', 'ctbk_engine_src:rides_tl_start'),
+	('rides-tl-fine-end', 'rides-tl-fine/end', 'ctbk_engine_src:rides_tl_end'),
+)
+
 
 def _mirror_normalized(r2, bucket: str, ym: str, dry_run: bool, dest_prefix: str = 'normalized') -> None:
 	"""Server-side copy (within R2) of month `ym`'s consolidated parquet from
@@ -2069,7 +2076,7 @@ def gbfs_engine_submit(
 		if source_spec is None and _rides_anchor(config_name):
 			# The anchor's factory from the spec tables — `rides_tl_*` for the
 			# time-first transposes, not the `rides_*` their anchor alone names.
-			source_spec = {c: f for c, _, f in RIDES_ANCHOR_SPECS + RIDES_TL_ANCHOR_SPECS}[config_name]
+			source_spec = {c: f for c, _, f in RIDES_ANCHOR_SPECS + RIDES_TL_ANCHOR_SPECS + RIDES_TL_FINE_ANCHOR_SPECS}[config_name]
 	sys.exit(_engine_submit(
 		config_name,
 		aligned=aligned, mem_budget=mem_budget, close_chunk=close_chunk, envs=envs,
