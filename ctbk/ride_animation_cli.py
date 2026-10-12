@@ -194,6 +194,76 @@ def check(baseline: str, input_dir: Path) -> None:
     print(dumps({'days': len(dates), 'rides': sum(actual.values()), 'exactDailyParity': True}, indent=2))
 
 
+@rides_anim.command('check-index')
+@option('-b', '--baseline', default='rides-tl-fine', show_default=True)
+@option('-d', '--date', 'date_range', required=True, help='Inclusive YYYYMM-YYYYMM months to audit.')
+@option('-k', '--prefix', default='rides-anim-candidate/v1', show_default=True)
+@option('-o', '--output', type=ClickPath(path_type=Path), default=Path('tmp/animation-index-audit.json'))
+def check_index(
+    baseline: str,
+    date_range: str,
+    prefix: str,
+    output: Path,
+) -> None:
+    import polars as pl
+    from calendar import monthrange
+    from functools import lru_cache
+    from gzip import decompress
+    from .ride_animation import decode_day
+    from .ride_animation_audit import count_gate
+    from .pyramid_cascade.timelapse_check import read_tier, tier_cover
+    r2, bucket = _r2_client()
+    @lru_cache(maxsize=4)
+    def get(key: str) -> bytes:
+        return r2.get_object(Bucket=bucket, Key=key)['Body'].read()
+    raw_index = get(f'{prefix.rstrip("/")}/index.json')
+    index = loads(raw_index)
+    if index['version'] != 1:
+        raise ValueError('unsupported animation index version')
+    manifest = get(f'{baseline.rstrip("/")}/start/manifest.jsonl').decode()
+    results = {}
+    for ym in animation_months(date_range):
+        month = index['months'][ym]
+        days = {day: meta for day, meta in index['days'].items() if day.replace('-', '').startswith(ym)}
+        dates = sorted(days)
+        expected_dates = [f'{ym[:4]}-{ym[4:]}-{day:02d}' for day in range(1, monthrange(int(ym[:4]), int(ym[4:]))[1] + 1)]
+        if dates != expected_dates or month['dayCount'] != len(dates):
+            raise ValueError(f'{ym}: animation month has missing or extra days')
+        for item in month['inputs']:
+            if 'key' not in item or 'etag' not in item:
+                raise ValueError(f'{ym}: validation requires R2 input provenance')
+            if r2.head_object(Bucket=bucket, Key=item['key'])['ETag'] != item['etag']:
+                raise ValueError(f'{ym}: input changed after animation build')
+        start = int(datetime.fromisoformat(dates[0]).replace(tzinfo=timezone.utc).timestamp() * 1000)
+        end = int(datetime.fromisoformat(dates[-1]).replace(tzinfo=timezone.utc).timestamp() * 1000) + 86400000
+        frame = read_tier(tier_cover(manifest, '1d', start, end), get)
+        totals = frame.group_by('dt').agg(pl.col('count_n').sum()).sort('dt')
+        expected = {datetime.fromtimestamp(at / 1000, timezone.utc).strftime('%Y-%m-%d'): int(count) for at, count in totals.iter_rows()}
+        # Empty days must be present in the animation's continuous month.
+        expected = {day: expected.get(day, 0) for day in dates}
+        result = count_gate(month, days, expected)
+        samples = sorted({dates[0], dates[-1]})
+        for day in samples:
+            meta = days[day]
+            blob = get(f'{prefix.rstrip("/")}/{meta["key"]}')
+            if len(blob) != meta['bytes'] or md5(blob).hexdigest() != meta['md5']:
+                raise ValueError(f'{day}: compressed object disagrees with indexed hash/size')
+            nstations, carry, rows = decode_day(decompress(blob))
+            station_blob = get(f'{prefix.rstrip("/")}/{meta["stations"]}')
+            if md5(station_blob).hexdigest() != month['stations']['md5']:
+                raise ValueError(f'{day}: station table hash disagrees with index')
+            stations = loads(station_blob)
+            if (nstations, carry, len(rows) - carry) != (len(stations), meta['carry'], meta['rides']):
+                raise ValueError(f'{day}: decoded counts disagree with index')
+        result.update(final=month['final'], decodedSampleDays=samples)
+        results[ym] = result
+        err(f'{ym}: counts accounted; daily parity={result["exactDailyParity"]}; decoded {len(samples)} boundary days')
+    report = {'version': 1, 'indexMd5': md5(raw_index).hexdigest(), 'prefix': prefix, 'baseline': baseline, 'months': results}
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(dumps(report, indent=2, sort_keys=True) + '\n')
+    print(dumps({'months': len(results), 'sourceRides': sum(m['sourceRides'] for m in results.values()), 'encodedRides': sum(m['encodedRides'] for m in results.values()), 'excluded': sum(m['invalidDuration'] + m['unmapped'] for m in results.values()), 'exactDailyMonths': sum(m['exactDailyParity'] for m in results.values()), 'report': str(output)}, indent=2))
+
+
 @rides_anim.command('submit')
 @option('-d', '--date', 'date_range', required=True, help='Inclusive YYYYMM-YYYYMM source-start months.')
 @option('-k', '--prefix', default='rides-anim-candidate/v1', show_default=True)

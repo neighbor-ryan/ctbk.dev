@@ -1,0 +1,32 @@
+name: Animation history audit
+on:
+  workflow_dispatch:
+    inputs:
+      months:
+        description: Inclusive animation months (YYYYMM-YYYYMM)
+        default: '201306-202609'
+        required: true
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.13'
+          enable-cache: true
+      - run: uv sync --frozen --no-dev
+      - name: Audit published counts and decode boundary-day samples
+        env:
+          MONTHS: ${{ inputs.months }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: .venv/bin/ctbk rides-anim check-index -d "$MONTHS"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: animation-history-audit
+          path: tmp/animation-index-audit.json
