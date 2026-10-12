@@ -3,7 +3,7 @@ import 'use-kbd/styles.css'
 import '../styles/globals.css'
 import { HotkeysProvider, ShortcutsModal, Omnibar, LookupModal, SequenceModal, useHotkeysContext } from 'use-kbd'
 import { ThemeProvider as MuiThemeProvider, createTheme } from "@mui/material"
-import { StrictMode, Suspense, lazy, useMemo } from 'react'
+import { StrictMode, Suspense, lazy, useEffect, useMemo } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { PlotlyProvider } from 'pltly/react'
@@ -63,6 +63,13 @@ function AppContent() {
   const isStationsPage = pathname === '/stations'
   useScrollToHash()
   useGlobalStationsOmnibar()
+  useEffect(() => {
+    const blurSelection = (event: Event) => {
+      if (event.target instanceof HTMLSelectElement) event.target.blur()
+    }
+    document.addEventListener('change', blurSelection)
+    return () => document.removeEventListener('change', blurSelection)
+  }, [])
 
   return (
     <>

@@ -39,6 +39,10 @@ export function HTip(props: TipProps) {
   return canHover ? <Tip {...props} /> : props.children
 }
 
+export function WindowNote({ tl }: { tl: Timelapse }) {
+  return tl.windowWidth > 1 ? <span className={css.windowNote} data-testid="tl-window">rolling {tl.windowCode}</span> : null
+}
+
 export function Chevron({ dir }: { dir: 'left' | 'right' }) {
   return (
     <svg width={14} height={14} viewBox="0 0 14 14" aria-hidden>
@@ -357,7 +361,7 @@ export function TlSettings({ tl, animation = false }: { tl: Timelapse; animation
       }}>
         <HTip content="Trailing window: sum whole bins ending at this frame. Must fit within one chunk.">
           <label className={css.field}>
-            <span className={css.fieldLabel}>window</span>
+            <span className={css.fieldLabel}>rolling</span>
             <input className={css.date} style={{ width: 72 }} value={windowDraft} onChange={(e) => setWindowDraft(e.target.value)} aria-label="Trailing window" />
           </label>
         </HTip>

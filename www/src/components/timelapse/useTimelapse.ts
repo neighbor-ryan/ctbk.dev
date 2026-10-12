@@ -376,8 +376,8 @@ export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEn
   useAction('tl:faster', { label: 'Faster', group: 'Timelapse', defaultBindings: [']'], handler: () => setSp(stepSpeed(sp, 1)), enabled: on })
   useAction('tl:home', { label: 'Jump to range start', group: 'Timelapse', defaultBindings: ['home'], handler: () => { setPlaying(false); commitT(iStart) }, enabled: on })
   useAction('tl:end', { label: 'Jump to range end', group: 'Timelapse', defaultBindings: ['end'], handler: () => { setPlaying(false); commitT(iEnd) }, enabled: on })
-  useAction('tl:bin', { label: 'Coarser bin', group: 'Timelapse', defaultBindings: ['b'], handler: () => changeBin(stepBin(bin, 1)), enabled: on })
-  useAction('tl:bin-finer', { label: 'Finer bin', group: 'Timelapse', defaultBindings: ['shift+b'], handler: () => changeBin(stepBin(bin, -1)), enabled: on })
+  useAction('tl:bin', { label: `Coarser bin → ${binLabel(stepBin(bin, 1))}`, group: 'Timelapse', defaultBindings: ['b'], handler: () => changeBin(stepBin(bin, 1)), enabled: on })
+  useAction('tl:bin-finer', { label: `Finer bin → ${binLabel(stepBin(bin, -1))}`, group: 'Timelapse', defaultBindings: ['shift+b'], handler: () => changeBin(stepBin(bin, -1)), enabled: on })
   useAction('tl:style', { label: 'Cycle style (flow / activity / split)', group: 'Timelapse', defaultBindings: ['s'], handler: () => setPreset(PRESETS[(PRESETS.indexOf(preset) + 1) % PRESETS.length]), enabled: on })
   useAction('tl:loop', { label: 'Toggle loop', group: 'Timelapse', defaultBindings: ['l'], handler: () => setLoop(!loop), enabled: on })
 

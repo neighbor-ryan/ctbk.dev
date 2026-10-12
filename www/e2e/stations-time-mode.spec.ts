@@ -9,6 +9,25 @@ import { test, expect, type Page } from '@playwright/test'
 
 const ttOf = (page: Page) => new URL(page.url()).searchParams.get('tt')
 
+test('dropdown selection releases focus for playback and bin shortcuts', async ({ page }) => {
+  await page.goto('/stations?tm&b=10m&w=2h&d=250610-250610&tt=250610T19')
+  for (const [name, value] of [['Bin', '5m'], ['Window kernel', 'tri'], ['Style', 'act'], ['Circle size', '2']]) {
+    const select = page.getByRole('combobox', { name, exact: true })
+    await select.focus()
+    await select.selectOption(value)
+    await expect(select).toHaveValue(value)
+    await expect(select).not.toBeFocused()
+    await page.keyboard.press('Space')
+    await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible()
+    await page.keyboard.press('Space')
+    await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible()
+  }
+  await page.keyboard.press('b')
+  await expect(page.getByRole('combobox', { name: 'Bin', exact: true })).toHaveValue('10m')
+  await page.keyboard.press('Shift+B')
+  await expect(page.getByRole('combobox', { name: 'Bin', exact: true })).toHaveValue('5m')
+})
+
 // These tests exercise controls and chart synchronization. Fixed chart
 // records remove cold Worker fetch latency from the playhead assertion;
 // real frame/ride rendering is also checked in the live Chrome preview.
@@ -91,13 +110,15 @@ test('custom minute bins preserve the instant, and windows survive fullscreen na
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   await page.goto('/stations?tm&sel=HB101&b=15m&w=1h&wk=tri&d=250610-250610&tt=250610T1330')
-  await expect(page.getByTestId('tl-clock')).toHaveText('Tue, Jun 10, 2025 · 13:45 (last 1h)')
+  await expect(page.getByTestId('tl-clock')).toHaveText('Tue, Jun 10, 2025 · 13:45')
+  await expect(page.getByTestId('tl-window')).toHaveText('rolling 1h')
   await page.getByLabel('Custom bin', { exact: true }).fill('45m')
   await page.getByRole('button', { name: 'apply', exact: true }).nth(0).click()
   await expect.poll(() => [new URL(page.url()).searchParams.get('b'), ttOf(page)]).toEqual(['45m', '250610T1330'])
   await page.getByLabel('Trailing window', { exact: true }).fill('3h')
   await page.getByRole('button', { name: 'apply', exact: true }).nth(1).click()
-  await expect(page.getByTestId('tl-clock')).toHaveText('Tue, Jun 10, 2025 · 14:15 (last 3h)')
+  await expect(page.getByTestId('tl-clock')).toHaveText('Tue, Jun 10, 2025 · 14:15')
+  await expect(page.getByTestId('tl-window')).toHaveText('rolling 3h')
   const href = await page.getByRole('link', { name: '▶ timelapse', exact: true }).getAttribute('href')
   const params = new URL(href!, 'http://localhost').searchParams
   expect([params.get('b'), params.get('w'), params.get('wk'), params.get('t')]).toEqual(['45m', '3h', 'tri', '250610T1330'])

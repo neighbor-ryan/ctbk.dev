@@ -32,7 +32,7 @@ import { useAction } from 'use-kbd'
 import { boolParam, intParam, llzParam, stringParam, useUrlState, type LLZ } from 'use-prms'
 import GLMap from '../components/GLMap'
 import {
-  Chevron, HoverCard, Legend, LegendBar, PIN_RGB, rgbCss, scaleNote, sparkPath, Stats, TlSettings, TlTransport, WIDE,
+  Chevron, HoverCard, Legend, LegendBar, PIN_RGB, rgbCss, scaleNote, sparkPath, Stats, TlSettings, TlTransport, WIDE, WindowNote,
 } from '../components/timelapse/controls'
 import { pinIndices, timelapseLayers } from '../components/timelapse/layers'
 import { useTimelapse } from '../components/timelapse/useTimelapse'
@@ -225,7 +225,7 @@ export default function Timelapse() {
   const i = floor(shown)
   const stalled = playing && !(anim ? ready : frames.ready)
   const iMs = frameStartMs(bin, i + (!anim && tl.windowWidth > 1 ? 1 : 0))
-  const dateStr = (wide || mv ? clockLabel(bin, iMs) : shortLabel(bin, iMs)) + (!anim && tl.windowWidth > 1 ? ` (last ${tl.windowCode})` : '')
+  const dateStr = wide || mv ? clockLabel(bin, iMs) : shortLabel(bin, iMs)
   const nFramesRange = iEnd - iStart + 1
   const fmt = (n: number) => round(n).toLocaleString('en-US')
   const unit = binUnit(tl.windowCode)
@@ -251,6 +251,7 @@ export default function Timelapse() {
         <div className={css.header} data-testid="tl-header">
           <div className={css.headRow}>
             <span className={css.clockDate} data-testid="tl-clock">{dateStr}</span>
+            {!anim && <WindowNote tl={tl} />}
             <div className={css.badges}>
               {(anim ? animation.missing : frame?.missing) && <span className={`${css.badge} ${css.badgeWarn}`} data-testid="tl-no-data">no data</span>}
               {!mv && <>

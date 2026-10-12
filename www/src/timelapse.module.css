@@ -129,6 +129,13 @@
     opacity: 0.8;
 }
 
+.windowNote {
+    flex: none;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0.7;
+}
+
 .badges {
     display: flex;
     gap: 4px;

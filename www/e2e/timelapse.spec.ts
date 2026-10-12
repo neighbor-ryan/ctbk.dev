@@ -69,5 +69,6 @@ test('movie capture samples playback speed and waits for trailing-window data', 
   })).toEqual({ frames: 24, fps: 12, seconds: 2 })
   await page.evaluate(() => window.__tl!.seek(12))
   await expect(page.locator('[data-tl-frame="12"]')).toHaveCount(1)
-  await expect(page.getByTestId('tl-clock')).toHaveText('Tue, Jun 10, 2025 · 13:00 (last 2h)')
+  await expect(page.getByTestId('tl-clock')).toHaveText('Tue, Jun 10, 2025 · 13:00')
+  await expect(page.getByTestId('tl-window')).toHaveText('rolling 2h')
 })

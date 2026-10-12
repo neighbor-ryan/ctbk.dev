@@ -11,7 +11,7 @@
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import GLMap from './GLMap'
-import { HoverCard, Legend, LegendBar, scaleNote, TlSettings, TlTransport } from './timelapse/controls'
+import { HoverCard, Legend, LegendBar, scaleNote, TlSettings, TlTransport, WindowNote } from './timelapse/controls'
 import { pinIndices, timelapseLayers } from './timelapse/layers'
 import { useTimelapse } from './timelapse/useTimelapse'
 import { stationsInRect, useSelectionGestures, type Pt, type Rect, type SelAction } from '../lib/mapSelection'
@@ -139,7 +139,8 @@ export default function StationsTimeMode({ sel, multi, onSelAction, center, zoom
       </GLMap>
       <div ref={dockRef} className={css.dock} style={{ bottom }} data-testid="tm-dock" data-tl-frame={i}>
         <div className={tlCss.headRow}>
-          <span className={tlCss.clockDate} data-testid="tl-clock">{wide ? clockLabel(bin, iMs) : shortLabel(bin, iMs)}{tl.windowWidth > 1 && ` (last ${tl.windowCode})`}</span>
+          <span className={tlCss.clockDate} data-testid="tl-clock">{wide ? clockLabel(bin, iMs) : shortLabel(bin, iMs)}</span>
+          <WindowNote tl={tl} />
           <button type="button" className={`${tlCss.barBtn} ${css.bar}`} onClick={() => setLegendOpen(!legendOpen)} aria-expanded={legendOpen} aria-label="Toggle legend">
             <LegendBar preset={preset} />
           </button>
