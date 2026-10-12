@@ -26,7 +26,13 @@ def test_month_stage_records_deterministic_output_and_current_next_source_proven
     stage = Stage('202512')
     prepared = stage.to_artifact()
     assert [Path(dep.path) for dep in prepared.computation.deps[:2]] == [Path('202512.parquet'), Path('202601.parquet')]
-    def build(ym, input_dir, prefix, output, upload):
+    def build(
+        ym: str,
+        input_dir: Path,
+        prefix: str,
+        output: Path,
+        upload: bool,
+    ) -> dict:
         assert (ym, input_dir, prefix, output, upload) == ('202512', tmp_path, 'rides-anim-candidate/v1', tmp_path / 'output', False)
         output.mkdir()
         report = {'final': True, 'sourceRides': 5, 'days': {'2025-12-01': {'rides': 5}}, 'objects': {}, 'inputs': [{'local': 'machine-specific-path'}]}

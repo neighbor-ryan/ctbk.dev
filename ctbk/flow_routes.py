@@ -86,7 +86,11 @@ def flow_routes() -> None:
     """Measure inferred bicycle routes with a self-hosted routing engine."""
 
 
-def route_population(counts: Counter, stations: list[dict], minimum: int) -> dict:
+def route_population(
+    counts: Counter[tuple[int, int]],
+    stations: list[dict],
+    minimum: int,
+) -> dict:
     pairs = [[a, b, count] for (a, b), count in sorted(counts.items()) if a != b and count >= minimum]
     total = sum(count for (a, b), count in counts.items() if a != b)
     selected = sum(p[2] for p in pairs)
