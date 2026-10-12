@@ -179,7 +179,7 @@ type DirectedPair = { from: string; to: string; other: string; count: number }
  *  `pairCounts[other][t]` for each set member. Within-set pairs and stations
  *  missing from `stations` are excluded. Shared by the lens (summed per
  *  `other`) and the arc fan (one arc per pair). */
-function directedPairs(
+export function directedPairs(
   stations: Stations,
   pairCounts: StationPairCounts | null,
   selIds: readonly string[],

@@ -1,6 +1,6 @@
 # Ride animation: every ride, moving
 
-Status: June 2025 data, interactive prototype, and movie capture implemented and verified; full-history backfill and routed paths pending (2026-10-11).
+Status: June data, interactive animation, movie capture, and routed sample implemented and verified; full-history Batch backfill running, with validation and monthly/DVX integration pending (2026-10-11).
 Author: Ryan + Claude
 Builds on: [`timelapse-map.md`] (the `/timelapse` page, `GLMap`, movie mode `?mv=1` / `window.__tl.seek`), [`timelapse-fine-bins.md`] (the linked bin/fps/range/length controls). Its "v3 idea" in the v2-arcs sketch was per-trip animation; this spec is that idea.
 
@@ -124,7 +124,7 @@ Citi Bike already publishes the source data per ride: start and end time, statio
 - **A1: ride index**. The `rides-anim` stage and DVX outputs for one month, the day file format and a TS decoder (golden test: decode → re-encode is byte-identical, and count equals the `1d` shard's `count_n`), then the backfill on `e`.
 - **A2: straight-line page**. `/timelapse?anim=1` (or `/rides`?), `TripsLayer`, the trail and color presets, the station layer underneath, and the round-trip loops.
 - **A3: movie mode**. `seek` and scrns entries (a summer weekday evening rush in 60 s; one full day).
-- **A4: routes**. The OSRM sample, then the full run on Batch (**needs approval**), per-origin files, deterministic choice, polyline timing, and the per-day-bundle decision.
+- **A4: routes**. The OSRM sample, then the measured full run on Batch (authorized with the whole roadmap), per-origin files, deterministic choice, polyline timing, and the per-day-bundle decision.
 
 ## Open questions
 
@@ -136,3 +136,5 @@ Citi Bike already publishes the source data per ride: start and end time, statio
 
 [`timelapse-map.md`]: timelapse-map.md
 [`timelapse-fine-bins.md`]: timelapse-fine-bins.md
+
+Route sample preview is implemented under `?anim=1&flow=routes`. Alternative choice is stable across midnight carry-in; distance-based timestamps and binary-search interpolation drive trails and heads. The same route readiness gate applies to playback and deterministic movie seeks. The June 10 18:00 browser fixture has 3,870 active rides, including 84 on sample street routes. Uncovered pairs and round trips retain their explicit inferred fallback. The banner now says “Animation preview” because the candidate index is growing during the remote history build.

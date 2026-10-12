@@ -19,7 +19,7 @@
  * The default map on `/stations` (`?gl=0` → Leaflet `StationMap`) and on the
  * Home embed.
  */
-import { ArcLayer, ScatterplotLayer } from '@deck.gl/layers'
+import { ArcLayer, PathLayer, ScatterplotLayer } from '@deck.gl/layers'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ARC_SRC_FRAC, arcAlpha, arcWidthPx, lensZoomScale, type FlowArc } from './flowLens'
 import GLMap from './GLMap'
@@ -32,6 +32,7 @@ import type { Stations, StationPairCounts } from './stationMapCommon'
 import type { Layer, PickingInfo } from '@deck.gl/core'
 import type { MapboxOverlay } from '@deck.gl/mapbox'
 import type { Map as MaplibreMapInstance } from 'maplibre-gl'
+import type { FlowPath } from '../query/flowRoutes'
 
 const { max, round, sqrt } = Math
 
@@ -85,6 +86,7 @@ export interface StationMapGLProps {
   /** Flow-arc fan (Stage 3): one `ArcLayer` arc per directed pair between the
    *  lens source set and other stations (`flowArcs`). Null/empty = no fan. */
   arcs?: readonly FlowArc[] | null
+  flowPaths?: readonly FlowPath[] | null
   /** Transient hover selection (drives the title-bar subtitle link). */
   setSelectedId?: (id: string | undefined) => void
   /** Hovered station id → parent, for the live hover-preview lens. */
@@ -110,6 +112,7 @@ export default function StationMapGL({
   stationRadii,
   mark = 'fill',
   arcs,
+  flowPaths,
   setSelectedId,
   onHoverStation,
   center,
@@ -223,8 +226,21 @@ export default function StationMapGL({
     updateTriggers: { getSourceColor: [dark, arcMax], getTargetColor: [dark, arcMax], getWidth: arcMax },
   }) : null
 
+  const pathMax = flowPaths?.length ? flowPaths[flowPaths.length - 1].count : 1
+  const pathLayer = flowPaths?.length ? new PathLayer<FlowPath>({
+    id: 'flow-streets',
+    data: flowPaths as FlowPath[],
+    getPath: (d) => d.path,
+    getColor: (d) => [...arcRgb, arcAlpha(d.count, pathMax)],
+    getWidth: (d) => arcWidthPx(d.count, pathMax),
+    widthUnits: 'pixels', capRounded: true, jointRounded: true,
+    pickable: false,
+    updateTriggers: { getColor: [dark, pathMax], getWidth: pathMax },
+  }) : null
+
   const layers: Layer[] = [
     ...(arcLayer ? [arcLayer] : []),
+    ...(pathLayer ? [pathLayer] : []),
     new ScatterplotLayer<StationDatum>({
       id: 'stations',
       data,

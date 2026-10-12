@@ -17,6 +17,7 @@ import { useStationsOmnibarEndpoint } from '../hooks/useStationsOmnibarEndpoint'
 import { selParam, useSelection, type SelAction } from '../lib/mapSelection'
 import { useCanHover, useWide } from '../lib/useMediaQuery'
 import { useTotalsQuery, type Side } from '../query/rollups'
+import { assignRoutes, useFlowRoutes } from '../query/flowRoutes'
 import { timeRangeParam } from '../time-range'
 import css from "../stations.module.css"
 
@@ -148,6 +149,8 @@ export default function Stations() {
   // when arcs are off. The Leaflet fallback uses the same setting for lines.
   const [dir, setDir] = useUrlState('dir', codeParam<FlowDirection>('out', [['out', 'o'], ['in', 'i']]))
   const [fan, setFan] = useUrlState('fan', boolParam)
+  const [flow, setFlow] = useUrlState('flow', stringParam())
+  const streetRoutes = flow === 'routes'
   const [gl] = useUrlState('gl', glParam)
   // Time mode (GL only): `/api/tl` frames drive the circles, with the
   // timelapse dock (`StationsTimeMode`, lazy); `b`/`d`/`tt`/`sp`/`st`/`lp`/`sz`
@@ -382,6 +385,17 @@ export default function Stations() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [gl, fan, lensSourceIds.join(','), effectiveStations, pairCounts, dir],
   )
+  const routeData = useFlowRoutes(gl && fan && streetRoutes && !!lensSourceIds.length)
+  const routed = useMemo(
+    () => (gl && fan && streetRoutes && routeData.data && effectiveStations
+      ? assignRoutes(routeData.data, effectiveStations, pairCounts, lensSourceIds, dir)
+      : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [gl, fan, streetRoutes, routeData.data, effectiveStations, pairCounts, lensSourceIds.join(','), dir],
+  )
+  const routeStatus = routeData.error ? `Routes unavailable: ${routeData.error.message} · showing arcs`
+    : routed ? `${routed.total ? Math.round(100 * routed.routed / routed.total) : 0}% routed · sample coverage · other pairs use arcs`
+    : 'Loading route sample… · showing arcs'
   const effectiveColors = flowStyle?.colors ?? stationColors
   const effectiveRadii = flowStyle?.radii ?? null
 
@@ -425,9 +439,13 @@ export default function Stations() {
       onToggleDirection={() => setDir(dir === 'out' ? 'in' : 'out')}
       arcsEnabled={fan}
       onArcsChange={setFan}
+      streetRoutes={streetRoutes}
+      onStreetRoutesChange={gl ? (enabled) => setFlow(enabled ? 'routes' : undefined) : undefined}
+      routeStatus={routeStatus}
+      streetsDrawn={!!routed?.paths.length}
       total={flowStyle.total}
       topCount={flowStyle.topCount}
-      arcMax={arcs?.length ? arcs[arcs.length - 1].count : null}
+      arcMax={routed?.paths.length ? routed.paths[routed.paths.length - 1].count : (arcs?.length ? arcs[arcs.length - 1].count : null)}
       compact={compact}
       open={legendOpen}
       onToggleOpen={() => setLegendOpen(!legendOpen)}
@@ -472,7 +490,8 @@ export default function Stations() {
             stationColors={effectiveColors}
             stationRadii={effectiveRadii}
             mark={mark}
-            arcs={arcs}
+              arcs={routed?.arcs ?? arcs}
+              flowPaths={routed?.paths}
             setSelectedId={setSelectedId}
             onHoverStation={setHoverPreviewId}
             center={[view.lat, view.lng]}

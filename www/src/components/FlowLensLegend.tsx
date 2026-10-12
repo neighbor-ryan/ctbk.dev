@@ -22,7 +22,7 @@ import css from '../stations.module.css'
 /** Key circle radius when the radius channel is off (color-only lens). */
 const R_COLOR_ONLY = 6
 
-const fmt = (n: number) => n.toLocaleString()
+const fmt = (n: number) => Math.round(n).toLocaleString()
 
 export default function FlowLensLegend({
   sourceNames,
@@ -31,6 +31,10 @@ export default function FlowLensLegend({
   onToggleDirection,
   arcsEnabled,
   onArcsChange,
+  streetRoutes = false,
+  onStreetRoutesChange,
+  routeStatus,
+  streetsDrawn = false,
   total,
   topCount,
   arcMax,
@@ -44,6 +48,10 @@ export default function FlowLensLegend({
   onToggleDirection: () => void
   arcsEnabled: boolean
   onArcsChange: (enabled: boolean) => void
+  streetRoutes?: boolean
+  onStreetRoutesChange?: (enabled: boolean) => void
+  routeStatus?: string
+  streetsDrawn?: boolean
   total: number
   topCount: number
   /** Heaviest arc's trip count, when the arc fan is drawn (→ width key). */
@@ -98,6 +106,13 @@ export default function FlowLensLegend({
             <input type="checkbox" checked={arcsEnabled} onChange={(event) => onArcsChange(event.target.checked)} />
             Arcs
           </label>
+          {arcsEnabled && onStreetRoutesChange && <>
+            <label className={css.lensArcsToggle}>
+              <input type="checkbox" checked={streetRoutes} onChange={(event) => onStreetRoutesChange(event.target.checked)} />
+              Inferred bike routes
+            </label>
+            {streetRoutes && <div className={css.keyTitle}>{routeStatus}</div>}
+          </>}
           <div className={css.keyTitle}>trips per station</div>
           <div className={css.sizeKey} data-testid="lens-size-key">
             {sizeTicks.map((n) => {
@@ -120,7 +135,7 @@ export default function FlowLensLegend({
           </div>
           {widthTicks.length > 0 && (
             <>
-              <div className={css.keyTitle}>trips per arc {out ? '(set → station)' : '(station → set)'}</div>
+              <div className={css.keyTitle}>trips per {streetsDrawn ? 'street segment' : 'arc'} {out ? '(set → station)' : '(station → set)'}</div>
               <div className={css.widthKey} data-testid="lens-width-key">
                 {widthTicks.map((n) => (
                   <span key={n} className={css.keyItem}>

@@ -1,6 +1,6 @@
 # Routed flow map: selection flows along streets, merging and splitting en route
 
-Status: measured sample CLI and hosted-runner workflow implemented; real 1,000-pair routing measurement and frontend assignment pending (2026-10-11). Depends on the route set from [`ride-animation.md`] §Routes (phase A4).
+Status: real 1,000-pair sample and browser assignment implemented and verified; full route population, direction cues, and system layer pending (2026-10-11). Depends on the route set from [`ride-animation.md`] §Routes (phase A4).
 
 ## Goal
 
@@ -24,7 +24,7 @@ A4 stores each route as a simplified polyline, which is enough to animate one do
 - **Route → segment list**: each (pair, alt) becomes a varint delta-coded list of segment ids, with a direction bit per segment. A guess is ~25 segments per route at ~2 B each, so ~50 B per route; that is smaller than the polyline, which can then be *derived* from the segment list instead of stored separately. If that holds, A4 stores only segment lists, and animation and flows share one format.
 - **Indexes**: flows need both directions. "out" for a set needs routes *from* each set station, and "in" needs routes *to* it. Store per-origin files (A4's `routes/v1/{origin}`) plus per-destination files with the same records keyed the other way. That roughly doubles route storage (a guess of ~2 × 80 MB for the ≥10 rides/yr set, gzipped smaller), with each file lazy-loaded per selected station.
 
-All of the sizes here are guesses until the A0/A4 sample (1 k pairs) measures vertex and segment counts.
+Full-population sizes remain estimates; the measured sample is recorded below.
 
 ## Assignment (browser)
 
@@ -74,3 +74,9 @@ Build it as a stage alongside A4: (monthly `se_c` pair counts) × (route segment
 R0 implementation: `ctbk flow-routes sample` reads the published June animation month, excludes midnight carry-in from pair counts, and selects 1,000 non-round-trip pairs stratified by source region (250 JC, 250 HB, 500 NYC, filling undersized strata from remaining ranked pairs). It calls only a self-hosted localhost bicycle router, requests up to three alternatives with full geometry and OSM node annotations, records snap distances, and keeps no-route/no-segment or >250 m snaps as explicit fallbacks. Weights use the specified alpha of four. Shared OSM chains are contracted at branches, route endpoints, and reversals; signed segment IDs retain direction. Response caching is scoped to the OSM MD5 and pinned engine. Tests verify exact shared chains/directions, alternative weights, carry exclusion, and the complete sample payload/summary.
 
 Heavy work runs through `.github/workflows/routes-sample.yml` on a public hosted runner, with no local graph/image download. OSRM 26.10.0 amd64 image is pinned to digest `84074e1e66bd7eedc7fe52ece0f4deb2e6865454855ae77675c5f753d281fd58`; osmium is pinned to 4.3.1. The BBBike NewYork polygon covers longitude -74.36…-73.67 and latitude 40.48…40.96, including NYC and Jersey City. The workflow prepares the bicycle MLD graph, measures the sample, and publishes only hashed candidate geometry plus a short-lived index at `routes-sample/v1`. The extract MD5 and engine digest are part of the measurement provenance. Full OSM graph files remain ephemeral on the runner; only compressed geometry and summaries are retained.
+
+Measured run `38197223911` succeeded: 1,000 routed pairs (250 JC, 250 HB, 500 NYC), 1,772 alternatives, 3,341 segments, 25,877 vertices, 863,061 compressed bytes, and no no-route/snap fallbacks. The download host was changed to `data.bbbike.org` with bounded retries after the original host timed out from GitHub's runner. Object `objects/0c3b0db6cf5179fe9fcc80d3c0124458.json.gz` records extract MD5 `b0e185c2d2c7564b8e186f2258b93880` and the pinned engine. Only the 863 KB candidate and small metadata were downloaded locally.
+
+R2 sample preview: `/stations?fan=1&flow=routes` adds an “Inferred bike routes” toggle. Assignment uses each actual directed pair even when several sources are selected, excludes internal pairs, applies the existing destination cutoff, sums alternative-weighted volumes onto signed segment IDs, and drops segments below 4% of the heaviest. Street widths use the existing flow scale; labels round expected fractional volumes. Missing pairs remain arcs, and the legend reports routed trip share. This is partial sample coverage (54% of Columbus Drive's displayed June flow), not a full street network. Opposing directions are separate assignment volumes but currently overdraw on the same geometry; animated directional marks, offset lanes, dashed fallback arcs, full per-station route indexes, and the system layer remain pending.
+
+Animation consumes the same candidate's full route geometry with deterministic FNV choice keyed by absolute ride start, source, destination, duration, and flags. Identical encoded ride tuples share a choice; carry-in preserves it across midnight. Added station connectors retain exact endpoints. Timestamps are proportional to approximate local geographic distance along the polyline, and binary-search head interpolation avoids scanning long paths every frame. Round trips and uncovered pairs keep existing inferred loops/straight paths. Routes are plausible bicycle paths, not observed rider tracks.

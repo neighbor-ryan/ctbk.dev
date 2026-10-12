@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { rideHead, ridePaths } from './rideLayers'
+import { pathTimes, rideHead, ridePaths, routeFraction } from './rideLayers'
 
 describe('inferred ride paths', () => {
   const day = {
@@ -22,5 +22,21 @@ describe('inferred ride paths', () => {
     expect(rideHead(paths[0], 10)).toEqual(null)
     expect(rideHead(paths[1], 15)).toEqual([-72.999, 41.001])
     expect(ridePaths(day, 11700, 120)).toEqual([])
+  })
+  it('paces routes by distance and keeps inferred alternative choice stable across midnight carry-in', () => {
+    expect(pathTimes([[0, 0], [1, 0], [3, 0]], 10, 70)).toEqual([10, 30, 70])
+    expect(rideHead({ path: [[0, 0], [1, 0], [3, 0]], times: [10, 30, 70], flags: 0 }, 30)).toEqual([1, 0])
+    expect(routeFraction('hello')).toEqual(0x4f9f2cab / 4294967296)
+    const routes = { version: 1, segments: [], pairs: [{ source: 'A', destination: 'B', routes: [
+      { weight: 1, segments: [], geometry: [[-74, 40], [-74, 41], [-73, 41]] as [number, number][] },
+    ] }] }
+    const current = ridePaths(day, 0, 120, routes, 86400)[0]
+    const previousDay = { ...day, rides: { ...day.rides, starts: new Int32Array([86390, 86400, 86405]) } }
+    const previous = ridePaths(previousDay, 85500, 120, routes, 0)[0]
+    expect(current.path).toEqual([[-74, 40], [-74, 41], [-73, 41]])
+    expect(current.routed).toEqual(true)
+    expect(previous.path).toEqual(current.path)
+    const milliseconds = (t: number) => Math.round(t * 1000)
+    expect(previous.times.map((t) => milliseconds(t - 86400))).toEqual(current.times.map(milliseconds))
   })
 })
