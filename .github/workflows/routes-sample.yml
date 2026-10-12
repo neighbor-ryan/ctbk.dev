@@ -1,0 +1,54 @@
+name: Bicycle routes sample
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: routes-sample
+  cancel-in-progress: false
+jobs:
+  sample:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      OSRM_IMAGE: ghcr.io/project-osrm/osrm-backend@sha256:84074e1e66bd7eedc7fe52ece0f4deb2e6865454855ae77675c5f753d281fd58
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.13'
+          enable-cache: true
+      - name: Python dependencies
+        run: |
+          uv sync --frozen --no-dev
+          uv pip install 'osmium==4.3.1'
+      - name: Download NYC and Jersey City OSM extract
+        run: |
+          mkdir -p tmp/routes
+          curl --fail --location https://download.bbbike.org/osm/bbbike/NewYork/NewYork.osm.pbf --output tmp/routes/NewYork.osm.pbf
+          curl --fail --location https://download.bbbike.org/osm/bbbike/NewYork/NewYork.poly --output tmp/routes/NewYork.poly
+      - name: Prepare bicycle graph
+        run: |
+          docker run --rm -v "$PWD/tmp/routes:/data" "$OSRM_IMAGE" osrm-extract --threads 4 -p /opt/bicycle.lua /data/NewYork.osm.pbf
+          docker run --rm -v "$PWD/tmp/routes:/data" "$OSRM_IMAGE" osrm-partition --threads 4 /data/NewYork.osrm
+          docker run --rm -v "$PWD/tmp/routes:/data" "$OSRM_IMAGE" osrm-customize --threads 4 /data/NewYork.osrm
+          docker run -d --name bicycle-router --network host -v "$PWD/tmp/routes:/data" "$OSRM_IMAGE" osrm-routed --algorithm mld --port 51991 /data/NewYork.osrm
+      - name: Measure and publish 1000-pair candidate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          .venv/bin/ctbk flow-routes wait
+          .venv/bin/ctbk flow-routes sample -n 1000 -p tmp/routes/NewYork.osm.pbf -u
+          cat tmp/routes-sample/summary.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bicycle-routes-sample
+          path: |
+            tmp/routes-sample/summary.json
+            tmp/routes-sample/sample.json.gz
+            tmp/routes/NewYork.poly
+          if-no-files-found: ignore

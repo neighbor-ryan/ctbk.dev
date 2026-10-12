@@ -1,6 +1,6 @@
 # Routed flow map: selection flows along streets, merging and splitting en route
 
-Status: draft (2026-10-03). Depends on the route set from [`ride-animation.md`] §Routes (phase A4); this spec adds what flows need on top of it.
+Status: measured sample CLI and hosted-runner workflow implemented; real 1,000-pair routing measurement and frontend assignment pending (2026-10-11). Depends on the route set from [`ride-animation.md`] §Routes (phase A4).
 
 ## Goal
 
@@ -58,7 +58,7 @@ Build it as a stage alongside A4: (monthly `se_c` pair counts) × (route segment
 ## Phases
 
 - **R0 (with A4's sample)**: also request node annotations in the 1 k-pair OSRM run; measure segments per route and the size of the contracted graph. Decide whether routes are stored as segment lists only.
-- **R1: segment graph + route lists** for the ≥10 rides/yr set, per-origin and per-destination files. This runs inside A4's Batch job (**needs approval**).
+- **R1: segment graph + route lists** for the ≥10 rides/yr set, per-origin and per-destination files. The full-roadmap authorization covers the measured build; resource choices should follow R0's measurements.
 - **R2: FE assignment + `PathLayer`** on `/stations` behind `?flow=routes`, with arcs as the fallback. Tests: exact `vol` for a fixture of three pairs with two alternatives each.
 - **R3: system layer**: monthly `flows/v1` files, the empty-selection base layer, then the time-mode hookup.
 
@@ -70,3 +70,7 @@ Build it as a stage alongside A4: (monthly `se_c` pair counts) × (route segment
 - For multi-station selections, should flows *between* selected stations be shown, as internal flow? The arcs exclude them today.
 
 [`ride-animation.md`]: ride-animation.md
+
+R0 implementation: `ctbk flow-routes sample` reads the published June animation month, excludes midnight carry-in from pair counts, and selects 1,000 non-round-trip pairs stratified by source region (250 JC, 250 HB, 500 NYC, filling undersized strata from remaining ranked pairs). It calls only a self-hosted localhost bicycle router, requests up to three alternatives with full geometry and OSM node annotations, records snap distances, and keeps no-route/no-segment or >250 m snaps as explicit fallbacks. Weights use the specified alpha of four. Shared OSM chains are contracted at branches, route endpoints, and reversals; signed segment IDs retain direction. Response caching is scoped to the OSM MD5 and pinned engine. Tests verify exact shared chains/directions, alternative weights, carry exclusion, and the complete sample payload/summary.
+
+Heavy work runs through `.github/workflows/routes-sample.yml` on a public hosted runner, with no local graph/image download. OSRM 26.10.0 amd64 image is pinned to digest `84074e1e66bd7eedc7fe52ece0f4deb2e6865454855ae77675c5f753d281fd58`; osmium is pinned to 4.3.1. The BBBike NewYork polygon covers longitude -74.36…-73.67 and latitude 40.48…40.96, including NYC and Jersey City. The workflow prepares the bicycle MLD graph, measures the sample, and publishes only hashed candidate geometry plus a short-lived index at `routes-sample/v1`. The extract MD5 and engine digest are part of the measurement provenance. Full OSM graph files remain ephemeral on the runner; only compressed geometry and summaries are retained.
