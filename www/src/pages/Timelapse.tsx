@@ -40,9 +40,11 @@ import { selParam, stationsInRect, useSelection, useSelectionGestures, type Pt, 
 import { useCanHover, useMediaQuery } from '../lib/useMediaQuery'
 import { ensureChunk, useTlStationSeries, type SourceMode } from '../query/timelapse'
 import { clockLabel, shortLabel, binUnit } from '../query/timelapseControls'
-import { ANCHORS, chunkOf, formatYmd, frameStartMs, type Bin, type StationTable } from '../query/timelapseFrames'
+import { ANCHORS, chunkOf, formatT, formatYmd, frameStartMs, type Bin, type StationTable } from '../query/timelapseFrames'
 import { radiusFactor } from '../query/timelapseSize'
 import { movieGrid } from '../query/timelapseMovie'
+import { useRideAnimation } from '../query/useRideAnimation'
+import { movingRideLayers, ridePaths } from '../components/timelapse/rideLayers'
 import css from '../timelapse.module.css'
 import type { Layer, PickingInfo } from '@deck.gl/core'
 import type { MapboxOverlay } from '@deck.gl/mapbox'
@@ -62,11 +64,25 @@ const viewParam = llzParam({ default: SYSTEM_LLZ, latLngDecimals: 3 })
 
 export default function Timelapse() {
   const [mv] = useUrlState('mv', boolParam)
-  const tl = useTimelapse({ mv })
+  const [anim] = useUrlState('anim', boolParam)
+  const [colorRaw, setColorRaw] = useUrlState('clr', stringParam())
+  const [trailRaw, setTrailRaw] = useUrlState('trail', intParam(120))
+  const colorBy = colorRaw === 'user' ? 'user' : 'bike'
+  const trail = Math.min(600, max(5, trailRaw))
+  const animationReady = useRef(false)
+  const tl = useTimelapse({ mv, defaultBin: anim ? '1m' : '1d', clockReady: anim ? animationReady : undefined })
   const {
-    qc, src, bin, range, iStart, iEnd, tUrl, tToI, tRef, setT, playing, peek, table, frames, shown, shownFrames, frame,
+    qc, src, bin, range, iStart, iEnd, tUrl, tToI, tRef, setT, playing, peek, table, frames, shown: countShown, shownFrames, frame,
     scale, scaleFrozen, preset, sz, sp, shownWindows, windowWidth,
   } = tl
+  const shown = anim ? tl.tView : countShown
+  const frameMs = frameStartMs(bin, floor(shown))
+  const shownMs = frameMs + (shown - floor(shown)) * (frameStartMs(bin, floor(shown) + 1) - frameMs)
+  const animation = useRideAnimation(shownMs, anim)
+  animationReady.current = animation.ready
+  const bucket = floor(animation.seconds / 900) * 900
+  const paths = useMemo(() => animation.day ? ridePaths(animation.day, bucket, trail) : [], [animation.day, bucket, trail])
+  const moving = useMemo(() => movingRideLayers(paths, animation.seconds, trail, colorBy), [paths, animation.seconds, trail, colorBy])
   const [view, setView] = useUrlState('ll', viewParam)
   const [pins, setPins] = useUrlState('sel', selParam)
   const [fpbRaw] = useUrlState('fpb', stringParam())
@@ -88,7 +104,7 @@ export default function Timelapse() {
   const [hover, setHover] = useState<{ i: number; x: number; y: number } | null>(null)
   // Circle size: `sz` × a zoomed-out shrink, on top of the presets' radii.
   const rf = radiusFactor(sz, view.zoom)
-  const layers = useMemo<Layer[]>(() => (table && frame
+  const circleLayers = useMemo<Layer[]>(() => (table && frame
     ? timelapseLayers({
       table,
       frame,
@@ -99,6 +115,7 @@ export default function Timelapse() {
       onHover: canHover ? (info: PickingInfo) => setHover(info.index >= 0 ? { i: info.index, x: info.x, y: info.y } : null) : undefined,
     })
     : []), [table, frame, preset, pinIdx, mv, canHover, rf])
+  const layers = anim ? moving.layers : circleLayers
 
   // ---- Movie mode: `window.__tl.seek(i)` -----------------------------------
   // Each seek: fetch the chunk(s) under the sampled playback clock, set `t`, then
@@ -119,7 +136,7 @@ export default function Timelapse() {
   const layersRef = useRef(layers)
   layersRef.current = layers
   useLayoutEffect(() => {
-    rendered.current = { t: shown, ready: shownFrames.ready && (windowWidth === 1 || shownWindows.ready) && scaleFrozen && layers.length > 0, layers }
+    rendered.current = { t: shown, ready: anim ? animation.ready : shownFrames.ready && (windowWidth === 1 || shownWindows.ready) && scaleFrozen && layers.length > 0, layers }
     notify()
   })
   const onAfterRender = useCallback(() => {
@@ -133,7 +150,7 @@ export default function Timelapse() {
       const tt = iStart + grid.offset(i)
       const a = floor(tt)
       const ks = Array.from(new Set([chunkOf(bin, a), chunkOf(bin, a + 1)]))
-      await Promise.all(ks.flatMap((k) => ANCHORS.map((anchor) => ensureChunk(qc, src, anchor, bin, k))))
+      if (!anim) await Promise.all(ks.flatMap((k) => ANCHORS.map((anchor) => ensureChunk(qc, src, anchor, bin, k))))
       tRef.current = tt
       setT(tt)
       await waitFor(() => rendered.current.t === tt && rendered.current.ready)
@@ -153,7 +170,7 @@ export default function Timelapse() {
     seek(Math.min(grid.frames - 1, round((tToI(tUrl) - iStart) / grid.step))).catch((e) => console.error('__tl.seek', e))
     return () => { delete window.__tl }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mv, bin, iStart, grid, src])
+  }, [mv, bin, iStart, grid, src, anim])
 
   // ---- Selection gestures (`lib/mapSelection`) -----------------------------
   // Taps pick with deck's `pickObject` (a wider radius for fingers);
@@ -179,7 +196,7 @@ export default function Timelapse() {
       return stationsInRect(table.positions, project, r, keep).map((j) => table.ids[j])
     },
     apply: applySel,
-  }, !mv)
+  }, !mv && !anim)
 
   // Control-bar height → `--tl-controls-h`, so the selection panel / bottom
   // sheet sits just above it.
@@ -199,9 +216,9 @@ export default function Timelapse() {
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   const i = floor(shown)
-  const stalled = playing && !frames.ready
-  const iMs = frameStartMs(bin, i + (tl.windowWidth > 1 ? 1 : 0))
-  const dateStr = (wide || mv ? clockLabel(bin, iMs) : shortLabel(bin, iMs)) + (tl.windowWidth > 1 ? ` (last ${tl.windowCode})` : '')
+  const stalled = playing && !(anim ? animation.ready : frames.ready)
+  const iMs = frameStartMs(bin, i + (!anim && tl.windowWidth > 1 ? 1 : 0))
+  const dateStr = (wide || mv ? clockLabel(bin, iMs) : shortLabel(bin, iMs)) + (!anim && tl.windowWidth > 1 ? ` (last ${tl.windowCode})` : '')
   const nFramesRange = iEnd - iStart + 1
   const fmt = (n: number) => round(n).toLocaleString('en-US')
   const unit = binUnit(tl.windowCode)
@@ -228,12 +245,12 @@ export default function Timelapse() {
           <div className={css.headRow}>
             <span className={css.clockDate} data-testid="tl-clock">{dateStr}</span>
             <div className={css.badges}>
-              {frame?.missing && <span className={`${css.badge} ${css.badgeWarn}`} data-testid="tl-no-data">no data</span>}
+              {(anim ? animation.missing : frame?.missing) && <span className={`${css.badge} ${css.badgeWarn}`} data-testid="tl-no-data">no data</span>}
               {!mv && <>
                 {stalled && <span className={`${css.badge} ${css.badgeWarn}`}>buffering…</span>}
-                {!frames.ready && !playing && !frames.error && <span className={css.badge}>loading…</span>}
-                {frames.error && <span className={`${css.badge} ${css.badgeError}`}>error: {frames.error.message}</span>}
-                {frame?.source === 'synth' && <span className={`${css.badge} ${css.badgeWarn}`}>synthetic</span>}
+                {!(anim ? animation.ready : frames.ready) && !playing && <span className={css.badge}>loading…</span>}
+                {(anim ? animation.error : frames.error) && <span className={`${css.badge} ${css.badgeError}`}>error: {(anim ? animation.error : frames.error)!.message}</span>}
+                {!anim && frame?.source === 'synth' && <span className={`${css.badge} ${css.badgeWarn}`}>synthetic</span>}
               </>}
             </div>
             {!mv && (
@@ -242,10 +259,22 @@ export default function Timelapse() {
               </button>
             )}
           </div>
-          <button type="button" className={css.barBtn} onClick={() => setLegendOpen(!legendOpen)} aria-label="Toggle legend" disabled={mv}>
+          {!anim && <button type="button" className={css.barBtn} onClick={() => setLegendOpen(!legendOpen)} aria-label="Toggle legend" disabled={mv}>
             <LegendBar preset={preset} />
-          </button>
-          {legendOpen && (
+          </button>}
+          {anim && <div className={css.legendBody}>
+            <div data-testid="ride-active">{moving.active.toLocaleString('en-US')} rides in progress</div>
+            {legendOpen && <>
+            <div className={css.clockSub}>June 2025 sample · inferred straight paths and round-trip loops · rides over 3h fade out</div>
+            <div className={css.clockSub}>{colorBy === 'bike' ? 'cyan: electric · orange: classic · gray: unknown' : 'green: member · pink: casual · gray: unknown'}</div>
+            {!mv && <div className={css.group}>
+              <label>Color <select className={css.select} aria-label="Ride color" value={colorBy} onChange={(e) => setColorRaw(e.target.value)}><option value="bike">Bike type</option><option value="user">User type</option></select></label>
+              <label>Trail <select className={css.select} aria-label="Trail length" value={trail} onChange={(e) => setTrailRaw(Number(e.target.value))}>{[30, 60, 120, 300, 600].map((n) => <option key={n} value={n}>{n}s</option>)}</select></label>
+              <Link to={`/timelapse?b=${bin}&d=${formatYmd(range[0])}-${formatYmd(range[1])}&t=${formatT(shownMs)}&len=${tl.length}&sp=${sp}&ll=${viewParam.encode(view) ?? ''}`}>Station counts</Link>
+            </div>}
+            </>}
+          </div>}
+          {!anim && legendOpen && (
             <div className={css.legendBody} data-testid="tl-legend">
               <Legend preset={preset} unit={unit} note={note} />
               <div className={css.clockSub}>
@@ -266,6 +295,7 @@ export default function Timelapse() {
                   {frame.unmapped > 0 && <span className={css.chip}>{fmt(frame.unmapped)} rides at unmapped stations</span>}
                 </div>
               )}
+              {!mv && <Link to={`/timelapse?anim=1&b=1m&d=250610-250610&t=250610T1800&len=60&ll=${viewParam.encode(view) ?? ''}`}>Moving rides · June sample</Link>}
             </div>
           )}
         </div>
@@ -273,7 +303,7 @@ export default function Timelapse() {
         {dragRect && (
           <div className={css.dragRect} style={{ left: dragRect.x0, top: dragRect.y0, width: dragRect.x1 - dragRect.x0, height: dragRect.y1 - dragRect.y0 }} />
         )}
-        {!mv && canHover && table && frame && hover !== null && !dragRect && (
+        {!mv && !anim && canHover && table && frame && hover !== null && !dragRect && (
           <HoverCard
             x={hover.x}
             y={hover.y}
@@ -285,7 +315,7 @@ export default function Timelapse() {
             multi={multi}
           />
         )}
-        {!mv && table && frame && (pinIdx.length > 0 || multi) && (
+        {!mv && !anim && table && frame && (pinIdx.length > 0 || multi) && (
           <SelPanel
             src={src}
             bin={bin}
@@ -303,10 +333,10 @@ export default function Timelapse() {
             onDone={() => applySel({ t: 'done' })}
           />
         )}
-        {!table && <div className={css.loading}>Loading stations…</div>}
+        {!anim && !table && <div className={css.loading}>Loading stations…</div>}
         {!mv && (
           <div className={css.controls} ref={controlsRef} data-testid="tl-controls">
-            {showSettings && <TlSettings tl={tl} />}
+            {showSettings && <TlSettings tl={tl} animation={anim} />}
             <TlTransport tl={tl} wide={wide} settingsOpen={settingsOpen} onToggleSettings={() => setSettingsOpen(!settingsOpen)} />
           </div>
         )}

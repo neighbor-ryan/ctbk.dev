@@ -302,7 +302,7 @@ export function Scrubber({
 
 /** The ⚙ settings row: range, bin, speed, style, circle size, loop, plus
  *  the too-many-frames bin hint and (touch) a key cheat sheet. */
-export function TlSettings({ tl }: { tl: Timelapse }) {
+export function TlSettings({ tl, animation = false }: { tl: Timelapse; animation?: boolean }) {
   const { bin, changeBin, range, setRangeEdit, applySpan, capNote, lastDay, iStart, iEnd, t, sp, setSp, preset, setPreset, sz, setSz, loop, setLoop } = tl
   const canHover = useCanHover()
   const [customBin, setCustomBin] = useState('')
@@ -351,7 +351,7 @@ export function TlSettings({ tl }: { tl: Timelapse }) {
         <button type="submit" className={css.btn}>apply</button>
         {binError && <span role="alert" className={css.note}>{binError}</span>}
       </form>
-      <form className={css.group} onSubmit={(e) => {
+      {!animation && <form className={css.group} onSubmit={(e) => {
         e.preventDefault()
         try { tl.changeWindow(windowDraft); setWindowError(null) } catch (err) { setWindowError((err as Error).message) }
       }}>
@@ -369,7 +369,7 @@ export function TlSettings({ tl }: { tl: Timelapse }) {
           </select>
         </HTip>
         {windowError && <span role="alert" className={css.note}>{windowError}</span>}
-      </form>
+      </form>}
       <form className={css.group} onSubmit={(e) => {
         e.preventDefault()
         const value = Number(fpsDraft)
@@ -399,15 +399,15 @@ export function TlSettings({ tl }: { tl: Timelapse }) {
         <button type="submit" className={css.btn}>apply</button>
       </form>
       {linkedError && <span role="alert" className={css.note}>{linkedError}</span>}
-      <HTip content="Style preset (s)">
+      {!animation && <HTip content="Style preset (s)">
         <label className={css.field}>
           <span className={css.fieldLabel}>style</span>
           <select className={css.select} value={preset} onChange={(e) => setPreset(e.target.value as Preset)} aria-label="Style">
             {PRESETS.map((p) => <option key={p} value={p}>{PRESET_LABEL[p]}</option>)}
           </select>
         </label>
-      </HTip>
-      <HTip content="Circle size (multiplies every radius; circles also shrink when zoomed out)">
+      </HTip>}
+      {!animation && <HTip content="Circle size (multiplies every radius; circles also shrink when zoomed out)">
         <label className={css.field}>
           <span className={css.fieldLabel}>size</span>
           <select className={css.select} value={sz} onChange={(e) => setSz(Number(e.target.value))} aria-label="Circle size" data-testid="tl-size">
@@ -416,7 +416,7 @@ export function TlSettings({ tl }: { tl: Timelapse }) {
             ))}
           </select>
         </label>
-      </HTip>
+      </HTip>}
       <HTip content="Loop at the end of the range (l)">
         <label className={css.check}>
           <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} /> loop

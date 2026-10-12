@@ -124,9 +124,11 @@ export interface UseTimelapseOpts {
   mv?: boolean
   /** Register the `tl:*` hotkeys (default on). */
   keysEnabled?: boolean
+  /** An animation source can buffer the shared clock independently of counts. */
+  clockReady?: { current: boolean }
 }
 
-export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEnabled = true }: UseTimelapseOpts = {}) {
+export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEnabled = true, clockReady }: UseTimelapseOpts = {}) {
   const qc = useQueryClient()
   const binP = useMemo(() => createBinParam(defaultBin), [defaultBin])
   const [bin, setBin] = useUrlState('b', binP)
@@ -339,7 +341,7 @@ export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEn
     const tick = (now: number) => {
       const dt = (now - last) / 1000
       last = now
-      if (readyRef.current) {
+      if (clockReady ? clockReady.current : readyRef.current) {
         let next = tRef.current + sp * dt
         if (next >= iEnd) {
           if (loop) next = iStart
@@ -358,7 +360,7 @@ export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEn
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [playing, sp, iStart, iEnd, loop, setTUrl, bin])
+  }, [playing, sp, iStart, iEnd, loop, setTUrl, bin, clockReady])
 
   // Keyboard (`use-kbd`): all show up in the ShortcutsModal / Omnibar. Off in
   // movie mode (interaction disabled) and whenever the caller says so.

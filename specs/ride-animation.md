@@ -1,6 +1,6 @@
 # Ride animation: every ride, moving
 
-Status: draft (2026-09-29)
+Status: June 2025 data, interactive prototype, and movie capture implemented and verified; full-history backfill and routed paths pending (2026-10-11).
 Author: Ryan + Claude
 Builds on: [`timelapse-map.md`] (the `/timelapse` page, `GLMap`, movie mode `?mv=1` / `window.__tl.seek`), [`timelapse-fine-bins.md`] (the linked bin/fps/range/length controls). Its "v3 idea" in the v2-arcs sketch was per-trip animation; this spec is that idea.
 
@@ -36,11 +36,13 @@ This is not a pyramid. Nothing here is summed; it is a **time-sorted leaf table*
 | `Δstart` | LEB128 varint, seconds | delta from the previous ride's start, with the first ride relative to local midnight. Max gap on 2025-06-04 was 75 s (fits 1 byte); winter nights in 2013 may need 2 |
 | `dur` | u16 seconds | capped at **3 h** (10,800). This keeps 99.91% of rides exact. Longer rides get `dur=cap` plus a `long` flag (drawn fading out, not arriving) |
 | `ss`, `es` | u16 | indices into the month's station table |
-| `flags` | u8 | bit 0 e-bike, bit 1 casual, bit 2 long (capped); bike type is unknown before 2021-02, so the bit is 0 and the FE's "unknown" color applies |
+| `flags` | u8 | bit 0 e-bike, bit 1 casual, bit 2 long (capped), bit 3 unknown bike type, bit 4 unknown user type |
 
 The file is stored columnar (all `Δstart`, then all `dur`, …) and gzipped. **Measured on 2025-06-04**: 195,324 rides, 8.0 B/ride raw, **5.2 B/ride gzip-9**, **1.02 MB/day**. On 2025-06-15 (101 k rides) it was 5.3 B/ride. Brotli (R2/CF re-compress) should do slightly better; that is not measured. Full history is ~330 M × 5.3 B ≈ **1.75 GB**.
 
 Tie order is `(start_ms, ss, es, dur)`, so a ride's **ordinal within its day file is a stable id**. `Ride ID` exists only from 2021-02, so it can't serve as the id.
+
+Implemented wire format: `CTRA`, version `1`, reserved `0`, station count `u16`, record count `u32`, carry-in count `u32` (16-byte little-endian header). First start offset is signed zigzag LEB128; following offsets are unsigned deltas. Columns then contain durations, source indices, destination indices (`u16`) and flags (`u8`). Timestamps and durations are quantized to whole local-clock seconds; ties sort by `(start_seconds, ss, es, dur, flags)`. Both decoders reject invalid bounds, column lengths, carry-in, and noncanonical ordering. gzip has `mtime=0`.
 
 ### Chunking: per day, with carry-in
 
@@ -58,6 +60,14 @@ Each day file also carries the **carry-in**: rides that started in `[t0 − 3h, 
 - **Backfill**: 160 months, run on `e` (not the laptop). It reads the six needed columns (~60–80 MB per recent month) and writes ~1.75 GB. Batch is optional; it is embarrassingly parallel over months.
 
 ## Rendering (v1)
+
+Implemented candidate: `ctbk rides-anim create -d YYYYMM [-i LOCAL_NORMALIZED_DIR] [-u]`, `check -i BUILD_DIR`, and resumable `backfill -d YYYYMM-YYYYMM [-u]`. Projected R2 inputs are cached by ETag; checkpoints also compare the canonical map and station table hashes. Hashed day/station objects are published under `rides-anim-candidate/v1/objects/<md5>.*`; the mutable index uses 60-second caching. This candidate publication is content-addressed independently of DVX; formal `MonthTable`/DVX integration remains pending. It accounts separately for invalid-duration and unmapped rides.
+
+June 2025 has 4,836,455 source and encoded rides, zero invalid-duration or unmapped rides, and 4,363 rides capped at three hours. Every one of its 30 daily counts equals the fine pyramid's `1d` start count exactly (`ctbk rides-anim check`); all daily files plus the station table total 25,713,970 bytes. June's local consolidated input plus projected July spillback are recorded in `tmp/animation-june/month.json` with the remote July ETag. Candidate index and files are published and publicly readable.
+
+The browser mode is `/timelapse?anim=1&b=1m&d=250610-250610&t=250610T1800&len=60`. It shares linked controls and the movie clock, buffers on animation data, prefetches the next day after noon, and uses only the current day's padded carry-in (no adjacent-day double drawing). Geometry stays stable within 15-minute buckets; GPU trails use local seconds, with moving dot heads and round-trip loops. Long rides fade out; colors distinguish bike/user type and unknowns. This is explicitly labeled a June sample with inferred straight paths. Candidate mode still shares count-series queries for the scrubber; it does not require them to advance the clock.
+
+Verification: 219 hermetic Python tests; 159 frontend unit tests and TypeScript; eight existing browser checks plus the animation browser check (exact concurrency 3,870 at 18:00 and 3,851 at 18:01; deterministic movie seek to 18:00). Desktop and 390×844 phone rendering/settings checked in HCCSx Chrome. Movie artifact `www/tmp/movies/ride-day-smoke.mp4`: 720 frames at 12 fps, 640×640, exactly 60.000000 seconds by ffprobe; the evening frame has visible trails and 3,870 rides. `e` was unreachable over SSH; `rides-anim submit` prepares a pinned HCCS Batch run using existing reproc capacity and R2 Secrets Manager bindings, with 4 vCPU/8 GiB and checkpoint resume after Spot interruption.
 
 - deck.gl `TripsLayer` (`@deck.gl/geo-layers`, a new dependency beside `@deck.gl/layers` 9.4). Each ride is a path of `[start pos, end pos]` with timestamps `[start, start + dur]` in **seconds since the day's midnight**. float32 is exact to 1 s over a day, which is why the time base is per day and not epoch.
 - **Data feed**: one layer per loaded day. The GPU filters by `currentTime`, so an entire day (≤ 210 k two-vertex paths, ~7 MB of attributes) is uploaded once, not per frame. Around midnight, both adjacent days' layers render; carry-in rides are dropped from day `d+1`'s layer when day `d` is loaded, which avoids double-drawing. `binary` data (typed arrays straight from the unpacked columns) avoids JS object churn.
