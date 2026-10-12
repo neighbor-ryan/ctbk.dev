@@ -25,8 +25,8 @@ jobs:
       - name: Download NYC and Jersey City OSM extract
         run: |
           mkdir -p tmp/routes
-          curl --fail --location https://download.bbbike.org/osm/bbbike/NewYork/NewYork.osm.pbf --output tmp/routes/NewYork.osm.pbf
-          curl --fail --location https://download.bbbike.org/osm/bbbike/NewYork/NewYork.poly --output tmp/routes/NewYork.poly
+          curl --fail --location --connect-timeout 15 --max-time 600 --retry 3 --retry-all-errors https://data.bbbike.org/osm/bbbike/NewYork/NewYork.osm.pbf --output tmp/routes/NewYork.osm.pbf
+          curl --fail --location --connect-timeout 15 --max-time 60 --retry 3 --retry-all-errors https://data.bbbike.org/osm/bbbike/NewYork/NewYork.poly --output tmp/routes/NewYork.poly
       - name: Prepare bicycle graph
         run: |
           docker run --rm -v "$PWD/tmp/routes:/data" "$OSRM_IMAGE" osrm-extract --threads 4 -p /opt/bicycle.lua /data/NewYork.osm.pbf
