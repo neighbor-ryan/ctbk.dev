@@ -20,11 +20,10 @@ R2_PUBLIC_BASE_URL = "https://pub-4b6c7e01aa2349b8b8d6ed788df2a9d1.r2.dev"
 # cached past-window responses rotate (`specs/station-id-trailing-zero.md`).
 RIDES_CACHE_GEN = "trailing-zero-repair"
 # `/api/tl` (`src/tl.ts`): R2 prefix of the time-first `rides-tl-{start,end}`
-# pyramids (`specs/timelapse-map.md`; `rides-tl` = the full-history build,
-# `rides-tl-p0b` = the 2025-06 scratch build). Part of the edge-cache key.
+# pyramids (`specs/timelapse-fine-bins.md`; full history passed exact parity). Part of the edge-cache key.
 # Set `TL_CANONICALIZED = "1"` once `canonicalize` has run on the prefix
 # (materialized `c:` rows).
-TL_PREFIX = "rides-tl"
+TL_PREFIX = "rides-tl-fine"
 
 # Bundle .ttf font files as raw bytes (satori og:image rendering).
 # NOTE: defining ANY [[rules]] displaces wrangler's defaults, so the
@@ -98,7 +97,7 @@ R2_PUBLIC_BASE_URL = "https://pub-4b6c7e01aa2349b8b8d6ed788df2a9d1.r2.dev"
 # edge-cache key; `TL_CANONICALIZED = "1"` only once `canonicalize` has run
 # on it; `TL_HTTP_BASE = "https://data.ctbk.dev"` reads shards over HTTP
 # instead of the R2 binding (unset = R2).
-TL_PREFIX = "rides-tl"
+TL_PREFIX = "rides-tl-fine"
 
 [[env.dev.d1_databases]]
 binding = "DB"

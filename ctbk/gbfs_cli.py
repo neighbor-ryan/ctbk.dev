@@ -1351,8 +1351,8 @@ RIDES_TL_ANCHOR_SPECS = (
 	('rides-tl-end', 'rides-tl/end', 'ctbk_engine_src:rides_tl_end'),
 )
 
-# Candidate minute-first builds; leave the monthly serving cadence on
-# RIDES_TL_ANCHOR_SPECS until parity and read-cost gates pass.
+# Minute-first serving builds: full history passed exact monoid parity
+# against every hourly cell-bin before prefix adoption.
 RIDES_TL_FINE_ANCHOR_SPECS = (
 	('rides-tl-fine-start', 'rides-tl-fine/start', 'ctbk_engine_src:rides_tl_start'),
 	('rides-tl-fine-end', 'rides-tl-fine/end', 'ctbk_engine_src:rides_tl_end'),
@@ -1480,20 +1480,40 @@ def rides_extend(
 
 
 @gbfs.command('rides-tl-extend', help='Monthly `rides-tl` cadence (`specs/timelapse-map.md` P4) for one freshly-ingested month: `engine submit -R -f` both time-first anchors on HCCS Batch, capped at the first of the month after YM (fill mode builds only the missing shards; the cap keeps the tip closed — an uncapped fill would reach "now" and build open periods), then `engine watch` the two jobs together. No canonicalize pass (`/api/tl` folds merged `s:` leaves at serve time until `TL_CANONICALIZED=1`) and no D1 registration (`/api/tl` resolves shards from `manifest.jsonl`). Runs after `rides-extend`, which mirrors `normalized/<YM>.parquet` to the plain key the factory lists. Needs HCCS AWS creds (Batch); R2 creds come from the job def.')
-@option('-n', '--dry-run', is_flag=True, help='Print the two submit commands; no submits.')
+@option('-f/-F', '--fine/--no-fine', default=True, help='Minute-first serving cadence (default); -F selects the legacy hourly prefix.')
+@option('-n', '--dry-run', is_flag=True, help='Print repair, submits, and finality publication; no writes.')
 @option('-t', '--timeout', type=float, default=3600, show_default=True, help='`engine watch` deadline, seconds (both anchors run concurrently).')
 @argument('ym', metavar='YM')
 @click.pass_context
-def rides_tl_extend(ctx: click.Context, dry_run: bool, timeout: float, ym: str) -> None:
+def rides_tl_extend(
+	ctx: click.Context,
+	fine: bool,
+	dry_run: bool,
+	timeout: float,
+	ym: str,
+) -> None:
 	from ctbk.pyramid_cascade.engine_check import config_rg_size
 	from ctbk.pyramid_cascade.lite import RIDES_GENESIS
 	ym, m0 = _ym_month(ym)
 	m1 = datetime(m0.year + 1, 1, 1, tzinfo=timezone.utc) if m0.month == 12 else m0.replace(month=m0.month + 1)
 	if not Path(f's3/ctbk/normalized/{ym}.parquet.dvc').exists():
 		raise click.ClickException(f's3/ctbk/normalized/{ym}.parquet.dvc not found — has {ym} been consolidated?')
+	from ctbk.pyramid_cascade.engine_check import load_pyramid
+	from pyrmts_engine.invalidation import invalidate, load_invalidations
+	specs = RIDES_TL_FINE_ANCHOR_SPECS if fine else RIDES_TL_ANCHOR_SPECS
+	p0 = datetime(m0.year - 1, 12, 1, tzinfo=timezone.utc) if m0.month == 1 else m0.replace(month=m0.month - 1)
+	if dry_run:
+		err(f'invalidate: would journal [{p0:%Y-%m-%d}, {m0:%Y-%m-%d}) on {specs[0][0]}')
+	else:
+		_use_r2_rw_env()
+		pyramid = load_pyramid(specs[0][0])
+		entries, _ = load_invalidations(pyramid)
+		if not any(e.start == p0 and e.end == m0 for e in entries):
+			invalidate(pyramid, (p0, m0))
+		err(f'invalidate: [{p0:%Y-%m-%d}, {m0:%Y-%m-%d}) journaled on {specs[0][0]}')
 	range_ = f'{RIDES_GENESIS:%Y-%m-%d}/{m1:%Y-%m-%d}'
 	job_ids = []
-	for config_name, prefix, factory in RIDES_TL_ANCHOR_SPECS:
+	for config_name, prefix, factory in specs:
 		cmd = _engine_submit_cmd(
 			config_name,
 			scratch_prefix=prefix, fill=True, range_=range_, source_spec=factory,
@@ -1507,6 +1527,7 @@ def rides_tl_extend(ctx: click.Context, dry_run: bool, timeout: float, ym: str) 
 		err('watch: would poll both jobs to completion (`ctbk gbfs engine watch`)')
 		return
 	ctx.invoke(gbfs_engine_watch, interval=20, timeout=timeout, job_ids=tuple(job_ids))
+	ctx.invoke(gbfs_engine_tl_finalize, fine=fine, dry_run=False, ym=ym)
 	err(f'rides-tl extended through {ym}.')
 
 
@@ -2576,16 +2597,18 @@ def gbfs_feed_stats(paths: tuple[str, ...]) -> None:
 @option('-a', '--anchor', 'anchors', multiple=True, default=('start', 'end'), type=click.Choice(['start', 'end']))
 @option('-b', '--baseline', default='rides-tl', show_default=True)
 @option('-c', '--candidate', required=True)
+@option('-m', '--monthly', is_flag=True, help='Stream one calendar month at a time to bound full-history memory.')
 @option('-o', '--out', type=click.Path(path_type=Path), default=None)
 @option('-r', '--range', 'range_', required=True, help='Half-open FROM/TO UTC ISO range.')
 def gbfs_engine_tl_check(
 	anchors: tuple[str, ...],
 	baseline: str,
 	candidate: str,
+	monthly: bool,
 	out: Path | None,
 	range_: str,
 ) -> None:
-	from ctbk.pyramid_cascade.timelapse_check import compare_anchor, epoch_ms
+	from ctbk.pyramid_cascade.timelapse_check import compare_anchor, epoch_ms, month_ranges
 	from pathlib import PurePosixPath
 	start, end = (epoch_ms(s + 'T00:00:00Z' if len(s) == 10 else s) for s in range_.split('/'))
 	if end <= start:
@@ -2604,9 +2627,41 @@ def gbfs_engine_tl_check(
 			path.parent.mkdir(parents=True, exist_ok=True)
 			path.write_bytes(data)
 		return data
-	report = [compare_anchor(candidate.rstrip('/'), baseline.rstrip('/'), anchor, start, end, get) for anchor in anchors]
+	report = []
+	for lo, hi in month_ranges(start, end) if monthly else [(start, end)]:
+		for anchor in anchors:
+			checked = compare_anchor(candidate.rstrip('/'), baseline.rstrip('/'), anchor, lo, hi, get)
+			checked['range'] = [lo, hi]
+			report.append(checked)
+			err(f'{anchor} {datetime.fromtimestamp(lo / 1000, timezone.utc):%Y-%m}: exact parity passed')
 	text = json.dumps(report, indent=2) + '\n'
 	if out:
 		out.parent.mkdir(parents=True, exist_ok=True)
 		out.write_text(text)
 	print(text, end='')
+
+
+@gbfs_engine.command('tl-finalize', help='Verify full hourly (and optionally minute) manifest coverage through YM, then publish conservative start/end cache watermarks. Run only after both source-capped builds succeed.')
+@option('-f/-F', '--fine/--no-fine', default=True, help='Verify the minute-first serving prefix (default); -F selects legacy hourly.')
+@option('-n', '--dry-run', is_flag=True, help='Check coverage and print watermarks; no writes.')
+@argument('ym', metavar='YM')
+def gbfs_engine_tl_finalize(fine: bool, dry_run: bool, ym: str) -> None:
+	from ctbk.pyramid_cascade.timelapse_check import tier_cover
+	from ctbk.pyramid_cascade.timelapse_cadence import finality
+	from ctbk.pyramid_cascade.lite import RIDES_GENESIS
+	ym, m0 = _ym_month(ym)
+	m1 = datetime(m0.year + 1, 1, 1, tzinfo=timezone.utc) if m0.month == 12 else m0.replace(month=m0.month + 1)
+	r2, bucket = _r2_client(rw=not dry_run)
+	specs = RIDES_TL_FINE_ANCHOR_SPECS if fine else RIDES_TL_ANCHOR_SPECS
+	for _, prefix, _ in specs:
+		manifest = r2.get_object(Bucket=bucket, Key=f'{prefix}/manifest.jsonl')['Body'].read().decode()
+		for tier in ['1h', '1m'] if fine else ['1h']:
+			tier_cover(manifest, tier, int(RIDES_GENESIS.timestamp() * 1000), int(m1.timestamp() * 1000))
+	watermarks = finality(m0, m1)
+	for _, prefix, _ in specs:
+		anchor = prefix.rsplit('/', 1)[1]
+		key = f'{prefix}/final.json'
+		value = watermarks[anchor]
+		if not dry_run:
+			r2.put_object(Bucket=bucket, Key=key, Body=(json.dumps({'finalThrough': value}) + '\n').encode(), ContentType='application/json')
+		err(f'{key}: finalThrough={value}' + (' (dry-run)' if dry_run else ''))

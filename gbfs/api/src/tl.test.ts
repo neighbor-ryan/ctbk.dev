@@ -257,14 +257,18 @@ describe('serveTl', () => {
 });
 
 describe('versioned any-bin responses', () => {
+	it('treats pre-genesis time as zero, including the first partial calendar year', () => {
+		const plan = { reads: [{ shard: P0B[0], from: TL_GENESIS_MS, to: Date.UTC(2014, 0, 1) }], gaps: [] };
+		expect(completeFrames(plan, '1y', 0)).toEqual([[0, 2]]);
+	});
 	it('keeps partially covered derived frames unknown and combines adjacent reads', () => {
-		const [t0] = chunkRange('45m', 0);
+		const [t0] = chunkRange('45m', 1);
 		const reads = [[0, 15], [30, 60], [60, 90]].map(([a, b]) => ({
 			shard: P0B[0], from: t0 + a * 60_000, to: t0 + b * 60_000,
 		}));
 		const plan = { reads, gaps: [[t0 + 15 * 60_000, t0 + 30 * 60_000] as [number, number]] };
-		expect(coveredFrames(plan, '45m', 0)).toEqual([[0, 2]]);
-		expect(completeFrames(plan, '45m', 0)).toEqual([[1, 2]]);
+		expect(coveredFrames(plan, '45m', 1)).toEqual([[0, 2]]);
+		expect(completeFrames(plan, '45m', 1)).toEqual([[1, 2]]);
 	});
 
 	it('pivots minute rows directly to sparse counts with exact canonical sums', () => {

@@ -115,3 +115,14 @@ def compare_anchor(
     if not all(checks.values()):
         raise ValueError(f'timelapse parity failed: {report}')
     return report
+
+
+def month_ranges(start: int, end: int) -> list[tuple[int, int]]:
+    ranges = []
+    while start < end:
+        at = datetime.fromtimestamp(start / 1000, timezone.utc)
+        following = datetime(at.year + (at.month == 12), at.month % 12 + 1, 1, tzinfo=timezone.utc)
+        stop = min(end, int(following.timestamp() * 1000))
+        ranges.append((start, stop))
+        start = stop
+    return ranges

@@ -3,7 +3,15 @@ from json import dumps
 import polars as pl
 import pytest
 
-from ctbk.pyramid_cascade.timelapse_check import Read, hourly, tier_cover
+from ctbk.pyramid_cascade.timelapse_check import Read, epoch_ms, hourly, month_ranges, tier_cover
+
+
+def test_monthly_stream_clips_edges_and_uses_utc_for_naive_input() -> None:
+    assert epoch_ms('2025-06-15T00:00:00') == epoch_ms('2025-06-15T00:00:00Z')
+    assert month_ranges(epoch_ms('2025-06-15'), epoch_ms('2025-07-10')) == [
+        (1749945600000, 1751328000000),
+        (1751328000000, 1752105600000),
+    ]
 
 
 def test_cover_deduplicates_rewrites_and_clips_overlapping_rungs() -> None:

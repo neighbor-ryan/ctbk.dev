@@ -352,11 +352,11 @@ export function completeFrames(plan: TlPlan, bin: TlBin, k: number): [number, nu
 	const out: [number, number][] = [];
 	let interval = 0;
 	for (let f = 0; f < K; f++) {
-		const from = frameStartMs(bin, k * K + f);
+		const from = Math.max(TL_GENESIS_MS, frameStartMs(bin, k * K + f));
 		const to = frameStartMs(bin, k * K + f + 1);
 		while (interval < intervals.length && intervals[interval][1] <= from) interval++;
 		const span = intervals[interval];
-		if (!span || span[0] > from || span[1] < to) continue;
+		if (to > TL_GENESIS_MS && (!span || span[0] > from || span[1] < to)) continue;
 		const last = out[out.length - 1];
 		if (last && last[1] === f) last[1] = f + 1;
 		else out.push([f, f + 1]);
@@ -494,7 +494,8 @@ export async function serveTl(
 		if (err instanceof TlNotFound) return errorResponse(404, err.message, cors);
 		throw err;
 	}
-	const plan = planCover(shards, bin, t0, t1);
+	const plan = gv && t1 <= TL_GENESIS_MS ? { reads: [], gaps: [] }
+		: planCover(shards, bin, gv ? Math.max(t0, TL_GENESIS_MS) : t0, t1);
 	const canon = mode === 'canonical'
 		? await loadCanonMapWith(async (key) => {
 			const bytes = await storage.get(key);
