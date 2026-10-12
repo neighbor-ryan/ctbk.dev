@@ -110,6 +110,7 @@ interface BuildProgress {
 }
 interface HealthSnapshot {
   generatedAt: number
+  inventoryGeneratedAt?: number | null
   feed: FeedHealth
   compactions: CompactionHealth
   cascade: CascadeHealth
@@ -160,6 +161,10 @@ export default function Health() {
   return (
     <Page>
       <h1 style={{ fontSize: '1.6em', margin: '0 0 0.5em' }}>GBFS pipeline health</h1>
+      <p style={{ fontSize: '0.85em', opacity: 0.7, marginTop: 0 }}>
+        Live checks updated {fmtAge(data.generatedAt)} · refreshed each minute.<br />
+        Historical inventory {data.inventoryGeneratedAt ? `updated ${fmtAge(data.inventoryGeneratedAt)}` : 'awaiting its first refresh'} · refreshed hourly.
+      </p>
       <TripdataSection tripdata={data.tripdata} />
       <FeedSection feed={data.feed} />
       <CompactionsSection compactions={data.compactions} />
