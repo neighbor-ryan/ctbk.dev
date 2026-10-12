@@ -96,6 +96,7 @@
 !scripts/gen-station-urls.js
 !scripts/gen-version.js
 !scripts/push-screenshots.py
+!scripts/render-timelapse.mjs
 !scrns.config.json
 !scrns.timelapse.json
 !src/chart/YmrgtbChart.tsx
@@ -245,6 +246,8 @@
 !src/query/timelapseFrames.ts
 !src/query/timelapseLinked.test.ts
 !src/query/timelapseLinked.ts
+!src/query/timelapseMovie.test.ts
+!src/query/timelapseMovie.ts
 !src/query/timelapsePrefetch.test.ts
 !src/query/timelapsePrefetch.ts
 !src/query/timelapseSize.test.ts

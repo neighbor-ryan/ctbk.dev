@@ -440,7 +440,7 @@ export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEn
   return {
     qc, src, bin, changeBin, windowCode: windowSpec.code, windowWidth: windowSpec.width, changeWindow, kernel, setKernel, range, setRangeEdit, applySpan, capNote, lastDay, iStart, iEnd, tUrl, tToI,
     tRef, t, setT, playing, play, pause, toggle, step, commitT, peek, onPeek, tView, table, frames, rangeChunks,
-    shown, shownFrames, frame, scale, scaleFrozen, preset, setPreset, sp, setSp, length, setLength, derived, touch, loop, setLoop, sz, setSz, totals,
+    shown, shownFrames, shownWindows, frame, scale, scaleFrozen, preset, setPreset, sp, setSp, length, setLength, derived, touch, loop, setLoop, sz, setSz, totals,
   }
 }
 

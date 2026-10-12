@@ -35,3 +35,15 @@ test('clock follows `t`; → steps `t` in the URL after pause', async ({ page })
   )
   expect(errors).toEqual([])
 })
+
+test('movie capture samples playback speed and waits for trailing-window data', async ({ page }) => {
+  await page.goto('/timelapse?mv=1&b=1h&d=250610-250610&sp=12&w=2h&cfps=12')
+  await expect(page.locator('[data-tl-frame="0"]')).toHaveCount(1, { timeout: 120000 })
+  expect(await page.evaluate(() => {
+    const { frames, fps, seconds } = window.__tl!
+    return { frames, fps, seconds }
+  })).toEqual({ frames: 24, fps: 12, seconds: 2 })
+  await page.evaluate(() => window.__tl!.seek(12))
+  await expect(page.locator('[data-tl-frame="12"]')).toHaveCount(1)
+  await expect(page.getByTestId('tl-clock')).toHaveText('Tue, Jun 10, 2025 · 13:00 (last 2h)')
+})

@@ -1,6 +1,6 @@
 # Timelapse fine bins: any bin, sub-hour tiers, sliding windows, linked controls
 
-Status: F1 implementation and candidate build in progress (2026-10-11; user authorized the full roadmap).
+Status: F1–F3 deployed; F4 controls deployed and movie capture verified locally (2026-10-11; user authorized the full roadmap).
 Author: Ryan + Claude
 Builds on: [`timelapse-map.md`] (the `rides-tl-{start,end}` time-first pyramids, `/api/tl`, frame grid, P0/P4 measurements); [`rides-tl-start.yaml`].
 
@@ -202,7 +202,7 @@ F1 implementation: `MonthlyRidesSource` truncates to the first/finest configured
 
 June 2025 F1 gates passed for both anchors on 2026-10-11. Image `ctbk-engine:789dc78a`, HCCS Batch revision 10; start job `49183149-139c-4073-8bf3-b12ba54f5588`, end job `e7dced3c-6dbc-408e-91cf-b0e862622899`, both succeeded. `ctbk gbfs engine tl-check -c rides-tl-f1 -r 2025-06-01/2025-07-01` verifies all three count-monoid columns over exact manifest-selected covers: minute→hour, quarter-hour→hour, and candidate hourly→production hourly all equal for every cell-hour. Actual bytes are approximately 11.1 MB (`1m`) and 7.2 MB (`15m`) per anchor, within the ±20% budget. Immutable input shards are cached under `tmp/tl-check` for repeatability; the report is in root `tmp/fine-parity.json`. Full-history builds remain at the candidate `rides-tl-fine` prefix, capped at 2026-10-01, until full validation and serving adoption.
 
-- **F1: config + source + scratch build** (Batch, **needs approval to submit**). Truncate to the base-tier bin; `1m`/`15m` tiers with the rungs above; a one-month scratch build (2025-06, `rides-tl-f1/`). Gates:
+- **F1: config + source + scratch build** (Batch, authorized with the full roadmap). Truncate to the base-tier bin; `1m`/`15m` tiers with the rungs above; a one-month scratch build (2025-06, `rides-tl-f1/`). Gates:
   - `1h` cascaded from `15m` equals the existing P4 `1h` shards row for row (ideally md5-equal);
   - Σ `1m` per hour equals `1h` on every station-hour;
   - measured bytes are within ±20% of the table.
@@ -225,8 +225,12 @@ June 2025 F1 gates passed for both anchors on 2026-10-11. Image `ctbk-engine:789
 
 Full-history candidate jobs: start `6e8e891d-ea69-4728-a74a-dc89fb09e96f`, end `f26efd86-9a55-44f9-bbb1-83dfd675f55d` (8 vCPU / 32 GiB each, image `789dc78a`, cap 2026-10-01). F2 grid and CSR serving are implemented behind `gv=1`; legacy grid ranges are preserved. Sparse responses accumulate directly without a dense minute matrix. A derived frame is covered only when its whole interval is available. API validation: 301 tests and TypeScript passed; client: 139 tests and TypeScript passed. Watermark publication and fine-prefix serving adoption remain pending.
 
-Monthly cadence repairs the previous start month through the invalidation journal before filling. `ctbk gbfs engine tl-finalize [-f] YM` verifies continuous hourly coverage for both anchors (and minute coverage with `-f`) before publishing watermarks; `rides-tl-extend` calls it only after both jobs succeed. `-f` selects the minute-first candidate cadence.
+Monthly cadence repairs the previous start month through the invalidation journal before filling. `ctbk gbfs engine tl-finalize [-F] YM` verifies continuous hourly and minute coverage for both anchors before publishing watermarks; `rides-tl-extend` calls it only after both jobs succeed. Fine cadence is the default; `-F` selects legacy hourly cadence.
 
 Full-history gates passed for all 160 months, June 2013 through September 2026, on both anchors. Every cell-hour and all three sum-monoid columns equal the hourly baseline. Totals: 335,007,625 starts and 335,009,585 ends. End job `f26efd86-9a55-44f9-bbb1-83dfd675f55d` was interrupted by Spot eviction; fill retry `c2737ca8-2f8c-42c4-808f-6aac2ea2275c` succeeded. Start job `6e8e891d-ea69-4728-a74a-dc89fb09e96f` succeeded. Reports: root `tmp/fine-full-{start,end}-parity.json`. Watermarks are published: start 2026-09-01; end 2026-10-01. API configuration adopts `rides-tl-fine` and monthly cadence defaults to it (`-F` explicitly selects legacy hourly).
 
 F3/F4 now include preset and custom nesting bins, minute deep links, box/triangle trailing sums with genesis pre-roll, window-based scale, fractional fps, movie length, persisted LRU order, derived-field styling, and recency on focusing fields. Fixed/calendar range edges are handled in `timelapseLinked.ts`; the monomial solver is generic and skips rank-deficient variable sets. Versioned missing data never falls back to synthetic counts; pre-genesis time is known zero, including the first partial calendar year. Seven focused browser tests pass; desktop and phone/window edits were checked in HCCSx Chrome. Real SNAPPY parquet fixtures verify 20-minute and 45-minute aggregation, CSR payloads, complete coverage, and finality cache headers. Windows currently use the same legal codes as bins; calendar windows that do not divide one year are not accepted.
+
+Deployment `cb4710bc` passed website (`38191906841`), worker (`38191906830`), and Python (`38191906777`) CI. HCCSx live Chrome verified minute data and a two-hour trailing window: June 10 at 13:31 shows 6,462 starts; changing from 15-minute to minute bins while holding 60 seconds derives 24 bins/second. Screenshot: root `tmp/tl-fine-live-minute.jpg`.
+
+Movie capture samples the interactive bins/second clock at `cfps` (default 30), so its frame count is `ceil(nBins * cfps / sp)` and its duration agrees with linked controls to one capture frame. Explicit `fpb` presets retain their fixed samples per bin. `window.__tl` publishes `frames`, `fps`, and `seconds`; `seek` waits for trailing-window data as well as deck redraw and map idle. `pnpm render:tl --fps 30 URL OUTPUT.mp4` probes those values and renders through scrns, writing a JSON manifest beside the video. Validation: 153 unit tests, TypeScript, eight focused browser tests, and a real 480×480 smoke render with 24 visible frames at 12 fps; ffprobe reports exactly 2.000000 seconds. Artifact: `www/tmp/movies/linked-smoke.mp4`.

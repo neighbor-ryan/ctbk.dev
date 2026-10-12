@@ -42,6 +42,7 @@ import { ensureChunk, useTlStationSeries, type SourceMode } from '../query/timel
 import { clockLabel, shortLabel, binUnit } from '../query/timelapseControls'
 import { ANCHORS, chunkOf, formatYmd, frameStartMs, type Bin, type StationTable } from '../query/timelapseFrames'
 import { radiusFactor } from '../query/timelapseSize'
+import { movieGrid } from '../query/timelapseMovie'
 import css from '../timelapse.module.css'
 import type { Layer, PickingInfo } from '@deck.gl/core'
 import type { MapboxOverlay } from '@deck.gl/mapbox'
@@ -51,9 +52,8 @@ const { floor, max, round } = Math
 
 declare global {
   interface Window {
-    /** Movie-mode seek API (`?mv=1`): `frames = nBins × fpb`; `seek(i)`
-     *  resolves once frame `i` is on screen (chunks in, deck drawn, map idle). */
-    __tl?: { frames: number; seek: (i: number) => Promise<void> }
+    /** Movie-mode seek resolves after data, deck redraw, and map idle. */
+    __tl?: { frames: number; fps: number; seconds: number; seek: (i: number) => Promise<void> }
   }
 }
 
@@ -65,12 +65,14 @@ export default function Timelapse() {
   const tl = useTimelapse({ mv })
   const {
     qc, src, bin, range, iStart, iEnd, tUrl, tToI, tRef, setT, playing, peek, table, frames, shown, shownFrames, frame,
-    scale, scaleFrozen, preset, sz,
+    scale, scaleFrozen, preset, sz, sp, shownWindows, windowWidth,
   } = tl
   const [view, setView] = useUrlState('ll', viewParam)
   const [pins, setPins] = useUrlState('sel', selParam)
-  const [fpbRaw] = useUrlState('fpb', intParam(1))
-  const fpb = max(1, fpbRaw)
+  const [fpbRaw] = useUrlState('fpb', stringParam())
+  const [captureFps] = useUrlState('cfps', intParam(30))
+  const fpb = /^\d+$/.test(fpbRaw ?? '') ? max(1, Number(fpbRaw)) : undefined
+  const grid = useMemo(() => movieGrid(iEnd - iStart + 1, sp, max(1, captureFps), fpb), [iStart, iEnd, sp, captureFps, fpb])
   const [cap] = useUrlState('cap', stringParam())
   const [tileBase] = useUrlState('tileBase', stringParam())
   const wide = useMediaQuery(WIDE)
@@ -99,7 +101,7 @@ export default function Timelapse() {
     : []), [table, frame, preset, pinIdx, mv, canHover, rf])
 
   // ---- Movie mode: `window.__tl.seek(i)` -----------------------------------
-  // Each seek: fetch the chunk(s) under `t = iStart + i / fpb`, set `t`, then
+  // Each seek: fetch the chunk(s) under the sampled playback clock, set `t`, then
   // wait for (1) a committed render showing exactly that `t` with its frame
   // pair ready and the scale frozen, (2) a deck redraw of those layers
   // (`onAfterRender`), (3) MapLibre idle; then set `data-tl-frame`.
@@ -117,19 +119,18 @@ export default function Timelapse() {
   const layersRef = useRef(layers)
   layersRef.current = layers
   useLayoutEffect(() => {
-    rendered.current = { t: shown, ready: shownFrames.ready && scaleFrozen && layers.length > 0, layers }
+    rendered.current = { t: shown, ready: shownFrames.ready && (windowWidth === 1 || shownWindows.ready) && scaleFrozen && layers.length > 0, layers }
     notify()
   })
   const onAfterRender = useCallback(() => {
     drawn.current = layersRef.current
     notify()
   }, [notify])
-  const nFrames = (iEnd - iStart + 1) * fpb
   const seekChain = useRef<Promise<void>>(Promise.resolve())
   useEffect(() => {
     if (!mv) return
     const doSeek = async (i: number) => {
-      const tt = iStart + i / fpb
+      const tt = iStart + grid.offset(i)
       const a = floor(tt)
       const ks = Array.from(new Set([chunkOf(bin, a), chunkOf(bin, a + 1)]))
       await Promise.all(ks.flatMap((k) => ANCHORS.map((anchor) => ensureChunk(qc, src, anchor, bin, k))))
@@ -147,12 +148,12 @@ export default function Timelapse() {
       seekChain.current = p.catch(() => {})
       return p
     }
-    window.__tl = { frames: nFrames, seek }
+    window.__tl = { frames: grid.frames, fps: grid.fps, seconds: grid.seconds, seek }
     // Land on the URL's `t` so `[data-tl-frame]` appears without a caller.
-    seek(round((tToI(tUrl) - iStart) * fpb)).catch((e) => console.error('__tl.seek', e))
+    seek(Math.min(grid.frames - 1, round((tToI(tUrl) - iStart) / grid.step))).catch((e) => console.error('__tl.seek', e))
     return () => { delete window.__tl }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mv, bin, iStart, fpb, nFrames, src])
+  }, [mv, bin, iStart, grid, src])
 
   // ---- Selection gestures (`lib/mapSelection`) -----------------------------
   // Taps pick with deck's `pickObject` (a wider radius for fingers);
