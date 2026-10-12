@@ -135,7 +135,7 @@ export default function FlowLensLegend({
           </div>
           {widthTicks.length > 0 && (
             <>
-              <div className={css.keyTitle}>trips per {streetsDrawn ? 'street segment' : 'arc'} {out ? '(set → station)' : '(station → set)'}</div>
+              <div className={css.keyTitle}>trips per {streetsDrawn ? 'line (street / fallback arc)' : 'arc'} {out ? '(set → station)' : '(station → set)'}</div>
               <div className={css.widthKey} data-testid="lens-width-key">
                 {widthTicks.map((n) => (
                   <span key={n} className={css.keyItem}>

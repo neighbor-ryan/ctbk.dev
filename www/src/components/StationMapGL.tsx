@@ -209,7 +209,8 @@ export default function StationMapGL({
   // destination (riding direction), so direction reads without arrowheads and
   // the origin doesn't pile up into a blob. `arcs` is sorted light→heavy, so
   // heavy arcs draw on top. Tilted so arcs curve visibly at pitch 0.
-  const arcMax = arcs?.length ? arcs[arcs.length - 1].count : 1
+  const pathMax = flowPaths?.length ? flowPaths[flowPaths.length - 1].count : 0
+  const arcMax = max(pathMax, arcs?.length ? arcs[arcs.length - 1].count : 0, 1)
   const arcRgb = dark ? ARC_RGB_DARK : ARC_RGB_LIGHT
   const arcLayer = arcs?.length ? new ArcLayer<FlowArc>({
     id: 'flow-arcs',
@@ -226,16 +227,15 @@ export default function StationMapGL({
     updateTriggers: { getSourceColor: [dark, arcMax], getTargetColor: [dark, arcMax], getWidth: arcMax },
   }) : null
 
-  const pathMax = flowPaths?.length ? flowPaths[flowPaths.length - 1].count : 1
   const pathLayer = flowPaths?.length ? new PathLayer<FlowPath>({
     id: 'flow-streets',
     data: flowPaths as FlowPath[],
     getPath: (d) => d.path,
-    getColor: (d) => [...arcRgb, arcAlpha(d.count, pathMax)],
-    getWidth: (d) => arcWidthPx(d.count, pathMax),
+    getColor: (d) => [...arcRgb, arcAlpha(d.count, arcMax)],
+    getWidth: (d) => arcWidthPx(d.count, arcMax),
     widthUnits: 'pixels', capRounded: true, jointRounded: true,
     pickable: false,
-    updateTriggers: { getColor: [dark, pathMax], getWidth: pathMax },
+    updateTriggers: { getColor: [dark, arcMax], getWidth: arcMax },
   }) : null
 
   const layers: Layer[] = [

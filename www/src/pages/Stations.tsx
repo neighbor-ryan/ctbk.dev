@@ -396,6 +396,8 @@ export default function Stations() {
   const routeStatus = routeData.error ? `Routes unavailable: ${routeData.error.message} · showing arcs`
     : routed ? `${routed.total ? Math.round(100 * routed.routed / routed.total) : 0}% routed · sample coverage · other pairs use arcs`
     : 'Loading route sample… · showing arcs'
+  const visibleArcs = routed?.arcs ?? arcs
+  const lineMax = Math.max(routed?.paths.length ? routed.paths[routed.paths.length - 1].count : 0, visibleArcs?.length ? visibleArcs[visibleArcs.length - 1].count : 0)
   const effectiveColors = flowStyle?.colors ?? stationColors
   const effectiveRadii = flowStyle?.radii ?? null
 
@@ -445,7 +447,7 @@ export default function Stations() {
       streetsDrawn={!!routed?.paths.length}
       total={flowStyle.total}
       topCount={flowStyle.topCount}
-      arcMax={routed?.paths.length ? routed.paths[routed.paths.length - 1].count : (arcs?.length ? arcs[arcs.length - 1].count : null)}
+      arcMax={lineMax || null}
       compact={compact}
       open={legendOpen}
       onToggleOpen={() => setLegendOpen(!legendOpen)}
@@ -490,7 +492,7 @@ export default function Stations() {
             stationColors={effectiveColors}
             stationRadii={effectiveRadii}
             mark={mark}
-              arcs={routed?.arcs ?? arcs}
+              arcs={visibleArcs}
               flowPaths={routed?.paths}
             setSelectedId={setSelectedId}
             onHoverStation={setHoverPreviewId}
