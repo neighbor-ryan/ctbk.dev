@@ -7,6 +7,7 @@
 !Dockerfile.screenshots
 !ROADMAP.md
 !e2e/bundle.spec.ts
+!e2e/flow-routes.spec.ts
 !e2e/glMap.ts
 !e2e/home-chart.spec.ts
 !e2e/map-embed.spec.ts
@@ -231,6 +232,8 @@
 !src/pages/Stations.tsx
 !src/pages/Timelapse.tsx
 !src/query/client.ts
+!src/query/flowRoutes.test.ts
+!src/query/flowRoutes.ts
 !src/query/mergeReview.ts
 !src/query/rideAnimation.test.ts
 !src/query/rideAnimation.ts
