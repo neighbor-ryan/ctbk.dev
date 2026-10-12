@@ -44,7 +44,7 @@ import { ANCHORS, chunkOf, formatT, formatYmd, frameStartMs, type Bin, type Stat
 import { radiusFactor } from '../query/timelapseSize'
 import { movieGrid } from '../query/timelapseMovie'
 import { useRideAnimation } from '../query/useRideAnimation'
-import { movingRideLayers, ridePaths } from '../components/timelapse/rideLayers'
+import { movingRideLayers, ridePaths, rideRouteOrigins } from '../components/timelapse/rideLayers'
 import { useFlowRoutes } from '../query/flowRoutes'
 import css from '../timelapse.module.css'
 import type { Layer, PickingInfo } from '@deck.gl/core'
@@ -82,10 +82,11 @@ export default function Timelapse() {
   const frameMs = frameStartMs(bin, floor(shown))
   const shownMs = frameMs + (shown - floor(shown)) * (frameStartMs(bin, floor(shown) + 1) - frameMs)
   const animation = useRideAnimation(shownMs, anim)
-  const routeData = useFlowRoutes(anim && routeMode)
+  const bucket = floor(animation.seconds / 900) * 900
+  const routeOrigins = useMemo(() => rideRouteOrigins(animation.day, bucket, trail), [animation.day, bucket, trail])
+  const routeData = useFlowRoutes(anim && routeMode, routeOrigins)
   const ready = animation.ready && (!routeMode || !!routeData.data || !!routeData.error)
   animationReady.current = ready
-  const bucket = floor(animation.seconds / 900) * 900
   const midnight = floor(shownMs / 86400000) * 86400
   const paths = useMemo(() => animation.day ? ridePaths(animation.day, bucket, trail, routeMode ? routeData.data : undefined, midnight) : [], [animation.day, bucket, trail, routeMode, routeData.data, midnight])
   const moving = useMemo(() => movingRideLayers(paths, animation.seconds, trail, colorBy), [paths, animation.seconds, trail, colorBy])
@@ -272,7 +273,7 @@ export default function Timelapse() {
           {anim && <div className={css.legendBody}>
             <div data-testid="ride-active">{moving.active.toLocaleString('en-US')} rides in progress</div>
             {legendOpen && <>
-            <div className={css.clockSub}>Animation preview · {routeMode ? <><span data-testid="ride-routed">{moving.routed.toLocaleString('en-US')} active rides on inferred bike routes</span> · sample coverage; other rides use straight paths</> : 'inferred straight paths'} · round-trip loops · rides over 3h fade out</div>
+            <div className={css.clockSub}>Animation preview · {routeMode ? <><span data-testid="ride-routed">{moving.routed.toLocaleString('en-US')} active rides on inferred bike routes</span> · {routeData.nj ? 'JC/Hoboken catalog + NYC sample' : 'sample coverage'}; other rides use straight paths</> : 'inferred straight paths'} · round-trip loops · rides over 3h fade out</div>
             <div className={css.clockSub}>{colorBy === 'bike' ? 'cyan: electric · orange: classic · gray: unknown' : 'green: member · pink: casual · gray: unknown'}</div>
             {animation.month && (animation.month.invalidDuration > 0 || animation.month.unmapped > 0) && <div className={css.clockSub} data-testid="ride-exclusions">
               This month excludes {animation.month.invalidDuration.toLocaleString('en-US')} invalid-duration records and {animation.month.unmapped.toLocaleString('en-US')} rides with unmapped stations.
@@ -307,7 +308,7 @@ export default function Timelapse() {
                   {frame.unmapped > 0 && <span className={css.chip}>{fmt(frame.unmapped)} rides at unmapped stations</span>}
                 </div>
               )}
-              {!mv && <Link to={`/timelapse?anim=1&b=1m&d=250610-250610&t=250610T1800&len=60&ll=${viewParam.encode(view) ?? ''}`}>Moving rides · June sample</Link>}
+              {!mv && <Link to={`/timelapse?anim=1&b=1m&d=${formatYmd(shownMs)}-${formatYmd(shownMs)}&t=${formatT(shownMs)}&len=60&ll=${viewParam.encode(view) ?? ''}`}>Animate this day</Link>}
             </div>
           )}
         </div>

@@ -1,6 +1,6 @@
 # Routed flow map: selection flows along streets, merging and splitting en route
 
-Status: real 1,000-pair sample and browser assignment implemented and verified; full route population, direction cues, and system layer pending (2026-10-11). Depends on the route set from [`ride-animation.md`] §Routes (phase A4).
+Status: complete JC/Hoboken pair catalog, direction chevrons, opposing lanes, and routed animation implemented and verified (2026-10-12). Full NYC routing and the system layer remain pending. Depends on the route set from [`ride-animation.md`] §Routes (phase A4).
 
 ## Goal
 
@@ -86,3 +86,13 @@ Population sizing: `ctbk flow-routes census -d YYYYMM-YYYYMM` counts each publis
 Street trunks and uncovered fallback arcs share one width/opacity maximum, including multi-source selections, so an uncovered pair is not independently scaled up to look as heavy as a merged street trunk. The legend keys both line types on that common trip scale. HCCSx rendering verified on Columbus Drive's June preview.
 
 Annual census run `38200639540` passed for 2024: 45,209,365 source rides, 45,209,026 encoded (339 invalid-duration exclusions, zero unmapped), 1,565,085 distinct non-round-trip pairs. The ≥10/year population is 516,902 pairs (HB 1,858; JC 3,363; NYC 511,681), carrying 41,136,758 of 44,163,355 non-round-trip rides (93.1%). Round trips total 1,045,671. The compressed count/coordinate population is 1,978,313 bytes at `routes-census/v1/objects/e62a5fcb6002caa3657daa3a6974ba7b.json.gz`. Full geometry and routing runtime will be substantially larger than the 1,000-pair preview; the full builder needs bounded storage, checkpoints, and per-origin/destination files before adoption.
+
+## Complete JC/Hoboken catalog
+
+`ctbk flow-routes nj` covers all 15,006 ordered nonroundtrip pairs among the 123 JC/HB IDs in September 2026's shared animation station table, including historical IDs and low-volume pairs. Canonical coordinates and the current bicycle graph produce inferred paths, not historical rider traces. New IDs or coordinate changes require a catalog rebuild. NYC retains the sample's NYC subset; round trips retain inferred loops.
+
+HCCS Batch job `15b674a0-fe2e-4036-ad57-40a90133bdb8` succeeded using pinned image `688066488567.dkr.ecr.us-east-1.amazonaws.com/ctbk-reproc:routes-425034f3` (workflow `38265871693`), x86_64, 4 vCPUs and 16 GiB. It used the existing HCCS queue and Secrets Manager bindings; the RAC `e` VM was not used and no new VM was needed. Bulk extracts and routing files stayed in Batch. An immutable R2 OSM snapshot and one checkpoint per origin support Spot retries. Context hashes include station coordinates, OSM hash, engine, alternatives and snap threshold. Only exact-key reads are used.
+
+All pairs routed, with zero fallbacks: 29,956 alternatives, 3,157 contracted segments, 15,839 vertices. The shared graph is 162,645 bytes compressed; graph plus origin and destination catalogs total 2,585,002 bytes. Public prefix `routes-nj/v1`; graph `objects/6ef5f13119b5a487845822fa4c2412f7.json.gz`; context `0961e50eec501c433219c8a356aed6d4`; OSM MD5 `b0e185c2d2c7564b8e186f2258b93880`. `ctbk flow-routes check-nj` verified every object's hash/size, exhaustive pair coverage, identical origin/destination records, normalized positive alternative weights, signed segment references, continuous geometry and indexed accounting. Only small catalogs/metadata were read locally.
+
+The frontend lazy-loads selected origin files for outgoing flows and destination files for incoming flows. Animation loads origins relevant to its current 15-minute bucket plus trail, reconstructs geometry from signed segments and waits for the catalog before movie capture. NJ pairs override sample records in a separate graph namespace. Static forward chevrons use screen-pixel spacing; opposing flows use separate right-hand lanes. Width/opacity retain the common flow scale. HCCSx Chrome verified JC outgoing/incoming and 390×844 Hoboken views, all showing 100% routed. June 10 at 18:00 retains exactly 3,870 active rides, with 110 routed versus the sample's 84. The count-map link now animates the current day and instant. Unit fixtures and browser tests cover these behaviors and deterministic movie seeking.

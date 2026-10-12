@@ -7,6 +7,7 @@ from gzip import compress, decompress
 from hashlib import file_digest, md5
 from itertools import groupby
 from json import dumps, loads
+from math import isclose
 from os import environ
 from pathlib import Path
 from re import fullmatch
@@ -213,3 +214,83 @@ def submit_nj(dry_run: bool, image: str) -> None:
     definition = batch.register_job_definition(jobDefinitionName='ctbk-reproc-routes', type='container', containerProperties=props, platformCapabilities=['FARGATE'], retryStrategy={'attempts': 3, 'evaluateOnExit': [{'onStatusReason': 'Your Spot Task*', 'action': 'RETRY'}, {'onStatusReason': 'Host EC2*', 'action': 'RETRY'}, {'onReason': '*', 'action': 'EXIT'}]})
     job = batch.submit_job(jobName='routes-nj', jobQueue=plan['queue'], jobDefinition=definition['jobDefinitionArn'])
     print(dumps({'jobId': job['jobId'], 'jobDefinition': definition['jobDefinitionArn'], **plan}, indent=2))
+
+
+def check_catalog(
+    index: dict,
+    graph: dict,
+    origins: dict[str, dict],
+    destinations: dict[str, dict],
+) -> dict:
+    ids = [s['id'] for s in index['stations']]
+    expected = {(a, b) for a in ids for b in ids if a != b}
+    def pairs(catalogs: dict[str, dict], direction: str) -> dict:
+        out = {}
+        for sid in ids:
+            data = catalogs[sid]
+            if data['version'] != 1 or len(data['pairs']) != len(ids) - 1:
+                raise ValueError('per-station catalog has incomplete coverage')
+            for pair in data['pairs']:
+                if pair[direction] != sid:
+                    raise ValueError('pair is in the wrong station catalog')
+                key = pair['source'], pair['destination']
+                if key in out:
+                    raise ValueError('duplicate catalog pair')
+                out[key] = pair
+        if set(out) != expected:
+            raise ValueError('catalog does not cover every ordered NJ pair')
+        return out
+    out = pairs(origins, 'source')
+    incoming = pairs(destinations, 'destination')
+    if out != incoming:
+        raise ValueError('origin and destination catalogs disagree')
+    if graph['version'] != 1 or len(graph['segments']) != index['segments']:
+        raise ValueError('graph disagrees with index')
+    alternatives = 0
+    for pair in out.values():
+        routes = pair['routes']
+        if bool(routes) == bool(pair['fallback']):
+            raise ValueError('pair must have routes or an explicit fallback')
+        if routes and not isclose(sum(r['weight'] for r in routes), 1, abs_tol=1e-12):
+            raise ValueError('alternative weights do not sum to one')
+        for route in routes:
+            alternatives += 1
+            if route['weight'] <= 0 or route['distance'] <= 0 or not route['segments']:
+                raise ValueError('invalid route weight, distance or segment list')
+            previous = None
+            for code in route['segments']:
+                if not code or abs(code) > len(graph['segments']):
+                    raise ValueError('route refers to an invalid segment')
+                points = graph['segments'][abs(code) - 1]['path']
+                start, end = (points[0], points[-1]) if code > 0 else (points[-1], points[0])
+                if previous is not None and previous != start:
+                    raise ValueError('route segment chain is discontinuous')
+                previous = end
+    counts = {'pairs': len(out), 'routedPairs': sum(bool(p['routes']) for p in out.values()), 'alternatives': alternatives, 'fallbacks': dict(sorted(Counter(p['fallback'] for p in out.values() if p['fallback']).items()))}
+    if counts != {k: index[k] for k in counts}:
+        raise ValueError('catalog accounting disagrees with index')
+    return counts
+
+
+@flow_routes.command('check-nj')
+@option('-k', '--prefix', default=PREFIX, show_default=True)
+@option('-o', '--output', type=ClickPath(path_type=Path), default=Path('tmp/routes-nj-audit.json'))
+def check_nj(prefix: str, output: Path) -> None:
+    r2, bucket = _r2_client()
+    def get(key: str) -> bytes:
+        return r2.get_object(Bucket=bucket, Key=f'{prefix}/{key}')['Body'].read()
+    index = loads(get('index.json'))
+    if index['version'] != 1:
+        raise ValueError('unsupported NJ route catalog')
+    def packed(meta: dict) -> dict:
+        blob = get(meta['key'])
+        if len(blob) != meta['bytes'] or md5(blob).hexdigest() != Path(meta['key']).name.split('.')[0]:
+            raise ValueError('catalog object hash or size disagrees with index')
+        return loads(decompress(blob))
+    graph = packed(index['graph'])
+    origins = {sid: packed(meta) for sid, meta in index['origins'].items()}
+    destinations = {sid: packed(meta) for sid, meta in index['destinations'].items()}
+    report = check_catalog(index, graph, origins, destinations) | {'context': index['context'], 'stations': len(index['stations']), 'segments': index['segments'], 'bytes': index['bytes'], 'scope': index['scope']}
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(dumps(report, indent=2, sort_keys=True) + '\n')
+    print(dumps(report, indent=2, sort_keys=True))

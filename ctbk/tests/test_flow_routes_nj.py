@@ -1,4 +1,6 @@
-from ctbk.flow_routes_nj import checkpoint_context, nj_stations, route_record
+import pytest
+
+from ctbk.flow_routes_nj import check_catalog, checkpoint_context, nj_stations, route_record
 
 
 def test_complete_nj_station_population_includes_historical_ids():
@@ -39,3 +41,18 @@ def test_explicit_fallbacks_keep_pair_coverage():
         assert route_record({'id': 'HB2'}, {'id': 'JC1'}, result) == {
             'source': 'HB2', 'destination': 'JC1', 'snaps': snaps, 'fallback': reason, 'routes': [],
         }
+
+
+def test_full_catalog_gate_checks_both_indexes_and_directional_continuity():
+    forward = {'source': 'JC1', 'destination': 'HB2', 'fallback': None, 'routes': [{'segments': [1, 2], 'distance': 100, 'weight': 1}]}
+    backward = {'source': 'HB2', 'destination': 'JC1', 'fallback': None, 'routes': [{'segments': [-2, -1], 'distance': 110, 'weight': 1}]}
+    index = {'stations': [{'id': 'JC1'}, {'id': 'HB2'}], 'segments': 2, 'pairs': 2, 'routedPairs': 2, 'alternatives': 2, 'fallbacks': {}}
+    graph = {'version': 1, 'segments': [{'path': [[0, 0], [1, 1]]}, {'path': [[1, 1], [2, 2]]}]}
+    origins = {'JC1': {'version': 1, 'pairs': [forward]}, 'HB2': {'version': 1, 'pairs': [backward]}}
+    destinations = {'HB2': {'version': 1, 'pairs': [forward]}, 'JC1': {'version': 1, 'pairs': [backward]}}
+    assert check_catalog(index, graph, origins, destinations) == {'pairs': 2, 'routedPairs': 2, 'alternatives': 2, 'fallbacks': {}}
+    broken = {'version': 1, 'segments': [graph['segments'][0], {'path': [[9, 9], [2, 2]]}]}
+    with pytest.raises(ValueError, match='^route segment chain is discontinuous$'):
+        check_catalog(index, broken, origins, destinations)
+    with pytest.raises(ValueError, match='^per-station catalog has incomplete coverage$'):
+        check_catalog(index, graph, origins, destinations | {'JC1': {'version': 1, 'pairs': []}})

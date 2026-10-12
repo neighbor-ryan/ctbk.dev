@@ -1,13 +1,25 @@
 import { TripsLayer } from '@deck.gl/geo-layers'
 import { ScatterplotLayer } from '@deck.gl/layers'
+import { routeGeometry, type RouteSample } from '../../query/flowRoutes'
 import type { LoadedRideDay } from '../../query/useRideAnimation'
-import type { RouteSample } from '../../query/flowRoutes'
 
 export interface MovingRide {
   path: [number, number][]
   times: number[]
   flags: number
   routed?: boolean
+}
+
+export function rideRouteOrigins(day: LoadedRideDay | undefined, bucket: number, trail: number): string[] {
+  if (!day) return []
+  const ids = new Set<string>()
+  const { rides, stations } = day
+  for (let i = 0; i < rides.starts.length; i++) {
+    if (rides.starts[i] > bucket + 900 + trail || rides.starts[i] + rides.durations[i] < bucket - trail) continue
+    const id = stations[rides.sources[i]].id
+    if (id.startsWith('JC') || id.startsWith('HB')) ids.add(id)
+  }
+  return [...ids].sort()
 }
 
 /** Stable across day boundaries: carry-in retains the same absolute start. */
@@ -48,8 +60,9 @@ export function ridePaths(day: LoadedRideDay, bucket: number, trail: number, rou
       const choice = routeFraction(JSON.stringify([midnight + start, source.id, destination.id, r.durations[i], r.flags[i]]))
       let cumulative = 0
       const route = alternatives.find((route) => { cumulative += route.weight; return choice < cumulative }) ?? alternatives[alternatives.length - 1]
-      if (route.geometry?.length) {
-        const path = [a, ...route.geometry, b].filter((p, i, points) => !i || p[0] !== points[i - 1][0] || p[1] !== points[i - 1][1])
+      const geometry = routeGeometry(routes!, route)
+      if (geometry.length) {
+        const path = [a, ...geometry, b].filter((p, i, points) => !i || p[0] !== points[i - 1][0] || p[1] !== points[i - 1][1])
         paths.push({ path, times: pathTimes(path, start, end), flags: r.flags[i], routed: true })
         continue
       }

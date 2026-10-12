@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assignRoutes, type RouteSample } from './flowRoutes'
+import { assignRoutes, mergeRoutes, routeGeometry, type RouteSample } from './flowRoutes'
 
 const stations = Object.fromEntries(['A', 'B', 'C', 'D'].map((name, i) => [name, { name, lng: i, lat: i, ends: 0 }]))
 const sample: RouteSample = {
@@ -12,6 +12,19 @@ const sample: RouteSample = {
   ],
 }
 describe('street assignment', () => {
+  it('merges namespaces without losing direction and honors explicit NJ fallbacks', () => {
+    const merged = mergeRoutes(sample, [{ path: [[4, 4], [5, 5]] }], [{ pairs: [
+      { source: 'A', destination: 'B', routes: [{ weight: 1, segments: [-1] }] },
+      { source: 'A', destination: 'C', routes: [] },
+    ] }])
+    expect(merged.pairs).toEqual([
+      { source: 'A', destination: 'B', routes: [{ weight: 1, segments: [-4] }] },
+      { source: 'A', destination: 'C', routes: [] },
+      sample.pairs[2],
+    ])
+    expect(routeGeometry(merged, merged.pairs[0].routes[0])).toEqual([[5, 5], [4, 4]])
+    expect(routeGeometry(sample, { weight: 1, segments: [1, 2] })).toEqual([[0, 0], [1, 1], [2, 2]])
+  })
   it('adds expected alternative volume to shared directional segments, retaining uncovered pairs as arcs', () => {
     expect(assignRoutes(sample, stations, { A: { B: 100, C: 60, D: 20, A: 8 } }, ['A'], 'out')).toEqual({
       paths: [

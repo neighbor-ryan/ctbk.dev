@@ -19,6 +19,7 @@
  * The default map on `/stations` (`?gl=0` → Leaflet `StationMap`) and on the
  * Home embed.
  */
+import { WebMercatorViewport } from '@deck.gl/core'
 import { ArcLayer, PathLayer, ScatterplotLayer } from '@deck.gl/layers'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ARC_SRC_FRAC, arcAlpha, arcWidthPx, lensZoomScale, type FlowArc } from './flowLens'
@@ -28,11 +29,12 @@ import { useTheme } from '../contexts/ThemeContext'
 import { stationsInRect, useSelectionGestures, type SelAction } from '../lib/mapSelection'
 import { useCanHover } from '../lib/useMediaQuery'
 import css from '../stations.module.css'
+import { directedStreets } from './flowDirections'
 import type { Stations, StationPairCounts } from './stationMapCommon'
+import type { FlowPath } from '../query/flowRoutes'
 import type { Layer, PickingInfo } from '@deck.gl/core'
 import type { MapboxOverlay } from '@deck.gl/mapbox'
 import type { Map as MaplibreMapInstance } from 'maplibre-gl'
-import type { FlowPath } from '../query/flowRoutes'
 
 const { max, round, sqrt } = Math
 
@@ -212,6 +214,9 @@ export default function StationMapGL({
   const pathMax = flowPaths?.length ? flowPaths[flowPaths.length - 1].count : 0
   const arcMax = max(pathMax, arcs?.length ? arcs[arcs.length - 1].count : 0, 1)
   const arcRgb = dark ? ARC_RGB_DARK : ARC_RGB_LIGHT
+  const directional = useMemo(() => directedStreets(flowPaths ?? [], new WebMercatorViewport({
+    longitude: center[1], latitude: center[0], zoom: liveZoom,
+  }), (count) => arcWidthPx(count, arcMax)), [flowPaths, center[0], center[1], liveZoom, arcMax])
   const arcLayer = arcs?.length ? new ArcLayer<FlowArc>({
     id: 'flow-arcs',
     data: arcs as FlowArc[],
@@ -229,7 +234,7 @@ export default function StationMapGL({
 
   const pathLayer = flowPaths?.length ? new PathLayer<FlowPath>({
     id: 'flow-streets',
-    data: flowPaths as FlowPath[],
+    data: directional.streets,
     getPath: (d) => d.path,
     getColor: (d) => [...arcRgb, arcAlpha(d.count, arcMax)],
     getWidth: (d) => arcWidthPx(d.count, arcMax),
@@ -237,10 +242,16 @@ export default function StationMapGL({
     pickable: false,
     updateTriggers: { getColor: [dark, arcMax], getWidth: arcMax },
   }) : null
+  const arrowLayer = directional.arrows.length ? new PathLayer({
+    id: 'flow-direction-chevrons', data: directional.arrows,
+    getPath: (d) => d.path, getColor: [...arcRgb, 245], getWidth: 1.6,
+    widthUnits: 'pixels', capRounded: true, jointRounded: true, pickable: false,
+  }) : null
 
   const layers: Layer[] = [
     ...(arcLayer ? [arcLayer] : []),
     ...(pathLayer ? [pathLayer] : []),
+    ...(arrowLayer ? [arrowLayer] : []),
     new ScatterplotLayer<StationDatum>({
       id: 'stations',
       data,

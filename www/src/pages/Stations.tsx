@@ -385,7 +385,7 @@ export default function Stations() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [gl, fan, lensSourceIds.join(','), effectiveStations, pairCounts, dir],
   )
-  const routeData = useFlowRoutes(gl && fan && streetRoutes && !!lensSourceIds.length)
+  const routeData = useFlowRoutes(gl && fan && streetRoutes && !!lensSourceIds.length, lensSourceIds, dir)
   const routed = useMemo(
     () => (gl && fan && streetRoutes && routeData.data && effectiveStations
       ? assignRoutes(routeData.data, effectiveStations, pairCounts, lensSourceIds, dir)
@@ -393,9 +393,9 @@ export default function Stations() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [gl, fan, streetRoutes, routeData.data, effectiveStations, pairCounts, lensSourceIds.join(','), dir],
   )
-  const routeStatus = routeData.error ? `Routes unavailable: ${routeData.error.message} · showing arcs`
-    : routed ? `${routed.total ? Math.round(100 * routed.routed / routed.total) : 0}% routed · sample coverage · other pairs use arcs`
-    : 'Loading route sample… · showing arcs'
+  const routeStatus = routeData.error ? `Route catalog unavailable: ${routeData.error.message} · ${routed ? 'partial routes' : 'showing arcs'}`
+    : routed ? `${routed.total ? Math.round(100 * routed.routed / routed.total) : 0}% routed · ${routeData.nj ? 'JC/Hoboken catalog + NYC sample' : 'sample coverage'} · chevrons show direction`
+      : 'Loading bike routes… · showing arcs'
   const visibleArcs = routed?.arcs ?? arcs
   const lineMax = Math.max(routed?.paths.length ? routed.paths[routed.paths.length - 1].count : 0, visibleArcs?.length ? visibleArcs[visibleArcs.length - 1].count : 0)
   const effectiveColors = flowStyle?.colors ?? stationColors
