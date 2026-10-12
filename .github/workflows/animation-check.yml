@@ -6,6 +6,9 @@ on:
         description: Inclusive animation months (YYYYMM-YYYYMM)
         default: '201306-202609'
         required: true
+      stage_month:
+        description: Optional YYYYMM to rebuild and verify the formal DVX stage on this runner
+        required: false
 permissions:
   contents: read
 jobs:
@@ -30,3 +33,22 @@ jobs:
         with:
           name: animation-history-audit
           path: tmp/animation-index-audit.json
+      - name: Verify formal DVX month stage
+        if: inputs.stage_month != ''
+        env:
+          STAGE_MONTH: ${{ inputs.stage_month }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          DVC_SITE_CACHE_DIR: ${{ runner.temp }}/dvc-site-cache
+        run: |
+          .venv/bin/ctbk ride-animation create -w1 "$STAGE_MONTH"
+          .venv/bin/ctbk rides-anim check -i "s3/ctbk/rides-animation/$STAGE_MONTH"
+      - name: Preserve DVX stage metadata
+        if: inputs.stage_month != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: animation-dvx-stage
+          path: |
+            s3/ctbk/rides-animation/*.dvc
+            s3/ctbk/rides-animation/*/month.json
