@@ -45,6 +45,7 @@ import { radiusFactor } from '../query/timelapseSize'
 import { movieGrid, movieRange } from '../query/timelapseMovie'
 import { useRideAnimation } from '../query/useRideAnimation'
 import { BIKE_COLORS, movingRideLayers, ridePaths, rideRouteOrigins } from '../components/timelapse/rideLayers'
+import { DayClock } from '../components/timelapse/DayClock'
 import { useFlowRoutes } from '../query/flowRoutes'
 import css from '../timelapse.module.css'
 import type { Layer, PickingInfo } from '@deck.gl/core'
@@ -254,74 +255,77 @@ export default function Timelapse() {
         cursor={hover !== null ? 'pointer' : 'grab'}
         className={css.map}
       >
-        <div className={css.header} data-testid="tl-header">
-          <div className={css.headRow}>
-            <span className={css.clockDate} data-testid="tl-clock">{dateStr}</span>
-            {!anim && <WindowNote tl={tl} />}
-            <div className={css.badges}>
-              {(anim ? animation.missing : frame?.missing) && <span className={`${css.badge} ${css.badgeWarn}`} data-testid="tl-no-data">no data</span>}
-              {!mv && <>
-                {stalled && <span className={`${css.badge} ${css.badgeWarn}`}>buffering…</span>}
-                {!(anim ? ready : frames.ready) && !playing && <span className={css.badge}>loading…</span>}
-                {anim && routeMode && routeData.error && <span className={`${css.badge} ${css.badgeWarn}`}>routes unavailable · straight paths</span>}
-                {(anim ? animation.error : frames.error) && <span className={`${css.badge} ${css.badgeError}`}>error: {(anim ? animation.error : frames.error)!.message}</span>}
-                {!anim && frame?.source === 'synth' && <span className={`${css.badge} ${css.badgeWarn}`}>synthetic</span>}
-              </>}
+        <div className={`${css.header}${anim ? ` ${css.withClock}` : ''}`} data-testid="tl-header">
+          {anim && <DayClock ms={shownMs} />}
+          <div className={css.headerCopy}>
+            <div className={css.headRow}>
+              <span className={css.clockDate} data-testid="tl-clock">{dateStr}</span>
+              {!anim && <WindowNote tl={tl} />}
+              <div className={css.badges}>
+                {(anim ? animation.missing : frame?.missing) && <span className={`${css.badge} ${css.badgeWarn}`} data-testid="tl-no-data">no data</span>}
+                {!mv && <>
+                  {stalled && <span className={`${css.badge} ${css.badgeWarn}`}>buffering…</span>}
+                  {!(anim ? ready : frames.ready) && !playing && <span className={css.badge}>loading…</span>}
+                  {anim && routeMode && routeData.error && <span className={`${css.badge} ${css.badgeWarn}`}>routes unavailable · straight paths</span>}
+                  {(anim ? animation.error : frames.error) && <span className={`${css.badge} ${css.badgeError}`}>error: {(anim ? animation.error : frames.error)!.message}</span>}
+                  {!anim && frame?.source === 'synth' && <span className={`${css.badge} ${css.badgeWarn}`}>synthetic</span>}
+                </>}
+              </div>
+              {!mv && (
+                <button type="button" className={css.info} onClick={() => setLegendOpen(!legendOpen)} aria-expanded={legendOpen} aria-label={legendOpen ? 'Hide legend' : 'Show legend'}>
+                  {legendOpen ? '×' : 'i'}
+                </button>
+              )}
             </div>
-            {!mv && (
-              <button type="button" className={css.info} onClick={() => setLegendOpen(!legendOpen)} aria-expanded={legendOpen} aria-label={legendOpen ? 'Hide legend' : 'Show legend'}>
-                {legendOpen ? '×' : 'i'}
-              </button>
+            {!anim && <button type="button" className={css.barBtn} onClick={() => setLegendOpen(!legendOpen)} aria-label="Toggle legend" disabled={mv}>
+              <LegendBar preset={preset} />
+            </button>}
+            {anim && <div className={css.legendBody}>
+              <div data-testid="ride-active">{moving.active.toLocaleString('en-US')} rides in progress</div>
+              {mv && colorBy === 'bike' && <div className={css.movieBikeLegend}>
+                <span><i style={{ background: rgbCss(BIKE_COLORS.electric) }} /> electric</span>
+                <span><i style={{ background: rgbCss(BIKE_COLORS.classic) }} /> classic</span>
+              </div>}
+              {legendOpen && !mv && <>
+              <div className={css.clockSub}>Animation preview · {routeMode ? <><span data-testid="ride-routed">{moving.routed.toLocaleString('en-US')} active rides on inferred bike routes</span> · {routeData.nj ? 'JC/Hoboken catalog + NYC sample' : 'sample coverage'}; other rides use straight paths</> : 'inferred straight paths'} · round-trip loops · rides over 3h fade out</div>
+              <div className={css.clockSub}>{colorBy === 'bike' ? 'light purple: electric · blue: classic · gray: unknown' : 'green: member · pink: casual · gray: unknown'}</div>
+              {animation.month && (animation.month.invalidDuration > 0 || animation.month.unmapped > 0) && <div className={css.clockSub} data-testid="ride-exclusions">
+                This month excludes {animation.month.invalidDuration.toLocaleString('en-US')} invalid-duration records and {animation.month.unmapped.toLocaleString('en-US')} rides with unmapped stations.
+              </div>}
+              {animation.month && !animation.month.final && <div className={css.clockSub}>Provisional month · late-ending rides may be added with the next data release.</div>}
+              {!mv && <div className={css.group}>
+                <label><input type="checkbox" checked={routeMode} onChange={(e) => setFlow(e.target.checked ? 'routes' : undefined)} /> Inferred bike routes</label>
+                <label>Color <select className={css.select} aria-label="Ride color" value={colorBy} onChange={(e) => setColorRaw(e.target.value)}><option value="bike">Bike type</option><option value="user">User type</option></select></label>
+                <label>Trail <select className={css.select} aria-label="Trail length" value={trail} onChange={(e) => setTrailRaw(Number(e.target.value))}>{[30, 60, 120, 300, 600].map((n) => <option key={n} value={n}>{n}s</option>)}</select></label>
+                <Link to={`/timelapse?b=${bin}&d=${formatYmd(range[0])}-${formatYmd(range[1])}&t=${formatT(shownMs)}&len=${tl.length}&sp=${sp}&ll=${viewParam.encode(view) ?? ''}`}>Station counts</Link>
+              </div>}
+              </>}
+            </div>}
+            {!anim && legendOpen && (
+              <div className={css.legendBody} data-testid="tl-legend">
+                <Legend preset={preset} unit={unit} note={note} />
+                <div className={css.clockSub}>
+                  {mv
+                    ? <>{frame && !frame.missing && <>{fmt(frame.starts.reduce((a, b) => a + b, 0))} rides started</>}</>
+                    : <>
+                      {formatYmd(range[0])} – {formatYmd(range[1])} · {bin} bins · frame {i - iStart + 1} of {nFramesRange}
+                      {peek !== null && <> · preview</>}
+                      {frame && !frame.missing && <> · {fmt(frame.starts.reduce((a, b) => a + b, 0))} starts</>}
+                    </>}
+                </div>
+                {!mv && frame && (
+                  <div className={css.chips}>
+                    {frame.missing && <span className={css.chip}>no data: past the last published month</span>}
+                    {frame.source === 'api' && <span className={css.chip}>source: rides-tl (/api/tl)</span>}
+                    {frame.source === 'shard' && <span className={css.chip}>source: live pyramid shard (interim)</span>}
+                    {frame.source === 'synth' && <span className={css.chip}>synthesized from monthly station totals (interim)</span>}
+                    {frame.unmapped > 0 && <span className={css.chip}>{fmt(frame.unmapped)} rides at unmapped stations</span>}
+                  </div>
+                )}
+                {!mv && <Link to={`/timelapse?anim=1&b=1m&d=${formatYmd(shownMs)}-${formatYmd(shownMs)}&t=${formatT(shownMs)}&len=60&ll=${viewParam.encode(view) ?? ''}`}>Animate this day</Link>}
+              </div>
             )}
           </div>
-          {!anim && <button type="button" className={css.barBtn} onClick={() => setLegendOpen(!legendOpen)} aria-label="Toggle legend" disabled={mv}>
-            <LegendBar preset={preset} />
-          </button>}
-          {anim && <div className={css.legendBody}>
-            <div data-testid="ride-active">{moving.active.toLocaleString('en-US')} rides in progress</div>
-            {mv && colorBy === 'bike' && <div className={css.movieBikeLegend}>
-              <span><i style={{ background: rgbCss(BIKE_COLORS.electric) }} /> electric</span>
-              <span><i style={{ background: rgbCss(BIKE_COLORS.classic) }} /> classic</span>
-            </div>}
-            {legendOpen && !mv && <>
-            <div className={css.clockSub}>Animation preview · {routeMode ? <><span data-testid="ride-routed">{moving.routed.toLocaleString('en-US')} active rides on inferred bike routes</span> · {routeData.nj ? 'JC/Hoboken catalog + NYC sample' : 'sample coverage'}; other rides use straight paths</> : 'inferred straight paths'} · round-trip loops · rides over 3h fade out</div>
-            <div className={css.clockSub}>{colorBy === 'bike' ? 'light purple: electric · blue: classic · gray: unknown' : 'green: member · pink: casual · gray: unknown'}</div>
-            {animation.month && (animation.month.invalidDuration > 0 || animation.month.unmapped > 0) && <div className={css.clockSub} data-testid="ride-exclusions">
-              This month excludes {animation.month.invalidDuration.toLocaleString('en-US')} invalid-duration records and {animation.month.unmapped.toLocaleString('en-US')} rides with unmapped stations.
-            </div>}
-            {animation.month && !animation.month.final && <div className={css.clockSub}>Provisional month · late-ending rides may be added with the next data release.</div>}
-            {!mv && <div className={css.group}>
-              <label><input type="checkbox" checked={routeMode} onChange={(e) => setFlow(e.target.checked ? 'routes' : undefined)} /> Inferred bike routes</label>
-              <label>Color <select className={css.select} aria-label="Ride color" value={colorBy} onChange={(e) => setColorRaw(e.target.value)}><option value="bike">Bike type</option><option value="user">User type</option></select></label>
-              <label>Trail <select className={css.select} aria-label="Trail length" value={trail} onChange={(e) => setTrailRaw(Number(e.target.value))}>{[30, 60, 120, 300, 600].map((n) => <option key={n} value={n}>{n}s</option>)}</select></label>
-              <Link to={`/timelapse?b=${bin}&d=${formatYmd(range[0])}-${formatYmd(range[1])}&t=${formatT(shownMs)}&len=${tl.length}&sp=${sp}&ll=${viewParam.encode(view) ?? ''}`}>Station counts</Link>
-            </div>}
-            </>}
-          </div>}
-          {!anim && legendOpen && (
-            <div className={css.legendBody} data-testid="tl-legend">
-              <Legend preset={preset} unit={unit} note={note} />
-              <div className={css.clockSub}>
-                {mv
-                  ? <>{frame && !frame.missing && <>{fmt(frame.starts.reduce((a, b) => a + b, 0))} rides started</>}</>
-                  : <>
-                    {formatYmd(range[0])} – {formatYmd(range[1])} · {bin} bins · frame {i - iStart + 1} of {nFramesRange}
-                    {peek !== null && <> · preview</>}
-                    {frame && !frame.missing && <> · {fmt(frame.starts.reduce((a, b) => a + b, 0))} starts</>}
-                  </>}
-              </div>
-              {!mv && frame && (
-                <div className={css.chips}>
-                  {frame.missing && <span className={css.chip}>no data: past the last published month</span>}
-                  {frame.source === 'api' && <span className={css.chip}>source: rides-tl (/api/tl)</span>}
-                  {frame.source === 'shard' && <span className={css.chip}>source: live pyramid shard (interim)</span>}
-                  {frame.source === 'synth' && <span className={css.chip}>synthesized from monthly station totals (interim)</span>}
-                  {frame.unmapped > 0 && <span className={css.chip}>{fmt(frame.unmapped)} rides at unmapped stations</span>}
-                </div>
-              )}
-              {!mv && <Link to={`/timelapse?anim=1&b=1m&d=${formatYmd(shownMs)}-${formatYmd(shownMs)}&t=${formatT(shownMs)}&len=60&ll=${viewParam.encode(view) ?? ''}`}>Animate this day</Link>}
-            </div>
-          )}
         </div>
         {cap && <div className={css.caption}>{cap}</div>}
         {mv && <div className={css.movieStrip} data-testid="movie-strip">

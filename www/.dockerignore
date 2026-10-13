@@ -183,6 +183,7 @@
 !src/components/smgStyle.ts
 !src/components/stationMapCommon.ts
 !src/components/timelapse/controls.tsx
+!src/components/timelapse/DayClock.tsx
 !src/components/timelapse/layers.ts
 !src/components/timelapse/rideLayers.test.ts
 !src/components/timelapse/rideLayers.ts

@@ -59,6 +59,37 @@
     min-width: 0;
 }
 
+.headerCopy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+}
+
+.withClock {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+}
+
+.withClock > svg {
+    flex: none;
+    width: 64px;
+    height: 64px;
+}
+
+@media (min-width: 768px) {
+    .withClock {
+        width: 500px;
+    }
+
+    .withClock > svg {
+        width: 88px;
+        height: 88px;
+    }
+}
+
 .info {
     flex: none;
     width: 24px;
