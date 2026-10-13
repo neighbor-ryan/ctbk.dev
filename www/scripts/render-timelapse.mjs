@@ -35,8 +35,8 @@ try {
   await page.goto(url.href)
   await page.locator('[data-tl-frame]').waitFor({ timeout: 120000 })
   plan = await page.evaluate(() => {
-    const { frames, fps, seconds } = window.__tl
-    return { frames, fps, seconds }
+    const { frames, fps, seconds, start, end } = window.__tl
+    return { frames, fps, seconds, start, end }
   })
   url.href = page.url()
 } finally {

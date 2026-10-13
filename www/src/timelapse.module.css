@@ -136,6 +136,57 @@
     opacity: 0.7;
 }
 
+.movieBikeLegend {
+    display: flex;
+    gap: 14px;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.movieBikeLegend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.movieBikeLegend i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.movieStrip {
+    position: absolute;
+    z-index: 1000;
+    left: var(--tl-gap);
+    right: var(--tl-gap);
+    bottom: var(--tl-gap);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    padding: 8px 12px;
+    pointer-events: none;
+}
+
+.movieStrip svg {
+    display: block;
+    width: 100%;
+    height: 48px;
+    margin: 4px 0;
+}
+
+.movieStripLabel,
+.movieStripDates {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.movieStripDates {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
 .badges {
     display: flex;
     gap: 4px;

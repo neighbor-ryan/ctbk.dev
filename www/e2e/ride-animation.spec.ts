@@ -1,5 +1,34 @@
 import { expect, test } from '@playwright/test'
 
+test('movie clips 04:00–04:00 with a complete fixed sparkline and minimal header', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  // Pin immutable payloads: September's public candidate index is provisional.
+  await page.route('**/rides-anim-candidate/v1/index.json', (route) => route.fulfill({ json: {
+    version: 1, days: {
+      '2026-09-29': { key: 'objects/fe8bcce30d8e60b25006b02971e87f1e.bin.gz', stations: 'objects/71710c5cff1e8f32bf6830d28bb8f115.json', rides: 181246, carry: 366 },
+      '2026-09-30': { key: 'objects/0717962ea5bf133017428e97234dc55b.bin.gz', stations: 'objects/71710c5cff1e8f32bf6830d28bb8f115.json', rides: 195899, carry: 640 },
+    },
+  } }))
+  await page.goto('/timelapse?anim=1&mv=1&b=1m&d=260929-260930&len=60&cfps=30&clip=260929T04-260930T04')
+  await expect(page.locator('[data-tl-frame="0"]')).toHaveCount(1, { timeout: 120000 })
+  expect(await page.evaluate(() => {
+    const { frames, fps, seconds, start, end } = window.__tl!
+    return { frames, fps, seconds, start, end }
+  })).toEqual({ frames: 900, fps: 30, seconds: 30, start: '260929T04', end: '260930T04' })
+  await expect(page.getByTestId('tl-clock')).toHaveText('Tue, Sep 29, 2026 · 04:00')
+  await expect(page.getByTestId('tl-header')).toHaveText('Tue, Sep 29, 2026 · 04:0081 rides in progress electric classic')
+  await expect(page.getByTestId('movie-strip')).toHaveText('Ride starts per minuteTue, Sep 29, 2026 · 04:00Wed, Sep 30, 2026 · 04:00')
+  const sparkline = await page.getByTestId('movie-sparkline').getAttribute('d')
+  expect(sparkline?.match(/[ML]/g)?.length).toBe(1440)
+  await page.evaluate(() => window.__tl!.seek(750))
+  await expect(page.locator('[data-tl-frame="750"]')).toHaveCount(1)
+  await expect(page.getByTestId('tl-clock')).toHaveText('Wed, Sep 30, 2026 · 00:00')
+  expect(await page.getByTestId('movie-sparkline').getAttribute('d')).toBe(sparkline)
+  expect(Number(await page.getByTestId('movie-playhead').getAttribute('x1'))).toBe(1200 / 1439 * 1000)
+  expect(errors).toEqual([])
+})
+
 test('June animation shows actual concurrency, steps, and supports deterministic movie seek', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))

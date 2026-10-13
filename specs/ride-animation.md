@@ -111,6 +111,8 @@ These are from `aggregated/se_c_YYYYMM.parquet` (the monthly pair counts behind 
 
 ## Streaming vs batch-rendered movies
 
+Movie exports support a bin-aligned, inclusive-start/exclusive-end `clip=YYMMDDTHHMM-YYMMDDTHHMM` within the `d=` date range. Capture speed stays the same as the underlying range: `d=260929-260930&len=60&clip=260929T04-260930T04` exports 24 hours in 30 seconds. `pnpm render:tl --fps 30 --width 1080 --height 1350 URL OUTPUT.mp4` saves the exact start/end in its JSON manifest. The movie header contains the clock, active ride count, and bike-color key; detailed caveats stay in the interactive view. Electric rides are light purple, classic rides blue, and unknown bike types gray. A bottom sparkline shows ride starts per bin over the capture window; capture waits for the entire strip before its first frame so the curve stays fixed throughout the video.
+
 - **Streaming (interactive)**: the default. Day files plus lazy routes, with deck.gl rendering live. It is cheap to host, since the files are static and immutable.
 - **Batch-rendered**: movie mode through `scrns` on a headless browser, per [`timelapse-map.md`]. For long or high-fps movies (a year at 1 day/2 s), run it on `e` or Batch with the deterministic Docker setup. The outputs (MP4s on R2) are the showcase artifacts. A server-side renderer (headless deck.gl via `@luma.gl` + node GL, or a Python/Datashader path) isn't worth building while scrns determinism holds.
 

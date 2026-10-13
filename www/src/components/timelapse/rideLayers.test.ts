@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { pathTimes, rideHead, ridePaths, routeFraction } from './rideLayers'
+import { pathTimes, rideHead, ridePaths, rideRgb, routeFraction } from './rideLayers'
 
 describe('inferred ride paths', () => {
+  it('uses light purple for electric and blue for classic while keeping unknown flags distinct', () => {
+    expect([0, 1, 8, 9].map((flags) => rideRgb(flags, 'bike'))).toEqual([
+      [80, 160, 255], [202, 170, 255], [160, 160, 160], [160, 160, 160],
+    ])
+    expect([0, 2, 16, 18].map((flags) => rideRgb(flags, 'user'))).toEqual([
+      [100, 220, 110], [255, 100, 190], [160, 160, 160], [160, 160, 160],
+    ])
+  })
   const day = {
     stations: [{ id: 'A', lng: -74, lat: 40 }, { id: 'B', lng: -73, lat: 41 }],
     rides: {

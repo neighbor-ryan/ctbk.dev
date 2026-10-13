@@ -10,6 +10,14 @@ export interface MovingRide {
   routed?: boolean
 }
 
+export const BIKE_COLORS = { electric: [202, 170, 255], classic: [80, 160, 255], unknown: [160, 160, 160] } as const
+
+export function rideRgb(flags: number, colorBy: 'bike' | 'user'): readonly [number, number, number] {
+  return colorBy === 'bike'
+    ? BIKE_COLORS[flags & 8 ? 'unknown' : flags & 1 ? 'electric' : 'classic']
+    : flags & 16 ? [160, 160, 160] : flags & 2 ? [255, 100, 190] : [100, 220, 110]
+}
+
 export function rideRouteOrigins(day: LoadedRideDay | undefined, bucket: number, trail: number): string[] {
   if (!day) return []
   const ids = new Set<string>()
@@ -93,9 +101,7 @@ export function rideHead(ride: MovingRide, seconds: number): [number, number] | 
 
 export function movingRideLayers(paths: MovingRide[], seconds: number, trail: number, colorBy: 'bike' | 'user') {
   const color = (r: MovingRide): [number, number, number, number] => {
-    const rgb = colorBy === 'bike'
-      ? r.flags & 8 ? [160, 160, 160] : r.flags & 1 ? [35, 210, 255] : [255, 154, 65]
-      : r.flags & 16 ? [160, 160, 160] : r.flags & 2 ? [255, 100, 190] : [100, 220, 110]
+    const rgb = rideRgb(r.flags, colorBy)
     const duration = r.times[r.times.length - 1] - r.times[0]
     const opacity = r.flags & 4 ? Math.max(0, 1 - (seconds - r.times[0]) / duration) : 1
     return [...rgb, Math.round(230 * opacity)] as [number, number, number, number]

@@ -32,7 +32,7 @@ import { useAction } from 'use-kbd'
 import { boolParam, intParam, llzParam, stringParam, useUrlState, type LLZ } from 'use-prms'
 import GLMap from '../components/GLMap'
 import {
-  Chevron, HoverCard, Legend, LegendBar, PIN_RGB, rgbCss, scaleNote, sparkPath, Stats, TlSettings, TlTransport, WIDE, WindowNote,
+  Chevron, edgeX, HoverCard, Legend, LegendBar, PIN_RGB, rgbCss, scaleNote, sparkPath, Stats, TlSettings, TlTransport, WIDE, WindowNote,
 } from '../components/timelapse/controls'
 import { pinIndices, timelapseLayers } from '../components/timelapse/layers'
 import { useTimelapse } from '../components/timelapse/useTimelapse'
@@ -40,11 +40,11 @@ import { selParam, stationsInRect, useSelection, useSelectionGestures, type Pt, 
 import { useCanHover, useMediaQuery } from '../lib/useMediaQuery'
 import { ensureChunk, useTlStationSeries, type SourceMode } from '../query/timelapse'
 import { clockLabel, shortLabel, binUnit } from '../query/timelapseControls'
-import { ANCHORS, chunkOf, formatT, formatYmd, frameStartMs, type Bin, type StationTable } from '../query/timelapseFrames'
+import { ANCHORS, chunksCovering, chunkOf, formatT, formatYmd, frameStartMs, type Bin, type StationTable } from '../query/timelapseFrames'
 import { radiusFactor } from '../query/timelapseSize'
-import { movieGrid } from '../query/timelapseMovie'
+import { movieGrid, movieRange } from '../query/timelapseMovie'
 import { useRideAnimation } from '../query/useRideAnimation'
-import { movingRideLayers, ridePaths, rideRouteOrigins } from '../components/timelapse/rideLayers'
+import { BIKE_COLORS, movingRideLayers, ridePaths, rideRouteOrigins } from '../components/timelapse/rideLayers'
 import { useFlowRoutes } from '../query/flowRoutes'
 import css from '../timelapse.module.css'
 import type { Layer, PickingInfo } from '@deck.gl/core'
@@ -56,7 +56,7 @@ const { floor, max, round } = Math
 declare global {
   interface Window {
     /** Movie-mode seek resolves after data, deck redraw, and map idle. */
-    __tl?: { frames: number; fps: number; seconds: number; seek: (i: number) => Promise<void> }
+    __tl?: { frames: number; fps: number; seconds: number; start: string; end: string; seek: (i: number) => Promise<void> }
   }
 }
 
@@ -94,8 +94,12 @@ export default function Timelapse() {
   const [pins, setPins] = useUrlState('sel', selParam)
   const [fpbRaw] = useUrlState('fpb', stringParam())
   const [captureFps] = useUrlState('cfps', intParam(30))
+  const [clip] = useUrlState('clip', stringParam())
+  const [captureStart, captureAfter] = useMemo(() => movieRange(bin, iStart, iEnd, mv ? clip : undefined), [bin, iStart, iEnd, mv, clip])
+  const movieSeries = useMemo(() => tl.totals.slice(captureStart - iStart, captureAfter - iStart), [tl.totals, captureStart, captureAfter, iStart])
+  const movieTotalsReady = movieSeries.every(Number.isFinite)
   const fpb = /^\d+$/.test(fpbRaw ?? '') ? max(1, Number(fpbRaw)) : undefined
-  const grid = useMemo(() => movieGrid(iEnd - iStart + 1, sp, max(1, captureFps), fpb), [iStart, iEnd, sp, captureFps, fpb])
+  const grid = useMemo(() => movieGrid(captureAfter - captureStart, sp, max(1, captureFps), fpb), [captureStart, captureAfter, sp, captureFps, fpb])
   const [cap] = useUrlState('cap', stringParam())
   const [tileBase] = useUrlState('tileBase', stringParam())
   const wide = useMediaQuery(WIDE)
@@ -143,7 +147,7 @@ export default function Timelapse() {
   const layersRef = useRef(layers)
   layersRef.current = layers
   useLayoutEffect(() => {
-    rendered.current = { t: shown, ready: anim ? ready : shownFrames.ready && (windowWidth === 1 || shownWindows.ready) && scaleFrozen && layers.length > 0, layers }
+    rendered.current = { t: shown, ready: (!mv || movieTotalsReady) && (anim ? ready : shownFrames.ready && (windowWidth === 1 || shownWindows.ready) && scaleFrozen && layers.length > 0), layers }
     notify()
   })
   const onAfterRender = useCallback(() => {
@@ -153,8 +157,10 @@ export default function Timelapse() {
   const seekChain = useRef<Promise<void>>(Promise.resolve())
   useEffect(() => {
     if (!mv) return
+    const totalsReady = Promise.all(chunksCovering(bin, captureStart, captureAfter - 1).map((k) => ensureChunk(qc, src, 'start', bin, k)))
     const doSeek = async (i: number) => {
-      const tt = iStart + grid.offset(i)
+      await totalsReady
+      const tt = captureStart + grid.offset(i)
       const a = floor(tt)
       const ks = Array.from(new Set([chunkOf(bin, a), chunkOf(bin, a + 1)]))
       if (!anim) await Promise.all(ks.flatMap((k) => ANCHORS.map((anchor) => ensureChunk(qc, src, anchor, bin, k))))
@@ -172,12 +178,12 @@ export default function Timelapse() {
       seekChain.current = p.catch(() => {})
       return p
     }
-    window.__tl = { frames: grid.frames, fps: grid.fps, seconds: grid.seconds, seek }
+    window.__tl = { frames: grid.frames, fps: grid.fps, seconds: grid.seconds, start: formatT(frameStartMs(bin, captureStart)), end: formatT(frameStartMs(bin, captureAfter)), seek }
     // Land on the URL's `t` so `[data-tl-frame]` appears without a caller.
-    seek(Math.min(grid.frames - 1, round((tToI(tUrl) - iStart) / grid.step))).catch((e) => console.error('__tl.seek', e))
+    seek(Math.max(0, Math.min(grid.frames - 1, round((tToI(tUrl) - captureStart) / grid.step)))).catch((e) => console.error('__tl.seek', e))
     return () => { delete window.__tl }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mv, bin, iStart, grid, src, anim])
+  }, [mv, bin, captureStart, captureAfter, grid, src, anim])
 
   // ---- Selection gestures (`lib/mapSelection`) -----------------------------
   // Taps pick with deck's `pickObject` (a wider radius for fingers);
@@ -273,9 +279,13 @@ export default function Timelapse() {
           </button>}
           {anim && <div className={css.legendBody}>
             <div data-testid="ride-active">{moving.active.toLocaleString('en-US')} rides in progress</div>
-            {legendOpen && <>
+            {mv && colorBy === 'bike' && <div className={css.movieBikeLegend}>
+              <span><i style={{ background: rgbCss(BIKE_COLORS.electric) }} /> electric</span>
+              <span><i style={{ background: rgbCss(BIKE_COLORS.classic) }} /> classic</span>
+            </div>}
+            {legendOpen && !mv && <>
             <div className={css.clockSub}>Animation preview · {routeMode ? <><span data-testid="ride-routed">{moving.routed.toLocaleString('en-US')} active rides on inferred bike routes</span> · {routeData.nj ? 'JC/Hoboken catalog + NYC sample' : 'sample coverage'}; other rides use straight paths</> : 'inferred straight paths'} · round-trip loops · rides over 3h fade out</div>
-            <div className={css.clockSub}>{colorBy === 'bike' ? 'cyan: electric · orange: classic · gray: unknown' : 'green: member · pink: casual · gray: unknown'}</div>
+            <div className={css.clockSub}>{colorBy === 'bike' ? 'light purple: electric · blue: classic · gray: unknown' : 'green: member · pink: casual · gray: unknown'}</div>
             {animation.month && (animation.month.invalidDuration > 0 || animation.month.unmapped > 0) && <div className={css.clockSub} data-testid="ride-exclusions">
               This month excludes {animation.month.invalidDuration.toLocaleString('en-US')} invalid-duration records and {animation.month.unmapped.toLocaleString('en-US')} rides with unmapped stations.
             </div>}
@@ -314,6 +324,17 @@ export default function Timelapse() {
           )}
         </div>
         {cap && <div className={css.caption}>{cap}</div>}
+        {mv && <div className={css.movieStrip} data-testid="movie-strip">
+          <div className={css.movieStripLabel}>Ride starts per {binUnit(bin)}</div>
+          <svg viewBox="0 0 1000 48" preserveAspectRatio="none" aria-label="Ride starts timeline">
+            <path data-testid="movie-sparkline" d={sparkPath(movieSeries, 1000, 48, 'edge')} fill="none" stroke="#7fb3ff" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+            <line data-testid="movie-playhead" x1={edgeX(shown - captureStart, movieSeries.length) * 1000} x2={edgeX(shown - captureStart, movieSeries.length) * 1000} y1={0} y2={48} stroke="#ffd24a" strokeWidth={3} vectorEffect="non-scaling-stroke" />
+          </svg>
+          <div className={css.movieStripDates}>
+            <span>{clockLabel(bin, frameStartMs(bin, captureStart))}</span>
+            <span>{clockLabel(bin, frameStartMs(bin, captureAfter))}</span>
+          </div>
+        </div>}
         {dragRect && (
           <div className={css.dragRect} style={{ left: dragRect.x0, top: dragRect.y0, width: dragRect.x1 - dragRect.x0, height: dragRect.y1 - dragRect.y0 }} />
         )}
