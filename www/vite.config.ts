@@ -1,11 +1,13 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import mdx from '@mdx-js/rollup'
+import { movieExports } from './scripts/movie-export-server'
 
 export default defineConfig({
   plugins: [
     { enforce: 'pre', ...mdx() },
     react(),
+    movieExports(),
   ],
   resolve: {
     alias: {

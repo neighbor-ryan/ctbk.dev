@@ -1,0 +1,38 @@
+.page { min-height: 100dvh; background: #202226; color: #eee; padding: 18px 24px; }
+.heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; }
+.heading h1 { font-size: 24px; font-weight: 650; margin: 0 0 4px; }
+.heading p, .sidebar p { font-size: 13px; color: #b7b9bf; margin: 0; }
+.page a { color: #a8ccff; font-size: 13px; }
+.workspace { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 24px; }
+.viewer { min-width: 0; }
+.stage { height: calc(100dvh - 172px); min-height: 280px; display: flex; justify-content: center; align-items: center; overflow: hidden; background: #131416; }
+.frame { position: relative; flex: none; overflow: hidden; box-shadow: 0 0 0 1px #484a50; }
+.frame iframe { border: 0; display: block; transform-origin: top left; max-width: none; }
+.transport { display: flex; align-items: center; gap: 8px; padding-top: 12px; font-size: 12px; }
+.transport > input { flex: 1; min-width: 30px; accent-color: #ffd24a; }
+.transport label { display: flex; gap: 5px; align-items: center; margin: 0; }
+.time { font-variant-numeric: tabular-nums; white-space: nowrap; width: 86px; text-align: right; }
+.frameNote { color: #b7b9bf; font-size: 12px; margin-top: 8px; }
+.sidebar h2 { font-size: 16px; font-weight: 650; margin: 0 0 14px; }
+.sidebar form > label, .pair > label { display: flex; flex-direction: column; font-size: 12px; gap: 6px; margin-bottom: 14px; }
+.pair { display: flex; gap: 12px; }
+.pair > label { flex: 1; min-width: 0; }
+.page input:not([type=range]):not([type=checkbox]), .page select { width: 100%; background: #131416; border: 1px solid #62656b; border-radius: 4px; color: #eee; padding: 7px 8px; font-size: 13px; color-scheme: dark; }
+.page button { border: 1px solid #62656b; background: #34363b; color: #eee; border-radius: 4px; padding: 7px 12px; font-size: 13px; cursor: pointer; }
+.page button:disabled { opacity: .45; cursor: default; }
+.page button:focus-visible, .page input:focus-visible, .page select:focus-visible, .page a:focus-visible { outline: 2px solid #7fb3ff; outline-offset: 3px; }
+.page button.play { color: #171717; background: #ffd24a; border-color: #ffd24a; border-radius: 50%; width: 38px; height: 38px; padding: 0; }
+.export { border-top: 1px solid #484a50; padding-top: 20px; margin-top: 24px; }
+.exportButton { width: 100%; margin-top: 14px; }
+.page button.exportButton { background: #a8ccff; border-color: #a8ccff; color: #171717; font-weight: 650; }
+.job { display: flex; flex-direction: column; gap: 10px; font-size: 13px; margin-top: 16px; }
+.job progress { width: 100%; accent-color: #a8ccff; }
+.page p.error { color: #ffacac; margin-top: 10px; overflow-wrap: anywhere; white-space: pre-wrap; }
+@media (max-width: 760px) {
+  .page { padding: 12px; }
+  .workspace { grid-template-columns: 1fr; gap: 24px; }
+  .stage { height: 64dvh; }
+  .heading h1 { font-size: 20px; }
+  .heading p { max-width: 230px; }
+  .transport { gap: 5px; }
+}

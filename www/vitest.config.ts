@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config'
 // `e2e/*.spec.ts`, which vitest's default glob would otherwise pick up.
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
     environment: 'node',
   },
 })

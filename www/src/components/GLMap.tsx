@@ -68,6 +68,8 @@ export interface GLMapProps {
   zoom: number
   /** Camera changes, rounded to 3 decimals / integer zoom (URL-friendly). */
   onMove?: (lat: number, lng: number, zoom: number) => void
+  /** Movie preview preserves fractional zoom and sub-meter camera coordinates. */
+  preciseCamera?: boolean
   /** Any click on the map (deck picks fire alongside it; see `StationMapGL`
    *  for the "just picked" guard). */
   onClick?: (e: MapLayerMouseEvent) => void
@@ -102,6 +104,7 @@ export default function GLMap({
   center,
   zoom,
   onMove,
+  preciseCamera = false,
   onClick,
   onReady,
   cursor = 'grab',
@@ -131,12 +134,17 @@ export default function GLMap({
         cursor={cursor}
         interactive={interactive}
         canvasContextAttributes={{ preserveDrawingBuffer }}
-        onMove={(e) => onMove?.(round(e.viewState.latitude * 1000) / 1000, round(e.viewState.longitude * 1000) / 1000, round(e.viewState.zoom))}
+        dragRotate={!preciseCamera}
+        touchPitch={!preciseCamera}
+        onMove={(e) => onMove?.(...(preciseCamera
+          ? [e.viewState.latitude, e.viewState.longitude, e.viewState.zoom] as const
+          : [round(e.viewState.latitude * 1000) / 1000, round(e.viewState.longitude * 1000) / 1000, round(e.viewState.zoom)] as const))}
         onClick={onClick}
         // maplibre renders black until it's resized to the settled flex/100vh
         // container size; resize on load + keep in sync with a ResizeObserver.
         onLoad={(e) => {
           const m = e.target
+          if (preciseCamera) m.touchZoomRotate.disableRotation()
           m.resize()
           observerRef.current?.disconnect()
           observerRef.current = new ResizeObserver(() => m.resize())

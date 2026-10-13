@@ -27,7 +27,7 @@
  * `tl-stations.json` sidecar exists.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useAction } from 'use-kbd'
 import { boolParam, intParam, llzParam, stringParam, useUrlState, type LLZ } from 'use-prms'
 import GLMap from '../components/GLMap'
@@ -62,10 +62,12 @@ declare global {
 }
 
 const SYSTEM_LLZ: LLZ = { lat: 40.735, lng: -73.975, zoom: 11 }
-const viewParam = llzParam({ default: SYSTEM_LLZ, latLngDecimals: 3 })
+const viewParam = llzParam({ default: SYSTEM_LLZ, latLngDecimals: 6, zoomDecimals: 3 })
 
 export default function Timelapse() {
   const [mv] = useUrlState('mv', boolParam)
+  const [pv] = useUrlState('pv', boolParam)
+  const location = useLocation()
   const [anim] = useUrlState('anim', boolParam)
   const [flow, setFlow] = useUrlState('flow', stringParam())
   const routeMode = flow === 'routes'
@@ -92,6 +94,9 @@ export default function Timelapse() {
   const paths = useMemo(() => animation.day ? ridePaths(animation.day, bucket, trail, routeMode ? routeData.data : undefined, midnight) : [], [animation.day, bucket, trail, routeMode, routeData.data, midnight])
   const moving = useMemo(() => movingRideLayers(paths, animation.seconds, trail, colorBy), [paths, animation.seconds, trail, colorBy])
   const [view, setView] = useUrlState('ll', viewParam)
+  useEffect(() => {
+    if (mv && pv) window.parent.postMessage({ type: 'ctbk-movie-view', view: viewParam.encode(view) ?? '' }, window.location.origin)
+  }, [mv, pv, view])
   const [pins, setPins] = useUrlState('sel', selParam)
   const [fpbRaw] = useUrlState('fpb', stringParam())
   const [captureFps] = useUrlState('cfps', intParam(30))
@@ -241,15 +246,17 @@ export default function Timelapse() {
 
   return (
     <div ref={pageRef} className={css.page} data-tl-frame={mv ? undefined : i} onMouseLeave={() => setHover(null)}>
+      {mv && pv && <MoviePreviewKeys />}
       <GLMap
         layers={layers}
         center={[view.lat, view.lng]}
         zoom={view.zoom}
-        onMove={mv ? undefined : (la, ln, z) => setView({ lat: la, lng: ln, zoom: z })}
+        onMove={mv && !pv ? undefined : (la, ln, z) => setView({ lat: la, lng: ln, zoom: z })}
         onReady={(m) => { mapRef.current = m; notify() }}
         onOverlay={(o, m) => { overlayRef.current = o; setGestureMap(m) }}
         onAfterRender={mv ? onAfterRender : undefined}
-        interactive={!mv}
+        interactive={!mv || pv}
+        preciseCamera={pv}
         preserveDrawingBuffer={mv}
         tileBase={tileBase}
         cursor={hover !== null ? 'pointer' : 'grab'}
@@ -375,6 +382,7 @@ export default function Timelapse() {
         {!anim && !table && <div className={css.loading}>Loading stations…</div>}
         {!mv && (
           <div className={css.controls} ref={controlsRef} data-testid="tl-controls">
+            <Link className={css.movieLink} to={`/movie${location.search}`}>Movie preview & export</Link>
             {showSettings && <TlSettings tl={tl} animation={anim} />}
             <TlTransport tl={tl} wide={wide} settingsOpen={settingsOpen} onToggleSettings={() => setSettingsOpen(!settingsOpen)} />
           </div>
@@ -382,6 +390,14 @@ export default function Timelapse() {
       </GLMap>
     </div>
   )
+}
+
+function MoviePreviewKeys() {
+  const send = (action: string) => window.parent.postMessage({ type: 'ctbk-movie-key', action }, window.location.origin)
+  useAction('movie-preview:play', { label: 'Play / pause movie preview', group: 'Movie', defaultBindings: ['space'], handler: () => send('play') })
+  useAction('movie-preview:prev', { label: 'Previous movie frame', group: 'Movie', defaultBindings: ['arrowleft'], handler: () => send('prev') })
+  useAction('movie-preview:next', { label: 'Next movie frame', group: 'Movie', defaultBindings: ['arrowright'], handler: () => send('next') })
+  return null
 }
 
 /** Selected stations: docked right (desktop) or a collapsible bottom sheet

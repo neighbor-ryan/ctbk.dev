@@ -23,7 +23,6 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src"],
-  "exclude": ["src/_legacy"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src", "vite.config.ts", "scripts/movie-export-server*.ts"],
+  "exclude": ["src/_legacy"]
 }

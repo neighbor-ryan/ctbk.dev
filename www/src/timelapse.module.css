@@ -67,6 +67,12 @@
     flex: 1;
 }
 
+.movieLink {
+    color: #a8ccff;
+    font-size: 12px;
+    align-self: flex-end;
+}
+
 .withClock {
     flex-direction: row;
     align-items: center;

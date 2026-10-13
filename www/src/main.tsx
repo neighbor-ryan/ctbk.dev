@@ -47,6 +47,7 @@ const FeedHealth = lazy(() => import("./pages/FeedHealth"))
 const CellsDebug = lazy(() => import("./pages/CellsDebug"))
 const MergeReview = lazy(() => import("./pages/MergeReview"))
 const Timelapse = lazy(() => import("./pages/Timelapse"))
+const MovieStudio = lazy(() => import("./pages/MovieStudio"))
 
 function Pipeline() {
   return (
@@ -91,6 +92,7 @@ function AppContent() {
           <Route path="/cells-debug" element={<CellsDebug />} />
           <Route path="/merge-review" element={<MergeReview />} />
           <Route path="/timelapse" element={<Timelapse />} />
+          <Route path="/movie" element={<MovieStudio />} />
           {/* Catch-all: the CFW assets router SPA-fallbacks unknown paths
               to index.html with a 200 (specs/done/www-cfw-migration.md),
               so the router must render a real 404 page, not an empty
@@ -100,7 +102,7 @@ function AppContent() {
       </Suspense>
       {/* `/timelapse` owns the bottom edge (control bar + bottom sheet); its
           corner widget would sit on top of the ⚙ / scrubber. */}
-      {pathname !== '/timelapse' && (
+      {pathname !== '/timelapse' && pathname !== '/movie' && (
         <ThemeToggle onOpenShortcuts={openModal} hideThemeButton={isStationsPage}>
           {isStationsPage && (
             <>

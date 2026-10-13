@@ -13,6 +13,7 @@
 !e2e/map-embed.spec.ts
 !e2e/merge-review.spec.ts
 !e2e/month-range.spec.ts
+!e2e/movie-studio.spec.ts
 !e2e/ride-animation.spec.ts
 !e2e/shortcuts.spec.ts
 !e2e/station-map-gl.spec.ts
@@ -99,6 +100,8 @@
 !scripts/gen-version.js
 !scripts/push-screenshots.py
 !scripts/render-timelapse.mjs
+!scripts/movie-export-server.ts
+!scripts/movie-export-server.test.ts
 !scrns.config.json
 !scrns.timelapse.json
 !src/chart/YmrgtbChart.tsx
@@ -229,6 +232,8 @@
 !src/pages/Home.tsx
 !src/pages/MergeReview.module.css
 !src/pages/MergeReview.tsx
+!src/pages/MovieStudio.tsx
+!src/pages/MovieStudio.module.css
 !src/pages/NotFound.tsx
 !src/pages/Pipeline.mdx
 !src/pages/StationDetail.tsx
@@ -238,6 +243,8 @@
 !src/query/flowRoutes.test.ts
 !src/query/flowRoutes.ts
 !src/query/mergeReview.ts
+!src/query/movieStudio.ts
+!src/query/movieStudio.test.ts
 !src/query/rideAnimation.test.ts
 !src/query/rideAnimation.ts
 !src/query/ridesMulti.ts

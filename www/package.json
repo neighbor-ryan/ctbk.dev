@@ -83,7 +83,7 @@
     "test:ui": "playwright test --ui",
     "test:bundle": "playwright test --config=playwright.bundle.config.ts",
     "deploy:cf": "pnpm run build && wrangler deploy",
-    "test:unit": "vitest run src"
+    "test:unit": "vitest run"
   },
   "repository": {
     "type": "git",

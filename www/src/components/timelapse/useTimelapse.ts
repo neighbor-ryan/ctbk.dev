@@ -141,7 +141,7 @@ export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEn
   const [tUrl, setTUrl] = useUrlState(tKey, tParam)
   const [sp, setSpUrl] = useUrlState('sp', {
     encode: (value: number) => value === 8 ? undefined : String(value),
-    decode: (raw: string | undefined) => { const value = Number(raw); return Number.isFinite(value) && value >= .25 && value <= 60 ? value : 8 },
+    decode: (raw: string | undefined) => { const value = Number(raw); return Number.isFinite(value) && value > 0 && (mv || value >= .25 && value <= 60) ? value : 8 },
   })
   const [lengthRaw, setLengthRaw] = useUrlState('len', stringParam())
   const [lruRaw, setLruRaw] = useUrlState('lru', stringParam())
@@ -192,7 +192,7 @@ export function useTimelapse({ tKey = 't', defaultBin = '1d', mv = false, keysEn
   useEffect(() => {
     // The default range follows asynchronously loaded data bounds. Never
     // rewrite a deep-linked instant against the temporary wall-clock range.
-    if (publishedLastDay === null) return
+    if (publishedLastDay === null || mv) return
     const p = prevGrid.current
     prevGrid.current = { bin, iStart, iEnd }
     if (!p && !mv) {
