@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import type { HealthSnapshot } from './health';
+import { classifyCoverage, type HealthSnapshot } from './health';
 import { d1SizeGB, DEFAULT_RULES, diffRules, feedLagP90Seconds, feedStaleMinutes, hourlyCompactionStaleMinutes, pyramidTipAgeHours, snapshotAgeMinutes, stationsStaleHours, type AlertState, type FiringEntry, type Rule, isUsPop, runAlerts } from './alerts';
 
 const FIXED_NOW = new Date('2026-05-24T12:00:00Z');
@@ -227,7 +227,7 @@ describe('DEFAULT_RULES on a full snapshot', () => {
 		const lost = fresh({ feed: { ...snap().feed, gaps: { ...gaps, missing: 31, unexplained: ['10:20'], cronSkips: 2 } } });
 		expect(firingIds(lost)).toEqual(['feed-missed-lus']);
 		expect(DEFAULT_RULES.find((r) => r.id === 'feed-missed-lus')!.firingText(lost)).toBe(
-			':rotating_light: *GBFS minutes possibly lost* — 1 WAL hole(s) today next to a skipped poller tick (10:20); 2 skipped tick(s), 30 other unobserved generation(s) (upstream omission or cache)',
+			':rotating_light: *GBFS minutes possibly lost* — 1 minute slot(s) absent from both feeds next to a skipped primary tick (10:20); 2 skipped primary tick(s). Backup recovery has been accounted for',
 		);
 	});
 
@@ -250,7 +250,7 @@ describe('DEFAULT_RULES on a full snapshot', () => {
 		const risk = withRecentLags([60, 61, 62], 'TPE53-P1');
 		expect(firingIds(risk)).toEqual(['feed-lag']);
 		expect(DEFAULT_RULES.find((r) => r.id === 'feed-lag')!.firingText(risk)).toBe(
-			':warning: *GBFS stale-cache loss risk* — 3 distinct observations first seen ≥ 60s late in the last 10 minutes; a feed generation lasts about a minute, so updates may be superseded before we see them (latest serving POP: TPE53-P1)',
+			':warning: *Primary GBFS feed delayed (1 of 2 feeds)* — 3 distinct observations first seen ≥ 60s late in the last 10 minutes; backup coverage unknown. Minute coverage does not prove every upstream generation was captured (latest serving POP: TPE53-P1)',
 		);
 		expect(firingIds(fresh({ d1: { sizeBytes: 8.5e9 } }))).toEqual(['d1-size']);
 		expect(d1SizeGB(fresh({ d1: { sizeBytes: 4.01e9 } }))).toBe(4.01);
@@ -279,11 +279,33 @@ describe('DEFAULT_RULES on a full snapshot', () => {
 		const gaps = { settled: 718, missing: 3, unexplained: [], cronSkips: 0, recentMissing: ['11:50', '11:51', '11:52'] };
 		const s = fresh({ feed: { ...snap().feed, gaps } });
 		expect(firingIds(s)).toEqual(['feed-generation-gaps']);
-		expect(rule.firingText(s)).toBe(':rotating_light: *GBFS generation coverage loss* — 3 missing WAL generations in the last 10 settled minutes (11:50, 11:51, 11:52); upstream omission, stale cache, or missed polls may be responsible. Running cron ticks alone do not prove coverage');
+		expect(rule.firingText(s)).toBe(':rotating_light: *GBFS combined coverage loss* — 3 minute slots absent from both feeds in the last 10 settled minutes (11:50, 11:51, 11:52); backup recovery has been accounted for. Upstream omission, stale cache, or missed polls may be responsible');
 		gaps.recentMissing = ['11:51', '11:52'];
 		expect([rule.check(s), rule.check(s, true)]).toEqual([false, true]);
 		gaps.recentMissing = ['11:52'];
 		expect(rule.check(s, true)).toBe(false);
+	});
+
+	it('three primary holes covered by backup are a redundancy warning, not combined loss', () => {
+		const minutes = ['2026-05-24 11:50', '2026-05-24 11:51', '2026-05-24 11:52'];
+		const coverage = classifyCoverage(new Set(), new Set(minutes), '2026-05-24', 0, minutes);
+		const s = fresh({ feed: { ...snap().feed, coverage, backup: { latestPoll: null, ts: FIXED_NOW.getTime() / 1000 - 30, polledAt: FIXED_NOW.getTime() / 1000 }, gaps: { settled: 0, missing: 3, unexplained: ['11:50'], cronSkips: 1, recentMissing: minutes } } });
+		expect(firingIds(s)).toEqual(['feed-redundancy']);
+		coverage.recent.combined = minutes;
+		expect(firingIds(s)).toEqual(['feed-generation-gaps', 'feed-redundancy']);
+		coverage.complete = false;
+		expect(firingIds(s)).toEqual(['feed-coverage-unknown']);
+		for (const id of ['feed-stale', 'feed-generation-gaps', 'feed-missed-lus', 'feed-redundancy']) {
+			const rule = DEFAULT_RULES.find((r) => r.id === id)!;
+			expect([rule.check(s, false), rule.check(s, true)]).toEqual([false, true]);
+		}
+	});
+
+	it('fresh backup protects a stalled primary; a recently uploaded frozen backup does not', () => {
+		const s = fresh({ feed: { ...snap().feed, latestPoll: null, backup: { latestPoll: snap().feed.latestPoll, ts: FIXED_NOW.getTime() / 1000 - 30, polledAt: FIXED_NOW.getTime() / 1000 } } });
+		expect(firingIds(s)).toEqual([]);
+		s.feed.backup!.ts = FIXED_NOW.getTime() / 1000 - 600;
+		expect(firingIds(s)).toEqual(['feed-stale']);
 	});
 
 });
@@ -299,8 +321,9 @@ class FakeR2 {
 		if (!o) return null;
 		return { etag: o.etag, json: async <T>() => JSON.parse(o.body) as T };
 	}
-	async put(key: string, body: string, opts?: { onlyIf?: { etagMatches?: string } }) {
+	async put(key: string, body: string, opts?: { onlyIf?: { etagMatches?: string; etagDoesNotMatch?: string } }) {
 		const want = opts?.onlyIf?.etagMatches;
+		if (opts?.onlyIf?.etagDoesNotMatch === '*' && this.objects.has(key)) return null;
 		if (want !== undefined && this.objects.get(key)?.etag !== want) return null;
 		const o = { body, etag: `e${++this.n}` };
 		this.objects.set(key, o);
@@ -309,45 +332,109 @@ class FakeR2 {
 	state(): AlertState { return JSON.parse(this.objects.get('gbfs/alerts/state.json')!.body); }
 }
 
-describe('runAlerts', () => {
-	const rule: Rule = { id: 'always', description: 'never fires', check: () => true, firingText: () => 'boom' };
+class FakeSlack {
+	calls: Array<{ kind: string; ts?: string; parent?: string; text: string }> = [];
+	failDaily = false;
+	async postReport(text: string) { this.calls.push({ kind: 'op', text }); return { id: 'month' }; }
+	async editReport(ts: string, text: string) { this.calls.push({ kind: 'edit-op', ts, text }); }
+	async post(text: string, parent?: string) {
+		if (this.failDaily) throw new Error('daily post failed');
+		this.calls.push({ kind: 'daily', parent, text }); return { id: `day-${this.calls.length}` };
+	}
+	async edit(ts: string, text: string) { this.calls.push({ kind: 'edit', ts, text }); }
+	async postUrgent(text: string, parent: string) { this.calls.push({ kind: 'urgent', parent, text }); return { id: 'incident' }; }
+	shape() { return this.calls.map(({ kind, ts, parent }) => ({ kind, ...(ts ? { ts } : {}), ...(parent ? { parent } : {}) })); }
+}
 
-	it('overlapping cron runs post a firing transition once', async () => {
-		vi.useRealTimers();
+describe('runAlerts monthly delivery', () => {
+	const rule: Rule = { id: 'always', description: 'condition cleared', check: () => true, firingText: () => 'boom' };
+	const init = async () => {
 		const r2 = new FakeR2();
 		await r2.put('health/snapshot.json', JSON.stringify(snap()));
-		const posts: string[][] = [];
-		const slack = {
-			sync: async (thread: { messages: string[] }) => {
-				posts.push(thread.messages);
-				// Slack's round-trip: the other run reads state meanwhile.
-				await new Promise((r) => setTimeout(r, 20));
-				return { threadId: `ts${posts.length}` };
-			},
-		};
-		const [a, b] = await Promise.all([
-			runAlerts(r2, 'tok', [rule], undefined, slack as never),
-			runAlerts(r2, 'tok', [rule], undefined, slack as never),
-		]);
-		expect(posts).toEqual([['boom']]);
-		expect([a.length, b.length].sort()).toEqual([0, 1]);
-		expect(Object.keys(r2.state().firing)).toEqual(['always']);
-		expect(r2.state().firing.always.threadTs).toBe('ts1');
+		return { r2, slack: new FakeSlack() };
+	};
+
+	it('overlapping first-ever runs create exactly one monthly OP and daily reply', async () => {
+		const { r2, slack } = await init();
+		const results = await Promise.all([runAlerts(r2, 'tok', [rule], undefined, slack), runAlerts(r2, 'tok', [rule], undefined, slack)]);
+		expect(slack.shape()).toEqual([{ kind: 'op' }, { kind: 'daily', parent: 'month' }]);
+		expect(results.map((r) => r.length).sort()).toEqual([0, 1]);
+		expect(r2.state().firing).toEqual({ always: { firingSince: FIXED_NOW.toISOString(), threadTs: 'month', firingText: 'boom', delivery: 'report' } });
 	});
 
-	it('a live claim defers to its holder; an expired one (a run that died mid-post) is taken over', async () => {
-		vi.useRealTimers();
-		const r2 = new FakeR2();
-		await r2.put('health/snapshot.json', JSON.stringify(snap()));
-		const posts: string[][] = [];
-		const slack = { sync: async (thread: { messages: string[] }) => { posts.push(thread.messages); return { threadId: 'ts1' }; } };
-		const claimed = (ageMs: number) => JSON.stringify({ firing: {}, claim: { at: new Date(Date.now() - ageMs).toISOString() } });
-		await r2.put('gbfs/alerts/state.json', claimed(60_000));
-		expect(await runAlerts(r2, 'tok', [rule], undefined, slack as never)).toEqual([]);
-		expect(posts).toEqual([]);
-		await r2.put('gbfs/alerts/state.json', claimed(6 * 60_000));
-		expect((await runAlerts(r2, 'tok', [rule], undefined, slack as never)).map((t) => t.rule.id)).toEqual(['always']);
-		expect(posts).toEqual([['boom']]);
-		expect(r2.state()).toEqual({ firing: { always: { firingSince: expect.any(String), threadTs: 'ts1', firingText: 'boom' } } });
+	it('warning flaps edit one daily reply; resolution never appends a second reply', async () => {
+		const { r2, slack } = await init();
+		await runAlerts(r2, 'tok', [rule], undefined, slack);
+		vi.advanceTimersByTime(60_000);
+		await runAlerts(r2, 'tok', [{ ...rule, check: () => false }], undefined, slack);
+		vi.advanceTimersByTime(60_000);
+		await runAlerts(r2, 'tok', [rule], undefined, slack);
+		expect(slack.shape()).toEqual([
+			{ kind: 'op' }, { kind: 'daily', parent: 'month' },
+			{ kind: 'edit-op', ts: 'month' }, { kind: 'edit', ts: 'day-2' },
+			{ kind: 'edit-op', ts: 'month' }, { kind: 'edit', ts: 'day-2' },
+		]);
+		expect(r2.state().report!.days['2026-05-24'].conditions).toEqual({ always: { starts: 2, active: true, changedAt: '2026-05-24T12:02:00.000Z', text: 'boom' } });
+	});
+
+	it('critical incidents broadcast once, then edit that message on recovery', async () => {
+		const { r2, slack } = await init();
+		const critical = { ...rule, severity: 'critical' as const };
+		await runAlerts(r2, 'tok', [critical], undefined, slack);
+		await runAlerts(r2, 'tok', [critical], undefined, slack);
+		vi.advanceTimersByTime(60_000);
+		await runAlerts(r2, 'tok', [{ ...critical, check: () => false }], undefined, slack);
+		expect(slack.shape()).toEqual([
+			{ kind: 'op' }, { kind: 'daily', parent: 'month' }, { kind: 'urgent', parent: 'month' },
+			{ kind: 'edit-op', ts: 'month' }, { kind: 'edit', ts: 'day-2' }, { kind: 'edit', ts: 'incident' },
+		]);
+		expect(slack.calls.at(-1)!.text).toBe('boom\n:white_check_mark: *Resolved* — condition cleared · 2026-05-24 12:01 UTC');
+		expect(r2.state().firing).toEqual({});
+	});
+
+	it('retries failed daily delivery without duplicating the OP or episode', async () => {
+		const { r2, slack } = await init();
+		slack.failDaily = true;
+		expect(await runAlerts(r2, 'tok', [rule], undefined, slack)).toEqual([]);
+		expect(slack.shape()).toEqual([{ kind: 'op' }]);
+		expect(r2.state().report!.threadTs).toBe('month');
+		vi.advanceTimersByTime(60_000);
+		slack.failDaily = false;
+		await runAlerts(r2, 'tok', [rule], undefined, slack);
+		expect(slack.shape()).toEqual([{ kind: 'op' }, { kind: 'edit-op', ts: 'month' }, { kind: 'daily', parent: 'month' }]);
+		expect(r2.state().report!.days['2026-05-24'].conditions.always).toEqual({ starts: 1, active: true, changedAt: FIXED_NOW.toISOString(), text: 'boom' });
+		expect(r2.state().pending).toBeUndefined();
+	});
+
+	it('same day periodic refresh edits OP only; new day adds one reply; new month adds one OP', async () => {
+		const { r2, slack } = await init();
+		await runAlerts(r2, 'tok', [], undefined, slack);
+		vi.advanceTimersByTime(15 * 60_000);
+		await runAlerts(r2, 'tok', [], undefined, slack);
+		vi.setSystemTime(new Date('2026-05-25T00:00:00Z'));
+		await runAlerts(r2, 'tok', [], undefined, slack);
+		vi.setSystemTime(new Date('2026-06-01T00:00:00Z'));
+		await runAlerts(r2, 'tok', [], undefined, slack);
+		expect(slack.shape()).toEqual([
+			{ kind: 'op' }, { kind: 'daily', parent: 'month' }, { kind: 'edit-op', ts: 'month' },
+			{ kind: 'edit-op', ts: 'month' }, { kind: 'edit', ts: 'day-2' }, { kind: 'daily', parent: 'month' },
+			{ kind: 'edit-op', ts: 'month' }, { kind: 'edit', ts: 'day-6' },
+			{ kind: 'op' }, { kind: 'daily', parent: 'month' },
+		]);
+		expect(Object.keys(r2.state().report!.days)).toEqual(['2026-06-01']);
+	});
+
+	it('defers a live lease, takes over an expired one, and edits legacy recovery OPs', async () => {
+		const { r2, slack } = await init();
+		await r2.put('gbfs/alerts/state.json', JSON.stringify({ firing: {}, claim: { at: FIXED_NOW.toISOString() } }));
+		expect(await runAlerts(r2, 'tok', [rule], undefined, slack)).toEqual([]);
+		expect(slack.shape()).toEqual([]);
+		vi.advanceTimersByTime(6 * 60_000);
+		await runAlerts(r2, 'tok', [rule], undefined, slack);
+		expect(slack.shape()).toEqual([{ kind: 'op' }, { kind: 'daily', parent: 'month' }]);
+		await r2.put('gbfs/alerts/state.json', JSON.stringify({ firing: { legacy: { firingSince: FIXED_NOW.toISOString(), threadTs: 'legacy-op', firingText: 'old warning' } } }));
+		await runAlerts(r2, 'tok', [], undefined, slack);
+		expect(slack.shape().slice(2)).toEqual([{ kind: 'op' }, { kind: 'daily', parent: 'month' }, { kind: 'edit', ts: 'legacy-op' }]);
+		expect(r2.state().firing).toEqual({});
 	});
 });

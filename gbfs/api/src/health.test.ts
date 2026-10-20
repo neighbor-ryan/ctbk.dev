@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-	classifyFeedGaps, getCompactionHealth, getFeedHealth, getHealthSnapshot,
+	classifyCoverage, classifyFeedGaps, getCompactionHealth, getFeedHealth, getHealthSnapshot,
 	HEALTH_INVENTORY_KEY, HEALTH_SNAPSHOT_KEY, refreshHealthInventory,
 	shouldRefreshHealthInventory, summarizeFeedDay, type HealthR2,
 } from './health';
@@ -36,7 +36,7 @@ describe('health LIST budget', () => {
 		const snapshot = await getHealthSnapshot(r2);
 		expect(prefixes.sort()).toEqual([
 			'gbfs/avail/h1/2026-10-10/', 'gbfs/avail/h1/2026-10-11/',
-			'gbfs/heartbeat/2026-10-11/', 'gbfs/status/2026-10-10/', 'gbfs/status/2026-10-11/',
+			'gbfs/heartbeat/2026-10-11/', 'gbfs/probe/v11/2026-10-10/', 'gbfs/probe/v11/2026-10-11/', 'gbfs/status/2026-10-10/', 'gbfs/status/2026-10-11/',
 		]);
 		expect(snapshot.feed.latestPoll?.time).toBe('12:14');
 		expect(snapshot.inventoryGeneratedAt).toBe(null);
@@ -147,6 +147,52 @@ describe('classifyFeedGaps', () => {
 	});
 });
 
+describe('combined minute coverage', () => {
+	it('credits the backup, retains real gaps, and limits skipped-tick loss to uncovered slots', () => {
+		const labels = (minutes: number[]) => new Set(minutes.map((m) => `2026-10-20 00:0${m}`));
+		expect(classifyCoverage(labels([0, 2]), labels([1, 2, 3]), '2026-10-20', 5,
+			['2026-10-20 00:01', '2026-10-20 00:03', '2026-10-20 00:04'], ['00:01', '00:04'])).toEqual({
+			complete: true,
+			today: { date: '2026-10-20', settled: 5, primary: 2, backup: 3, combined: 4, recovered: 2, hours: [[5, 2, 3, 4], ...Array.from({ length: 23 }, () => [0, 0, 0, 0])] },
+			missing: ['2026-10-20 00:04'], unexplained: ['2026-10-20 00:04'],
+			recent: { primary: ['2026-10-20 00:01', '2026-10-20 00:03', '2026-10-20 00:04'], backup: ['2026-10-20 00:04'], combined: ['2026-10-20 00:04'] },
+		});
+	});
+
+	it('compares full dates across midnight and never fills from a different day', () => {
+		const result = classifyCoverage(new Set(['2026-10-19 23:58']), new Set(['2026-10-19 23:59']), '2026-10-20', 0,
+			['2026-10-19 23:58', '2026-10-19 23:59', '2026-10-20 00:00']);
+		expect(result.recent).toEqual({ primary: ['2026-10-19 23:59', '2026-10-20 00:00'], backup: ['2026-10-19 23:58', '2026-10-20 00:00'], combined: ['2026-10-20 00:00'] });
+		expect([result.today.settled, result.today.combined]).toEqual([0, 0]);
+	});
+
+	it('paginates both feeds and reports unknown if a listing exceeds its bound', async () => {
+		vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-20T00:05:00Z'));
+		try {
+			const r2 = fakeR2([]), calls: string[] = [];
+			r2.list = async ({ prefix = '', cursor }) => {
+				calls.push(`${prefix}:${cursor ?? ''}`);
+				if (prefix === 'gbfs/probe/v11/2026-10-20/') return {
+					objects: [{ key: `${prefix}00-01.json`, uploaded: new Date() }], truncated: true, cursor: 'next',
+				};
+				return { objects: [], truncated: false };
+			};
+			const feed = await getFeedHealth(r2, []);
+			expect(calls.filter((p) => p.startsWith('gbfs/probe/v11/2026-10-20/'))).toEqual([
+				'gbfs/probe/v11/2026-10-20/:', 'gbfs/probe/v11/2026-10-20/:next', 'gbfs/probe/v11/2026-10-20/:next',
+			]);
+			expect(feed.coverage!.complete).toBe(false);
+			expect(feed.backup!.ts).toBe(null);
+		} finally { vi.useRealTimers(); }
+	});
+
+	it('treats a truncated listing without a continuation cursor as incomplete', async () => {
+		const r2 = fakeR2([]);
+		r2.list = async () => ({ objects: [], truncated: true });
+		expect((await getFeedHealth(r2, [])).coverage!.complete).toBe(false);
+	});
+});
+
 describe('passive feed history', () => {
 	it('summarizes only the requested UTC day, separating unknown POPs from known ones', () => {
 		const t = Date.parse('2026-10-11T12:00:00Z') / 1000;
@@ -185,7 +231,7 @@ describe('passive feed history', () => {
 				popSamples: 1, nonUsSamples: 1, pops: { 'BCN50-P1': 1 },
 			}]);
 			await getFeedHealth(r2);
-			expect(writes).toEqual(['health/feed-drift.json', 'health/feed-history/2026-10-11.json']);
+			expect(writes.filter((key) => !key.startsWith('health/feed-coverage/'))).toEqual(['health/feed-drift.json', 'health/feed-history/2026-10-11.json']);
 			const yesterday = objects.get('health/feed-history/2026-10-11.json');
 			const next = await observe('2026-10-12T00:01:00Z', 'IAD12-P5');
 			expect(objects.get('health/feed-history/2026-10-11.json')).toBe(yesterday);

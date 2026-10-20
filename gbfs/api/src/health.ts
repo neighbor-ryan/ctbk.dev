@@ -1,3 +1,5 @@
+import type { FeedObservation, FeedDaySummary, FeedDrift, FeedHealth, FeedCoverageDay, FeedCoverage, FeedGaps } from '../../lib/feedHealth';
+export type { FeedObservation, FeedDaySummary, FeedDrift, FeedHealth, FeedCoverageDay, FeedCoverage, FeedGaps } from '../../lib/feedHealth';
 /**
  * `/api/health` — GBFS pipeline health snapshot.
  *
@@ -44,25 +46,6 @@ export interface HealthR2 {
 	put?(key: string, value: string): Promise<unknown>;
 }
 
-/** Feed-staleness drift: how far the feed's own `last_updated` lagged our
- *  poll wall-clock, for the latest poll plus a rolling 24h series (older
- *  history is derivable from the daily compaction parquets, which carry
- *  `ts` + `polled_at` per row). */
-export type FeedObservation = [polledAt: number, lagS: number, pop?: string | null];
-
-/** Sampled by health refreshes, not a census of every WAL generation. */
-export interface FeedDaySummary {
-	source: 'health-refresh';
-	date: string;
-	samples: number;
-	p50S: number;
-	p90S: number;
-	overGenerationCount: number;
-	popSamples: number;
-	nonUsSamples: number;
-	pops: Record<string, number>;
-}
-
 const US_POP_PREFIXES = new Set([
 	'IAD', 'JFK', 'EWR', 'BOS', 'PHL', 'BWI', 'PIT', 'CLT', 'RDU', 'ATL', 'MIA', 'TPA', 'JAX', 'MCO',
 	'ORD', 'DTW', 'CMH', 'IND', 'MSP', 'MCI', 'OMA', 'STL', 'BNA', 'MEM', 'DFW', 'IAH', 'AUS', 'SAT',
@@ -91,54 +74,48 @@ export function summarizeFeedDay(date: string, series: FeedObservation[]): FeedD
 	};
 }
 
-export interface FeedDrift {
-	/** `polled_at - ts` of the latest WAL record, seconds. */
-	latestS: number;
-	/** Feed `last_updated` (epoch s) of the latest WAL record. */
-	ts: number;
-	/** Poll wall-clock (epoch s) of the latest WAL record. */
-	polledAt: number;
-	/** `[polled_at epoch s, drift s, optional POP]` health samples, ≤24h old, oldest first. */
-	series: FeedObservation[];
-	/** CloudFront POP that served the latest record (`x-amz-cf-pop`), when recorded. */
-	pop?: string | null;
-}
-
-export interface FeedHealth {
-	latestPoll: { key: string; date: string; time: string; uploadedAt: string } | null;
-	drift: FeedDrift | null;
-	todayCount: number;
-	todayExpected: number;
-	last7Days: Array<{ date: string; count: number; expected: number }>;
-	gaps?: FeedGaps;
-	/** Last seven UTC days of durable sampled lag/POP summaries. */
-	history?: FeedDaySummary[];
-}
-
-/** Today's missing WAL minutes, classified against the poller's per-tick
- *  heartbeats. A LU stamped in minute m stays live ~60s, into m+1, so ticks
- *  m and m+1 both sample it: a hole with both heartbeats present is a
- *  generation not observed despite running ticks (upstream omission or
- *  stale cache), while a hole next to a missing heartbeat is one the poller may
- *  have missed — possible permanent loss. (Heartbeats prove a tick ran, not
- *  that it saw fresh data; sampling through a stale cache shows up as
- *  first-seen lag in `drift`, alerted separately.) */
-export interface FeedGaps {
-	/** Settled minutes today (excludes the current + previous, in flight). */
-	settled: number;
-	missing: number;
-	/** `HH:MM` of holes adjacent to a missing heartbeat. */
-	unexplained: string[];
-	/** Settled minutes with no heartbeat (CF skipped the cron). */
-	cronSkips: number;
-	/** Missing WAL generations in the last ten settled minutes, across UTC midnight.
-	 *  Tick presence cannot distinguish upstream omission from stale-cache loss. */
-	recentMissing?: string[];
+/** Compare timestamp-keyed observations. Keys from the backup are stamped by
+ * its feed's ts, not its upload time; repeated stale payloads cannot fill new slots. */
+export function classifyCoverage(
+	primary: Set<string>,
+	backup: Set<string>,
+	date: string,
+	settled: number,
+	recentMinutes: string[],
+	unexplained: string[] = [],
+): FeedCoverage {
+	const today: FeedCoverageDay = { date, settled, primary: 0, backup: 0, combined: 0, recovered: 0, hours: Array.from({ length: 24 }, () => [0, 0, 0, 0]) };
+	const missing: string[] = [];
+	for (let i = 0; i < settled; i++) {
+		const label = `${date} ${minuteLabel(i).replace('-', ':')}`;
+		const p = primary.has(label), b = backup.has(label);
+		const hour = today.hours[Math.floor(i / 60)];
+		hour[0]++; hour[1] += +p; hour[2] += +b; hour[3] += +(p || b);
+		today.primary += +p; today.backup += +b; today.combined += +(p || b); today.recovered += +(!p && b);
+		if (!p && !b) missing.push(label);
+	}
+	return {
+		complete: true, today, missing,
+		unexplained: unexplained.map((m) => `${date} ${m}`).filter((m) => missing.includes(m)),
+		recent: {
+			primary: recentMinutes.filter((m) => !primary.has(m)),
+			backup: recentMinutes.filter((m) => !backup.has(m)),
+			combined: recentMinutes.filter((m) => !primary.has(m) && !backup.has(m)),
+		},
+	};
 }
 
 const pad2 = (n: number) => n.toString().padStart(2, '0');
 const minuteLabel = (i: number) => `${pad2(Math.floor(i / 60))}-${pad2(i % 60)}`;
 
+/** Today's missing WAL minute slots, classified against the poller's per-tick
+ *  heartbeats. A LU stamped in minute m stays live ~60s, into m+1, so ticks
+ *  m and m+1 both sample it: a hole with both heartbeats present is a
+ *  minute slot not observed despite running ticks (timestamp phase, upstream omission or
+ *  stale cache), while a hole next to a missing heartbeat is one the poller may
+ *  have missed — possible permanent loss. (Heartbeats prove a tick ran, not
+ *  that it saw fresh data; sampling through a stale cache shows up as
+ *  first-seen lag in `drift`, alerted separately.) */
 /** `wal` / `heartbeats`: `HH-MM` labels present today. */
 export function classifyFeedGaps(wal: Set<string>, heartbeats: Set<string>, settled: number): FeedGaps {
 	let missing = 0;
@@ -281,9 +258,10 @@ async function listAll(
 	for (let i = 0; i < maxPages; i++) {
 		const result = await r2.list({ prefix, cursor, limit: 1000 });
 		out.push(...result.objects);
-		if (!result.truncated || !result.cursor) {
+		if (!result.truncated) {
 			return { objects: out, truncated: false };
 		}
+		if (!result.cursor) return { objects: out, truncated: true };
 		cursor = result.cursor;
 	}
 	return { objects: out, truncated: true };
@@ -306,9 +284,10 @@ async function listAllDelimited(
 		const result = await r2.list({ prefix, delimiter: '/', cursor, limit: 1000 });
 		objects.push(...result.objects);
 		(result.delimitedPrefixes ?? []).forEach((p) => delimitedPrefixes.add(p));
-		if (!result.truncated || !result.cursor) {
+		if (!result.truncated) {
 			return { objects, delimitedPrefixes: [...delimitedPrefixes].sort(), truncated: false };
 		}
+		if (!result.cursor) return { objects, delimitedPrefixes: [...delimitedPrefixes].sort(), truncated: true };
 		cursor = result.cursor;
 	}
 	return { objects, delimitedPrefixes: [...delimitedPrefixes].sort(), truncated: true };
@@ -325,9 +304,10 @@ export async function getFeedHealth(
 	const today = dates[0];
 	const todayExpected = minutesElapsedTodayUtc();
 	const liveDates = cachedCounts === undefined ? dates : dates.slice(0, 2);
-	const [lists, heartbeats] = await Promise.all([
+	const [lists, heartbeats, backups] = await Promise.all([
 		Promise.all(liveDates.map((date) => listAll(r2, `gbfs/status/${date}/`, 3))),
 		listAll(r2, `gbfs/heartbeat/${today}/`, 3),
+		Promise.all(dates.slice(0, 2).map((date) => listAll(r2, `gbfs/probe/v11/${date}/`, 3))),
 	]);
 	const todayCount = lists[0].objects.length;
 	const counts = dates
@@ -360,18 +340,44 @@ export async function getFeedHealth(
 
 	const gaps = classifyFeedGaps(minuteLabels(lists[0].objects), minuteLabels(heartbeats.objects), Math.max(0, todayExpected - 2));
 
-	const walKeys = new Set(lists.slice(0, 2).flatMap((l) => l.objects.map((o) => o.key)));
+	const labels = (pages: typeof lists) => new Set(pages.flatMap((l) => l.objects.flatMap((o) => {
+		const m = o.key.match(/(\d{4}-\d{2}-\d{2})\/(\d{2})-(\d{2})\.json$/);
+		return m ? [`${m[1]} ${m[2]}:${m[3]}`] : [];
+	})));
+	const primaryLabels = labels(lists.slice(0, 2)), backupLabels = labels(backups);
 	const endMinute = Math.floor(Date.now() / 60_000) - 1;
-	gaps.recentMissing = Array.from({ length: 10 }, (_, i) => {
+	const recentMinutes = Array.from({ length: 10 }, (_, i) => {
 		const iso = new Date((endMinute - 10 + i) * 60_000).toISOString();
-		return `gbfs/status/${iso.slice(0, 10)}/${iso.slice(11, 16).replace(':', '-')}.json`;
-	}).filter((key) => !walKeys.has(key)).map((key) => key.slice('gbfs/status/'.length, -5).replace('/', ' ').replace(/-(\d{2})$/, ':$1'));
+		return `${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
+	});
+	const coverage = classifyCoverage(primaryLabels, backupLabels, today, gaps.settled, recentMinutes, gaps.unexplained);
+	coverage.complete = [...lists.slice(0, 2), ...backups, heartbeats].every((l) => !l.truncated);
+	gaps.recentMissing = coverage.recent.primary;
+	const latestBackup = backups.flatMap((l) => l.objects).sort((a, b) => b.key.localeCompare(a.key))[0];
+	const backupObject = latestBackup ? await r2.get(latestBackup.key) : null;
+	const backupRecord = backupObject ? await backupObject.json<{ ts?: number; polled_at?: number }>() : null;
+	const backup: FeedHealth['backup'] = {
+		latestPoll: latestBackup ? { key: latestBackup.key, date: latestBackup.key.slice(-21, -11), time: latestBackup.key.slice(-10, -5).replace('-', ':'), uploadedAt: latestBackup.uploaded.toISOString() } : null,
+		ts: typeof backupRecord?.ts === 'number' ? backupRecord.ts : null,
+		polledAt: typeof backupRecord?.polled_at === 'number' ? backupRecord.polled_at : null,
+	};
+	if (r2.put && coverage.complete) {
+		await r2.put(`health/feed-coverage/${today}.json`, JSON.stringify(coverage.today));
+		// Finalize yesterday from both complete listings after midnight, including
+		// observations that arrived after yesterday's last health refresh.
+		const yesterday = classifyCoverage(primaryLabels, backupLabels, dates[1], 1440, []).today;
+		await r2.put(`health/feed-coverage/${dates[1]}.json`, JSON.stringify(yesterday));
+	}
+	const coverageHistory = (await Promise.all(dates.map(async (date) => {
+		const obj = await r2.get(`health/feed-coverage/${date}.json`);
+		return obj ? obj.json<FeedCoverageDay>() : null;
+	}))).filter((d): d is FeedCoverageDay => d !== null).reverse();
 	const summaries = await Promise.all(dates.map(async (date) => {
 		const obj = await r2.get(`health/feed-history/${date}.json`);
 		return obj ? obj.json<FeedDaySummary>() : null;
 	}));
 	const history = summaries.filter((s): s is FeedDaySummary => s !== null).reverse();
-	return { latestPoll, drift, todayCount, todayExpected, last7Days: counts, gaps, history };
+	return { latestPoll, drift, todayCount, todayExpected, last7Days: counts, gaps, history, coverage, backup, coverageHistory };
 }
 
 const FEED_DRIFT_KEY = 'health/feed-drift.json';

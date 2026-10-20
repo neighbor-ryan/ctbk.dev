@@ -41,6 +41,14 @@ function wasmReady(): Promise<void> {
 	return _wasmReady;
 }
 
+/** Shared rasterizer for bounded SVG health cards and share previews. */
+export async function rasterizeSvg(svg: string): Promise<Uint8Array> {
+	await wasmReady();
+	return new Resvg(svg, {
+		font: { fontBuffers: [new Uint8Array(interSemiBold as unknown as ArrayBuffer)], defaultFontFamily: 'Inter' },
+	}).render().asPng();
+}
+
 // ─── Station + LUC lookups ──────────────────────────────────────────
 
 interface StationRow {

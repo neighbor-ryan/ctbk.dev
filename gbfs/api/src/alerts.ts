@@ -1,30 +1,17 @@
-/** GBFS health alerting — every-5-minutes cron evaluates rules against the
- *  same `/api/health` snapshot, posts to Slack on firing/resolved transitions.
- *
- *  Design constraints (from user):
- *    1. NEVER block / interfere with the /1min poller (which lives in a
- *       different worker — `gbfs/worker/`). This module reads R2 only.
- *    2. Easy to tweak thresholds (declarative rules below).
- *    3. No false-positive flood — dedupe via R2 state object; only
- *       message on edges (clear→firing, firing→clear); resolved replies
- *       go in the firing message's Slack thread.
- *
- *  Slack transport uses `@rdub/thrds`'s `SlackClient.sync()` so the
- *  firing→resolved transition reads as a thread (OP = firing message,
- *  reply = resolved). State tracks `threadTs` + the original firing
- *  text so the resolve-side `sync()` can pass the right desired-thread.
- *
- *  See `specs/done/slack-notifications.md` for the manual GHA pings;
- *  this module covers the dynamic side (scraper health).
+/** GBFS health rules plus a CAS-protected Slack delivery outbox.
+ * The pollers live in separate workers; this module reads their timestamped
+ * WALs through /api/health. Routine transitions edit a monthly health thread;
+ * critical incidents broadcast once and are edited on resolution.
  */
-import { SlackClient } from '@rdub/thrds';
 import type { HealthR2, HealthSnapshot } from './health';
 import { ALERTS_HEARTBEAT_KEY, getHealthSnapshot, HEALTH_SNAPSHOT_KEY } from './health';
+import { updateHealthReport, reportDue, HealthSlackClient, type HealthReportState, type HealthSlack } from './healthReport';
 
 export { isUsPop } from './health';
 
 export interface Rule {
 	id: string;
+	severity?: 'warning' | 'critical';
 	description: string;
 	/** Pure function: given a snapshot, return `true` iff firing. */
 	check: (s: HealthSnapshot, wasFiring?: boolean) => boolean;
@@ -32,13 +19,14 @@ export interface Rule {
 	firingText: (s: HealthSnapshot) => string;
 }
 
-/** Per-rule firing record. Captures the original `firingText` so the
- *  resolved-transition `slack.sync()` can pass `[firingText, resolvedText]`
- *  as the desired thread state (thrds diffs vs existing → SKIP[0]+POST[1]). */
+/** Original incident details and delivery identity, retained until recovery. */
 export interface FiringEntry {
 	firingSince: string;     // ISO timestamp when this rule started firing
-	threadTs: string;        // Slack `ts` of the firing OP — also the thread parent
-	firingText: string;      // Frozen at firing time; resolved-sync needs it
+	threadTs: string;
+	firingText: string;
+	/** New delivery uses the monthly report; absent means an old standalone OP. */
+	delivery?: 'report';
+	incidentTs?: string;
 }
 
 export interface AlertState {
@@ -46,6 +34,12 @@ export interface AlertState {
 	firing: Record<string, FiringEntry>;
 	/** Set while a run posts its transitions to Slack (see `runAlerts`). */
 	claim?: { at: string };
+	report?: HealthReportState;
+	pending?: {
+		at: string;
+		firing: Record<string, FiringEntry>;
+		events: Array<{ id: string; description: string; severity?: Rule['severity']; kind: TransitionKind; firingText?: string; priorEntry?: FiringEntry; delivered?: boolean }>;
+	};
 }
 
 /** R2 key for the dedup state JSON. */
@@ -74,8 +68,28 @@ export function feedStaleMinutes(s: HealthSnapshot): number {
  *  cron tick) — see `FeedGaps`. Upstream-skipped generations are excluded.
  *  Empty for a snapshot that predates the field. */
 export function unexplainedGaps(s: HealthSnapshot): string[] {
-	return s.feed.gaps?.unexplained ?? [];
+	return s.feed.coverage?.unexplained ?? s.feed.gaps?.unexplained ?? [];
 }
+
+/** Freshness uses the upstream timestamp, so re-uploading a frozen payload
+ * cannot make either feed healthy. An unobserved backup is unknown/stale. */
+export function feedAgeMinutes(s: HealthSnapshot, source: 'primary' | 'backup'): number {
+	const ts = source === 'primary' ? s.feed.drift?.ts : s.feed.backup?.ts;
+	if (ts !== undefined && ts !== null) {
+		return Number.isFinite(ts) && ts <= Date.now() / 1000 ? (Date.now() / 1000 - ts) / 60 : Infinity;
+	}
+	return source === 'primary' ? feedStaleMinutes(s) : Infinity;
+}
+
+const combinedMissing = (s: HealthSnapshot) => s.feed.coverage?.recent.combined ?? s.feed.gaps?.recentMissing ?? [];
+const sourceContext = (s: HealthSnapshot) => {
+	const c = s.feed.coverage;
+	if (!c || !c.complete) return 'backup coverage unknown';
+	return c.recent.combined.length === 0 && c.complete
+		? 'combined minute coverage intact across both feeds'
+		: `${c.recent.combined.length} recent minute slot(s) absent from both feeds`;
+};
+const coverageUncertain = (s: HealthSnapshot) => s.feed.coverage?.complete === false || snapshotAgeMinutes(s) > SNAPSHOT_STALE_MIN;
 
 export function feedPop(s: HealthSnapshot): string | null {
 	return s.feed.drift?.pop ?? null;
@@ -172,22 +186,25 @@ const fmtAge = (h: number) => (h === Infinity ? 'never' : h < 48 ? `${h.toFixed(
 export const DEFAULT_RULES: Rule[] = [
 	{
 		id: 'feed-stale',
-		description: `No WAL poll observed in the last ${FEED_STALE_MIN} minutes`,
-		check: (s) => feedStaleMinutes(s) > FEED_STALE_MIN,
+		severity: 'critical',
+		description: `At least one feed observed within ${FEED_STALE_MIN} minutes`,
+		check: (s, wasFiring = false) => coverageUncertain(s) ? wasFiring : Math.min(feedAgeMinutes(s, 'primary'), feedAgeMinutes(s, 'backup')) > FEED_STALE_MIN,
 		firingText: (s) => {
-			const mins = feedStaleMinutes(s);
+			const mins = Math.min(feedAgeMinutes(s, 'primary'), feedAgeMinutes(s, 'backup'));
 			const ageDesc = mins === Infinity ? 'ever' : `${mins.toFixed(1)} min`;
-			return `:rotating_light: *GBFS feed stale* — no WAL poll in ${ageDesc} (threshold: ${FEED_STALE_MIN} min)`;
+			return `:rotating_light: *Both GBFS feeds stale or unobserved* — freshest upstream observation ${ageDesc}; neither feed protects new data (threshold: ${FEED_STALE_MIN} min)`;
 		},
 	},
 	{
 		id: 'feed-missed-lus',
-		description: 'No WAL holes adjacent to a skipped poller tick today',
-		check: (s) => unexplainedGaps(s).length > 0,
+		severity: 'critical',
+		description: 'No combined coverage holes adjacent to a skipped primary tick today',
+		check: (s, wasFiring = false) => coverageUncertain(s) ? wasFiring : unexplainedGaps(s).length > 0,
 		firingText: (s) => {
 			const g = s.feed.gaps!;
-			const shown = g.unexplained.slice(0, 10).join(', ') + (g.unexplained.length > 10 ? ', …' : '');
-			return `:rotating_light: *GBFS minutes possibly lost* — ${g.unexplained.length} WAL hole(s) today next to a skipped poller tick (${shown}); ${g.cronSkips} skipped tick(s), ${g.missing - g.unexplained.length} other unobserved generation(s) (upstream omission or cache)`;
+			const holes = unexplainedGaps(s);
+			const shown = holes.slice(0, 10).join(', ') + (holes.length > 10 ? ', …' : '');
+			return `:rotating_light: *GBFS minutes possibly lost* — ${holes.length} minute slot(s) absent from both feeds next to a skipped primary tick (${shown}); ${g.cronSkips} skipped primary tick(s). Backup recovery has been accounted for`;
 		},
 	},
 	{
@@ -199,15 +216,38 @@ export const DEFAULT_RULES: Rule[] = [
 			return lags.filter((lag) => lag >= FEED_LAG_RISK_S).length >= FEED_LAG_RISK_SAMPLES;
 		},
 		firingText: (s) =>
-			`:warning: *GBFS stale-cache loss risk* — ${recentFeedLags(s).filter((lag) => lag >= FEED_LAG_RISK_S).length} distinct observations first seen ≥ ${FEED_LAG_RISK_S}s late in the last 10 minutes; a feed generation lasts about a minute, so updates may be superseded before we see them` +
+			`:warning: *Primary GBFS feed delayed (1 of 2 feeds)* — ${recentFeedLags(s).filter((lag) => lag >= FEED_LAG_RISK_S).length} distinct observations first seen ≥ ${FEED_LAG_RISK_S}s late in the last 10 minutes; ${sourceContext(s)}. Minute coverage does not prove every upstream generation was captured` +
 			(feedPop(s) ? ` (latest serving POP: ${feedPop(s)})` : ''),
 	},
 	{
 		id: 'feed-generation-gaps',
-		description: 'At most 1 missing WAL generation in the last 10 settled minutes',
-		check: (s, wasFiring = false) => (s.feed.gaps?.recentMissing?.length ?? 0) >= (wasFiring ? 2 : 3),
+		severity: 'critical',
+		description: 'At most 1 combined coverage hole in the last 10 settled minutes',
+		check: (s, wasFiring = false) => coverageUncertain(s) ? wasFiring : combinedMissing(s).length >= (wasFiring ? 2 : 3),
 		firingText: (s) =>
-			`:rotating_light: *GBFS generation coverage loss* — ${s.feed.gaps!.recentMissing!.length} missing WAL generations in the last 10 settled minutes (${s.feed.gaps!.recentMissing!.join(', ')}); upstream omission, stale cache, or missed polls may be responsible. Running cron ticks alone do not prove coverage`,
+			`:rotating_light: *GBFS combined coverage loss* — ${combinedMissing(s).length} minute slots absent from both feeds in the last 10 settled minutes (${combinedMissing(s).join(', ')}); backup recovery has been accounted for. Upstream omission, stale cache, or missed polls may be responsible`,
+	},
+	{
+		id: 'feed-redundancy',
+		description: 'Both feeds have timely observations and at most 1 recent missing minute each',
+		check: (s, wasFiring = false) => {
+			if (coverageUncertain(s)) return wasFiring;
+			const c = s.feed.coverage;
+			if (!c) return false;
+			return Math.max(c.recent.primary.length, c.recent.backup.length) >= (wasFiring ? 2 : 3)
+				|| Math.max(feedAgeMinutes(s, 'primary'), feedAgeMinutes(s, 'backup')) > FEED_STALE_MIN;
+		},
+		firingText: (s) => {
+			const c = s.feed.coverage!;
+			return `:warning: *GBFS feed redundancy degraded* — primary missing ${c.recent.primary.length}/10 recent minute slots, backup missing ${c.recent.backup.length}/10; ${sourceContext(s)}. Primary age ${fmtAge(feedAgeMinutes(s, 'primary') / 60)}, backup age ${fmtAge(feedAgeMinutes(s, 'backup') / 60)}`;
+		},
+	},
+	{
+		id: 'feed-coverage-unknown',
+		severity: 'critical',
+		description: 'Both feed listings are complete',
+		check: (s) => s.feed.coverage?.complete === false,
+		firingText: () => ':rotating_light: *GBFS coverage unknown* — a bounded feed listing was truncated; combined coverage cannot be certified',
 	},
 	{
 		id: 'hourly-compaction-stale',
@@ -242,6 +282,7 @@ export const DEFAULT_RULES: Rule[] = [
 	},
 	{
 		id: 'health-snapshot-stale',
+		severity: 'critical',
 		description: `/api/health snapshot refreshed within ${SNAPSHOT_STALE_MIN} min`,
 		check: (s) => snapshotAgeMinutes(s) > SNAPSHOT_STALE_MIN,
 		firingText: (s) =>
@@ -305,9 +346,9 @@ export function resolvedText(rule: Rule): string {
 export async function readState(r2: AlertR2): Promise<{ state: AlertState; etag: string | null }> {
 	const obj = await r2.get(STATE_KEY);
 	if (!obj) return { state: { firing: {} }, etag: null };
-	const parsed = await obj.json<unknown>() as { firing?: unknown; claim?: AlertState['claim'] };
+	const parsed = await obj.json<unknown>() as { firing?: unknown; claim?: AlertState['claim']; report?: HealthReportState; pending?: AlertState['pending'] };
 	const firing = (parsed.firing && typeof parsed.firing === 'object') ? parsed.firing as Record<string, unknown> : {};
-	const out: AlertState = { firing: {}, ...(parsed.claim ? { claim: parsed.claim } : {}) };
+	const out: AlertState = { firing: {}, ...(parsed.claim ? { claim: parsed.claim } : {}), ...(parsed.report ? { report: parsed.report } : {}), ...(parsed.pending ? { pending: parsed.pending } : {}) };
 	for (const [id, raw] of Object.entries(firing)) {
 		// Tolerate legacy entries (`firing[id]: string`) — drop them; next
 		// firing of the same rule will rebuild a proper entry.
@@ -325,7 +366,7 @@ export interface AlertR2 extends Omit<HealthR2, 'get' | 'put'> {
 	put(
 		key: string,
 		body: string,
-		opts?: { httpMetadata?: { contentType?: string }; onlyIf?: { etagMatches: string } },
+		opts?: { httpMetadata?: { contentType?: string }; onlyIf?: { etagMatches?: string; etagDoesNotMatch?: string } },
 	): Promise<{ etag: string } | null>;
 }
 
@@ -339,111 +380,97 @@ export async function writeState(r2: AlertR2, state: AlertState, etag: string): 
 	return obj?.etag ?? null;
 }
 
-/** Apply a transition via Slack. Returns the state mutation to merge in
- *  (or `null` if Slack failed — caller decides whether to update state).
- *  Throws nothing — Slack errors are logged + swallowed so one bad rule
- *  doesn't block others. */
-export async function applyTransition(
-	slack: Pick<SlackClient, 'sync'>,
-	t: Transition,
-	nowIso: string,
-): Promise<{ kind: 'firing'; id: string; entry: FiringEntry } | { kind: 'resolved'; id: string } | null> {
-	try {
-		if (t.kind === 'firing') {
-			const firingText = t.firingText!;
-			const result = await slack.sync({ messages: [firingText] });
-			return {
-				kind: 'firing',
-				id: t.rule.id,
-				entry: {
-					firingSince: nowIso,
-					threadTs: result.threadId,
-					firingText,
-				},
-			};
-		}
-		// resolved: re-state OP + add reply via thrds diff (existing=[OP],
-		// desired=[OP, resolved] ⇒ SKIP[0]+POST[1]).
-		const prior = t.priorEntry!;
-		await slack.sync(
-			{ messages: [prior.firingText, resolvedText(t.rule)] },
-			{ threadTs: prior.threadTs },
-		);
-		return { kind: 'resolved', id: t.rule.id };
-	} catch (e) {
-		console.error(`slack sync failed for rule=${t.rule.id} kind=${t.kind}:`, e);
-		return null;
-	}
-}
-
-/** Entry point for the scheduled handler. Returns the transitions whose
- *  Slack syncs succeeded — useful for tests and logging.
- *
- *  Minute crons overlap (a run can outlast the next tick by a minute), so
- *  two runs can see the same transition. Before posting, a run claims the
- *  state object with a conditional write; a run that loses the race, or
- *  finds a live claim, posts nothing and leaves the transition to the
- *  claimant (2026-10-10: one `feed-missed-lus` firing posted twice, 1.5 s
- *  apart, from overlapping runs). */
+/** Serialize Slack changes with a conditional R2 lease. Delivery checkpoints
+ * persist the monthly OP and daily reply before continuing, so partial failures
+ * retry known message IDs instead of creating another thread. */
 export async function runAlerts(
 	r2: AlertR2,
 	slackToken: string,
 	rules: Rule[] = DEFAULT_RULES,
 	db?: D1Database,
-	slackClient?: Pick<SlackClient, 'sync'>,
+	slackClient?: HealthSlack,
 ): Promise<Transition[]> {
-	let [snapshot, { state: prev, etag }] = await Promise.all([
-		currentSnapshot(r2, db),
-		readState(r2),
-	]);
-	const transitions = diffRules(rules, prev, snapshot);
-	if (transitions.length === 0) {
+	const [snapshot, loaded] = await Promise.all([currentSnapshot(r2, db), readState(r2)]);
+	const { state: prev } = loaded;
+	let etag = loaded.etag;
+	const transitions: Transition[] = prev.pending ? prev.pending.events.map((event) => ({
+		rule: { id: event.id, description: event.description, severity: event.severity, check: () => false, firingText: () => event.firingText ?? '' },
+		kind: event.kind, firingText: event.firingText, priorEntry: event.priorEntry,
+	})) : diffRules(rules, prev, snapshot);
+	const nowIso = new Date().toISOString();
+	if (!prev.pending && transitions.length === 0 && !reportDue(prev.report, nowIso)) {
 		await writeHeartbeat(r2, 0, Object.keys(prev.firing));
 		return [];
 	}
-	if (prev.claim && Date.now() - Date.parse(prev.claim.at) < CLAIM_TTL_MS) {
-		console.log(`alerts: state claimed at ${prev.claim.at} by another run; skipping`);
-		return [];
-	}
+	if (prev.claim && Date.now() - Date.parse(prev.claim.at) < CLAIM_TTL_MS) return [];
 	if (etag === null) {
-		// First run ever: create the object so there's an etag to claim against.
-		etag = (await r2.put(STATE_KEY, JSON.stringify(prev)))!.etag;
+		// Conditional creation is necessary too: two first-ever cron runs must
+		// not overwrite one another before attempting their lease.
+		etag = (await r2.put(STATE_KEY, JSON.stringify(prev), { onlyIf: { etagDoesNotMatch: '*' } }))?.etag ?? null;
+		if (etag === null) return [];
 	}
-	const nowIso = new Date().toISOString();
-	const claimEtag = await writeState(r2, { ...prev, claim: { at: nowIso } }, etag);
-	if (claimEtag === null) {
-		console.log('alerts: lost the state claim to another run; skipping');
-		return [];
-	}
-
-	const slack = slackClient ?? new SlackClient({
-		token: slackToken,
-		channel: SLACK_CHANNEL,
-		username: SLACK_USERNAME,
-		iconEmoji: SLACK_ICON_EMOJI,
-		// thrds stores `globalThis.fetch` and calls it as `this.fetchImpl(…)`;
-		// Workers' fetch throws "Illegal invocation" when `this` isn't the global.
+	let claimEtag = await writeState(r2, { ...prev, claim: { at: nowIso } }, etag);
+	if (claimEtag === null) return [];
+	const slack = slackClient ?? new HealthSlackClient({
+		token: slackToken, channel: SLACK_CHANNEL, username: SLACK_USERNAME, iconEmoji: SLACK_ICON_EMOJI,
 		fetch: (input, init) => fetch(input, init),
 	});
-
-	const next: AlertState = { firing: { ...prev.firing } };
-	const succeeded: Transition[] = [];
-	for (const t of transitions) {
-		const result = await applyTransition(slack, t, nowIso);
-		if (!result) continue;
-		if (result.kind === 'firing') {
-			next.firing[result.id] = result.entry;
-		} else {
-			delete next.firing[result.id];
+	const next: AlertState = structuredClone(prev);
+	delete next.claim;
+	const checkpoint = async () => {
+		const updated = await writeState(r2, { ...next, claim: { at: new Date().toISOString() } }, claimEtag!);
+		if (updated === null) throw new Error('alerts: lost state lease; stopping Slack delivery');
+		claimEtag = updated;
+	};
+	try {
+		if (!next.pending) {
+			const firing = structuredClone(prev.firing);
+			for (const t of transitions) {
+				if (t.kind === 'firing') firing[t.rule.id] = { firingSince: nowIso, threadTs: '', firingText: t.firingText!, delivery: 'report' };
+				else delete firing[t.rule.id];
+			}
+			next.pending = { at: nowIso, firing, events: transitions.map((t) => ({
+				id: t.rule.id, description: t.rule.description, severity: t.rule.severity,
+				kind: t.kind, firingText: t.firingText, priorEntry: t.priorEntry,
+			})) };
+			await checkpoint();
 		}
-		succeeded.push(t);
+		const batch = next.pending;
+		next.report = await updateHealthReport(slack, next.report, batch.firing, transitions, snapshot, batch.at, async (report) => {
+			next.report = report;
+			await checkpoint();
+		});
+		for (const event of batch.events) {
+			if (event.delivered) continue;
+			if (event.kind === 'firing') {
+				const entry = batch.firing[event.id];
+				entry.threadTs = next.report.threadTs!;
+				if (event.severity === 'critical') entry.incidentTs = (await slack.postUrgent(entry.firingText, entry.threadTs)).id;
+			} else {
+				const prior = event.priorEntry!;
+				const ts = prior.incidentTs ?? (prior.delivery === undefined ? prior.threadTs : undefined);
+				if (ts) await slack.edit(ts, `${prior.firingText}\n:white_check_mark: *Resolved* — ${event.description} · ${batch.at.slice(0, 16).replace('T', ' ')} UTC`);
+			}
+			event.delivered = true;
+			await checkpoint();
+		}
+		next.firing = batch.firing;
+		delete next.pending;
+		delete next.claim;
+		if (await writeState(r2, next, claimEtag) === null) throw new Error('alerts: state lease expired');
+		await writeHeartbeat(r2, 0, Object.keys(next.firing));
+		return transitions;
+	} catch (error) {
+		console.error('alerts: report delivery failed', error);
+		// Keep the last successful delivery checkpoint, release its lease.
+		const loaded = await readState(r2);
+		if (loaded.etag === claimEtag) {
+			delete loaded.state.claim;
+			await writeState(r2, loaded.state, claimEtag!);
+		}
+		await writeHeartbeat(r2, Math.max(1, transitions.length), Object.keys(loaded.state.firing));
+		return [];
 	}
-	// Always written (even with every Slack sync failed): it releases the claim.
-	if (await writeState(r2, next, claimEtag) === null) {
-		console.error('alerts: state changed under our claim (expired mid-post?); overwrote nothing');
-	}
-	await writeHeartbeat(r2, transitions.length - succeeded.length, Object.keys(next.firing));
-	return succeeded;
 }
 
 /** The minute cron's cached snapshot, at any age (a stale one is what

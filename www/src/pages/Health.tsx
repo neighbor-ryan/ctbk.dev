@@ -1,3 +1,5 @@
+import type { FeedHealth } from '../../../gbfs/lib/feedHealth'
+import { healthCardSvg } from '../../../gbfs/api/src/healthCard'
 /** `/health` — GBFS pipeline health overview.
  *
  *  Backed by a single `/api/health` snapshot endpoint on the worker.
@@ -12,19 +14,6 @@ import { localToPageHost } from '../lib/apiBase'
 // Override at build/dev time with `VITE_API_BASE=http://localhost:51896 pnpm dev`.
 const API_BASE = localToPageHost(import.meta.env.VITE_API_BASE ?? 'https://ctbk-gbfs-api.hccs-ctbk.workers.dev')
 
-interface FeedDrift {
-  latestS: number
-  ts: number
-  polledAt: number
-  series: Array<[number, number]>  // [polled_at epoch s, drift s], ≤24h, oldest first
-}
-interface FeedHealth {
-  latestPoll: { key: string; date: string; time: string; uploadedAt: string } | null
-  drift: FeedDrift | null
-  todayCount: number
-  todayExpected: number
-  last7Days: Array<{ date: string; count: number; expected: number }>
-}
 interface CompactionHealth {
   daily: { latestDate: string | null; count: number }
   hourly: { latestKey: string | null; todayCount: number }
@@ -166,7 +155,7 @@ export default function Health() {
         Historical inventory {data.inventoryGeneratedAt ? `updated ${fmtAge(data.inventoryGeneratedAt)}` : 'awaiting its first refresh'} · refreshed hourly.
       </p>
       <TripdataSection tripdata={data.tripdata} />
-      <FeedSection feed={data.feed} />
+      <FeedSection feed={data.feed} generatedAt={data.generatedAt} />
       <CompactionsSection compactions={data.compactions} />
       <BuildsSection builds={data.builds} />
       <PyramidsSection pyramids={data.pyramids} defaultPyramid={data.defaultPyramid} />
@@ -267,7 +256,7 @@ function quantile(sorted: number[], q: number): number {
 }
 
 /** Tiny inline sparkline of `[t, v]` points (drift seconds over 24h). */
-function DriftSparkline({ series }: { series: Array<[number, number]> }) {
+function DriftSparkline({ series }: { series: NonNullable<FeedHealth['drift']>['series'] }) {
   const W = 180, H = 34, PAD = 2
   if (series.length < 2) return null
   const ts = series.map(([t]) => t)
@@ -287,7 +276,7 @@ function DriftSparkline({ series }: { series: Array<[number, number]> }) {
   )
 }
 
-function FeedSection({ feed }: { feed: FeedHealth }) {
+function FeedSection({ feed, generatedAt }: { feed: FeedHealth; generatedAt: number }) {
   const todayPct = feed.todayCount / feed.todayExpected
   const ok = todayPct >= 0.98
   const drift = feed.drift
@@ -302,7 +291,7 @@ function FeedSection({ feed }: { feed: FeedHealth }) {
           status={feed.latestPoll ? 'ok' : 'bad'}
         />
         <Stat
-          label="Today"
+          label="Primary minute files today"
           value={`${feed.todayCount} / ${feed.todayExpected}`}
           sub={fmtPct(feed.todayCount, feed.todayExpected)}
           status={ok ? 'ok' : 'warn'}
@@ -321,6 +310,20 @@ function FeedSection({ feed }: { feed: FeedHealth }) {
         )}
         {drift && <DriftSparkline series={drift.series} />}
       </div>
+      {feed.coverage && (
+        <div style={{ marginTop: '1em' }}>
+          <p>
+            {feed.coverage.complete ? <><strong>Combined: {feed.coverage.today.combined}/{feed.coverage.today.settled}</strong> settled minute slots observed.
+              {' '}Backup recovered {feed.coverage.today.recovered}; {feed.coverage.missing.length} slots absent from both feeds.</> : <strong>Combined coverage unknown: feed listings incomplete.</strong>}
+            {' '}A minute slot can be empty because an upstream timestamp crossed a minute boundary; this is not a count of lost generations.
+          </p>
+          <img
+            src={`data:image/svg+xml,${encodeURIComponent(healthCardSvg({ generatedAt, feed }))}`}
+            alt="Recent feed coverage by UTC hour, with separate primary, backup and combined rows."
+            style={{ display: 'block', width: '100%', maxWidth: 900, height: 'auto', borderRadius: 10 }}
+          />
+        </div>
+      )}
       <div style={{ marginTop: '0.6em' }}>
         <table style={{ borderCollapse: 'collapse', fontSize: '0.9em' }}>
           <thead>

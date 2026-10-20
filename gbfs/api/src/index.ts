@@ -1347,6 +1347,26 @@ export default {
 			}
 		}
 
+		if (url.pathname === '/api/health/card.png') {
+			const cardUrl = new URL(url.pathname, url.origin);
+			cardUrl.searchParams.set('minute', String(Math.floor(Date.now() / 60_000)));
+			const cacheKey = new Request(cardUrl);
+			const cached = await caches.default.match(cacheKey);
+			if (cached) return cached;
+			// Share-card requests read the already persisted snapshot only. They
+			// cannot trigger inventory scans or minutely health writes.
+			const obj = await env.R2.get('health/snapshot.json');
+			if (!obj) return errorResponse('Health snapshot not available', 503, env);
+			const snapshot = await obj.json<import('./health').HealthSnapshot>();
+			const { healthCardSvg } = await import('./healthCard');
+			const { rasterizeSvg } = await import('./og');
+			const response = new Response(await rasterizeSvg(healthCardSvg(snapshot)) as BodyInit, {
+				headers: { ...corsHeaders(env), 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=60' },
+			});
+			ctx.waitUntil(caches.default.put(cacheKey, response.clone()));
+			return response;
+		}
+
 		// /api/coverage?from=&to=[&counts=1] and /api/coverage/<day> — fleet-wide
 		// observed-minute coverage from the empty-bitmap builder's per-day docs
 		// (`empty-v1p/coverage/<day>.json`; see ./coverage.ts). Past days are
