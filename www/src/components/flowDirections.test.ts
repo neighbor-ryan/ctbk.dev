@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { WebMercatorViewport } from '@deck.gl/core'
 import { directedStreets } from './flowDirections'
 
 const projection = { project: (p: [number, number]) => p, unproject: (p: [number, number]) => p }
@@ -21,5 +22,17 @@ describe('street direction marks', () => {
     expect(directedStreets([{ code: 1, count: 1, path: [[0, 0], [20, 0]] }], projection, () => 1)).toEqual({
       streets: [{ code: 1, count: 1, path: [[0, 0], [20, 0]] }], arrows: [],
     })
+  })
+  it('keeps geographic lane and chevron positions independent of camera translation', () => {
+    const paths = [
+      { code: 1, count: 100, path: [[-74.03, 40.72], [-74.02, 40.73]] as [number, number][] },
+      { code: -1, count: 20, path: [[-74.02, 40.73], [-74.03, 40.72]] as [number, number][] },
+    ]
+    const render = (longitude: number, latitude: number) => {
+      const result = directedStreets(paths, new WebMercatorViewport({ longitude, latitude, zoom: 14 }), () => 4)
+      return JSON.parse(JSON.stringify(result, (_key, value) => typeof value === 'number' ? Math.round(value * 1e8) / 1e8 : value))
+    }
+    expect(render(-74.03, 40.72)).toEqual(render(0, 0))
+    expect(render(-73.9, 40.8)).toEqual(render(0, 0))
   })
 })

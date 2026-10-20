@@ -165,7 +165,7 @@ export interface SystemFlow {
   provisional: boolean
 }
 
-export function systemFlowPaths(graph: Pick<RouteSample, 'segments'>, volumes: [number, number][], floor = .04): FlowPath[] {
+export function systemFlowPaths(graph: Pick<RouteSample, 'segments'>, volumes: [number, number][], floor = 0): FlowPath[] {
   const maximum = volumes.reduce((maximum, [, count]) => Math.max(maximum, count), 0)
   return volumes.map(([code, count]) => {
     const segment = graph.segments[Math.abs(code) - 1]

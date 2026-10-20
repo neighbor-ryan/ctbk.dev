@@ -12,8 +12,13 @@ const sample: RouteSample = {
   ],
 }
 describe('street assignment', () => {
-  it('renders precomputed network volumes with directional geometry and a shared floor', () => {
+  it('renders every positive precomputed network volume by default, retaining explicit floors', () => {
     expect(systemFlowPaths(sample, [[1, 100], [-2, 30], [3, 3]])).toEqual([
+      { code: 3, count: 3, path: [[2, 2], [3, 3]] },
+      { code: -2, count: 30, path: [[2, 2], [1, 1]] },
+      { code: 1, count: 100, path: [[0, 0], [1, 1]] },
+    ])
+    expect(systemFlowPaths(sample, [[1, 100], [-2, 30], [3, 3]], .04)).toEqual([
       { code: -2, count: 30, path: [[2, 2], [1, 1]] },
       { code: 1, count: 100, path: [[0, 0], [1, 1]] },
     ])

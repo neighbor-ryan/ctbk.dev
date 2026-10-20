@@ -216,9 +216,10 @@ export default function StationMapGL({
   const pathMax = flowPaths?.length ? flowPaths[flowPaths.length - 1].count : 0
   const arcMax = max(pathMax, arcs?.length ? arcs[arcs.length - 1].count : 0, 1)
   const arcRgb = dark ? ARC_RGB_DARK : ARC_RGB_LIGHT
+  // Panning is a translation: geographic lane offsets and chevrons depend on zoom.
   const directional = useMemo(() => directedStreets(flowPaths ?? [], new WebMercatorViewport({
-    longitude: center[1], latitude: center[0], zoom: liveZoom,
-  }), (count) => arcWidthPx(count, arcMax)), [flowPaths, center[0], center[1], liveZoom, arcMax])
+    zoom: liveZoom,
+  }), (count) => arcWidthPx(count, arcMax)), [flowPaths, liveZoom, arcMax])
   const arcLayer = arcs?.length ? new ArcLayer<FlowArc>({
     id: 'flow-arcs',
     data: arcs as FlowArc[],
@@ -240,7 +241,7 @@ export default function StationMapGL({
     getPath: (d) => d.path,
     getColor: (d) => [...arcRgb, arcAlpha(d.count, arcMax)],
     getWidth: (d) => arcWidthPx(d.count, arcMax),
-    widthUnits: 'pixels', capRounded: true, jointRounded: true,
+    widthUnits: 'pixels', widthMinPixels: 1, capRounded: true, jointRounded: true,
     pickable: false,
     updateTriggers: { getColor: [dark, arcMax], getWidth: arcMax },
   }) : null
