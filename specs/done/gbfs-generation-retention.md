@@ -1,6 +1,6 @@
 # Immutable GBFS generation retention
 
-Implemented locally on 2026-10-20; deployment and live verification belong to the integrating controller. This preserves raw source observations separately from the existing latest-LU-per-minute availability contract in [LU attribution].
+Deployed 2026-10-20 at `beffff30`; GBFS deployment and Python CI passed. This preserves raw source observations separately from the existing latest-LU-per-minute availability contract in [LU attribution].
 
 ## Evidence
 
@@ -20,6 +20,12 @@ Evidence is saved under the repository's ignored `tmp/feed-diagnosis-20261020/`:
 - `DailyStatusSource.parse` already selects the latest `ts` per `(station, LU minute)` before creating histogram rows. Its normalized minute counts and weighting remain unchanged when daily raw parquet retains several LUs in one minute.
 
 ## Rollout and verification
+
+Live R2 checks verified immutable generations `1792498980` and `1792499041`, with matching `ts`/content-hash metadata and exact `generation_key` pointers in both the minute aliases' JSON and metadata. Observed first-seen lag was 10 and 9 seconds. A later bounded listing found 50 immutable generations since deployment; no natural same-minute collision had occurred in that sample.
+
+The first post-deploy hour-12 shard was written at 13:05:41 UTC: 151,140 rows, 252 row groups and 1,363,854 bytes. The checked station row group contains 60 distinct LUs from 12:00 through 12:59 and omits none of the captured immutable LUs from that hour. This verifies natural Cloudflare hourly compaction; same-minute collision handling remains covered by explicit tests, and daily production acceptance awaits the next normal daily run. Bounded proof is saved under `wt/nyc-routes/tmp/generation-live-20261020/post-deploy-hour12-proof.json`.
+
+The bucket's actual lifecycle configuration was inspected with HCCS account credentials: its only rule aborts incomplete multipart uploads after seven days. Neither legacy minute JSON nor the new generation prefix has object expiry. At roughly 720 KB per generation and one LU per minute, the additional raw prefix grows about 1 GB/day, or 31 GB per 30 days. No deletion or lifecycle policy was added. A future retention policy must first establish verified durable compaction, including handling same-LU content variants, rather than blindly expiring the only copy.
 
 Deploy the poller and hourly compactor together with the updated daily compaction script. Readers tolerate old days without a generation prefix. No historical rebuild is needed to start retaining new observations; re-running compaction for dates after deployment can include their generation objects. Never delete raw generation files or advance a historical completeness claim solely because minute aliases exist.
 

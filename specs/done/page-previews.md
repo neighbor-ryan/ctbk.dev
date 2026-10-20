@@ -1,6 +1,6 @@
 # Query and section aware public page previews
 
-Implemented 2026-10-20. Deployment validation of the remote Browser Run binding remains part of rollout.
+Deployed 2026-10-20 at `1a7fdd1d`; remote Browser Run validation passed for five real public views.
 
 The previous dashboard metadata used one static mosaic for most routes. Station detail links had a live, separately drawn API image, but that renderer did not reflect page query parameters or the section being shared.
 
@@ -14,9 +14,13 @@ Cache keys contain canonical public URL state, deployed version and a server-der
 
 The bindings attach Browser Run, Workers Assets and the native rate limiter to the existing HCCS website Worker; no VM, R2 bucket or additional database is required. `server/public-worker.ts` is the production entry. The separate hosted movie/auth Worker can delegate its final public fallback to `servePublicPage(request, env, ctx)` once mounted, retaining the same bindings and public route routing. Generated binding types are checked independently by `tsconfig.worker.json`.
 
-URL state is the sharing contract. The embedded Home map currently keeps its camera and selection in local component state, so its section preview restores the default embedded map. Fullscreen `/stations` links encode camera and selection and preserve those views. Browser local storage, unsaved controls and private session state are never part of public captures.
+URL state is the sharing contract. The embedded Home map encodes selection and camera as `mapSel` and `mapLl`, preserving the host page's other filters. Its fullscreen/compare links carry selection, camera, month and theme into `/stations`. The reusable embed also supports local state when its host supplies no controlled values. Captures wait for both map data and GL readiness. Fullscreen `/stations` links retain their existing `ll`/`sel` contract. Browser local storage, unsaved controls and private session state are never part of public captures. Movie studio restores its URL's initial preview frame, rather than an unsaved playback position.
 
-Validation: 182 unit tests passed, including canonicalization, cookie isolation, real capture URL selection, cache reuse and cold capture rate limiting; two Playwright section-spy/readiness tests passed. Frontend and Worker TypeScript checks, Vite production build and Wrangler deployment dry-run passed. Local Worker HTML rewriting returned section/query-specific image metadata. Actual browser renders of Home, station map, ride animation and movie studio loaded their real plots without page errors, and their screenshots were visually reviewed. The Chrome MCP bootstrap was unavailable, so those render checks used installed Playwright Chromium; remote Cloudflare Browser Run rendering must be smoke tested after deployment.
+Known API selection is preserved: Home accepts only the fixed `prod`/`dev` enum and Stations its existing boolean flag; capture requests cannot provide an arbitrary backend URL. Capture-only CSS suppresses section focus outlines while normal keyboard focus remains visible.
+
+Validation: the integrated 197-test frontend/server suite passed, alongside frontend and Worker TypeScript checks, production build, and focused browser checks. Chrome CUA verified section restoration, the selected two-source embedded map and its arcs, and the health card. Remote Browser Run produced five inspected 1200×630 JPEGs: Home states with filters, selected Columbus Drive station map/chart, noon ride animation, portrait movie studio and current health. Cold captures took 3.3–9.4 seconds; a repeat returned byte-identical JPEG bytes in 33 ms with a cache hit. Four private/external capture URLs returned 400. Evidence is saved under `wt/rides-tl/tmp/page-previews-remote-20261020/`.
+
+Remote testing found a cached image response with max-age 14400 while its cold response specified 3600; repeated HTML metadata responses remained at 300. Account cache-setting/rule reads returned 403, so the exact account setting is unverified and unchanged. The source now reasserts the intended image TTL on cache hits for GET and HEAD, with a regression covering 14400→300 for health. That header correction and the embedded map followup still need their post-deploy repeat smoke. External platforms' own unfurl caching remains outside this control.
 
 Review URLs:
 

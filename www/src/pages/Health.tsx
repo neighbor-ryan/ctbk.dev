@@ -329,10 +329,10 @@ function FeedSection({ feed, generatedAt }: { feed: FeedHealth; generatedAt: num
           <thead>
             <tr style={{ opacity: 0.6 }}>
               <th style={cellStyle('left')}>Date</th>
-              <th style={cellStyle('right')}>Count</th>
+              <th style={cellStyle('right')}>Primary files</th>
               <th style={cellStyle('right')}>Expected</th>
               <th style={cellStyle('right')}>%</th>
-              <th style={cellStyle('left')}>Coverage</th>
+              <th style={cellStyle('left')}>Primary coverage</th>
             </tr>
           </thead>
           <tbody>
