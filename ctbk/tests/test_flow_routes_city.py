@@ -3,12 +3,13 @@ from gzip import decompress
 from io import BytesIO
 from json import loads
 from pathlib import Path
+from threading import Barrier, Lock, get_ident
 from types import SimpleNamespace
 
 import pytest
 
 from ctbk.flow_routes import encode_segments, segment_topology
-from ctbk.flow_routes_city import add_volumes, city, city_population, object_blob
+from ctbk.flow_routes_city import RouteStore, add_volumes, city, city_population, object_blob, publish_catalogs
 
 
 STATIONS = [{'id': 'A', 'lng': 0, 'lat': 0}, {'id': 'B', 'lng': 1, 'lat': 1}, {'id': 'C', 'lng': 2, 'lat': 2}]
@@ -40,6 +41,53 @@ def test_system_volumes_keep_expected_splits_repeated_segments_and_fallback_acco
     assert add_volumes({'routes': [{'segments': [-2, -1], 'weight': 1}]}, 30, volumes) is True
     assert add_volumes({'routes': []}, 20, volumes) is False
     assert dict(sorted(volumes.items())) == {-2: 30, -1: 30, 1: 125, 2: 75, 3: 25}
+
+
+def test_parallel_publication_bounds_live_payloads_keeps_caller_reads_and_serial_bytes():
+    catalogs = [(sid, {'version': 1, 'pairs': [{'source': sid, 'destination': 'Z', 'routes': []}]}) for sid in ['A', 'B', 'C', 'D']]
+    class Store(RouteStore):
+        def __init__(self, parallel=False):
+            self.objects = {}
+            self.barrier = Barrier(2) if parallel else None
+            self.lock = Lock()
+            self.state = {'active': 0, 'peak': 0, 'generated': 0, 'completed': 0}
+
+        def put(self, key, data, mutable=False):
+            with self.lock:
+                self.state['active'] += 1
+                self.state['peak'] = max(self.state['peak'], self.state['active'])
+            if self.barrier:
+                self.barrier.wait(timeout=5)
+            with self.lock:
+                self.objects[key] = data
+                self.state['active'] -= 1
+                self.state['completed'] += 1
+
+    serial, parallel = Store(), Store(parallel=True)
+    expected = {sid: serial.publish(data) for sid, data in catalogs}
+    caller = get_ident()
+    def generate():
+        for sid, data in catalogs:
+            assert get_ident() == caller
+            with parallel.lock:
+                assert parallel.state['generated'] - parallel.state['completed'] < 2
+                parallel.state['generated'] += 1
+            yield sid, data
+    result = publish_catalogs(parallel, generate(), workers=2)
+    assert list(result) == ['A', 'B', 'C', 'D']
+    assert result == expected
+    assert parallel.objects == serial.objects
+    assert parallel.state == {'active': 0, 'peak': 2, 'generated': 4, 'completed': 4}
+
+
+def test_parallel_publication_propagates_upload_failure():
+    class Store:
+        def publish(self, data):
+            raise RuntimeError('upload failed')
+    with pytest.raises(RuntimeError, match='^upload failed$'):
+        publish_catalogs(Store(), [('A', {'version': 1})])
+    with pytest.raises(ValueError, match='^publication workers must be positive$'):
+        publish_catalogs(Store(), [], workers=0)
 
 
 def test_city_builder_publishes_sparse_both_way_catalogs_and_exact_trip_coverage(monkeypatch, tmp_path):

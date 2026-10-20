@@ -1,7 +1,8 @@
 """Bounded-memory city routing and precomputed whole-network street volumes."""
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
+from concurrent.futures import Future, ThreadPoolExecutor
 from copy import deepcopy
 from gzip import compress, decompress
 from hashlib import file_digest, md5
@@ -14,6 +15,7 @@ from resource import RUSAGE_CHILDREN, RUSAGE_SELF, getrusage
 from sqlite3 import connect
 from subprocess import Popen, run
 from time import monotonic
+from typing import Iterable
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import urlopen
@@ -101,6 +103,27 @@ class RouteStore:
         return loads(decompress(blob))
 
 
+def publish_catalogs(
+    store: RouteStore,
+    catalogs: Iterable[tuple[str, dict]],
+    workers: int = 8,
+) -> dict[str, dict]:
+    """Bound independent CA uploads, consuming SQLite-backed input on the caller."""
+    if workers < 1:
+        raise ValueError('publication workers must be positive')
+    published = {}
+    pending: deque[tuple[str, Future[dict]]] = deque()
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for sid, data in catalogs:
+            pending.append((sid, pool.submit(store.publish, data)))
+            if len(pending) >= workers:
+                oldest_sid, future = pending.popleft()
+                published[oldest_sid] = future.result()
+        for sid, future in pending:
+            published[sid] = future.result()
+    return published
+
+
 @flow_routes.command('city')
 @option('-i', '--input-prefix', default='routes-census/v1', show_default=True)
 @option('-k', '--prefix', default=PREFIX, show_default=True)
@@ -181,11 +204,13 @@ def city(
         router.terminate()
         router.wait(timeout=30)
     routing_seconds = monotonic() - routing_started
+    topology_started = monotonic()
 
     def records_for(sid: str) -> list[dict]:
         return loads(decompress((cache / f'{sid}.json.gz').read_bytes()))
 
     # Two passes over per-origin checkpoints bound memory by topology + one origin.
+    err(f'Building shared topology for {routed_pairs} pairs')
     paths = (route['nodes'] for sid in origins for pair in records_for(sid) for route in pair['routes'])
     chains, edges = segment_topology(paths)
     needed = {node for chain in chains for node in chain}
@@ -197,33 +222,43 @@ def city(
     Nodes().apply_file(str(pbf))
     if set(points) != needed:
         raise ValueError('routing nodes absent from the OSM snapshot')
+    topology_seconds = monotonic() - topology_started
+    publication_started = monotonic()
     graph_meta = store.publish({'version': 1, 'segments': [{'path': [points[n] for n in chain]} for chain in chains]})
-    encoded_origins = {}
     destination_ids = set()
     destination_db = connect(output / 'destination-index.sqlite')
     destination_db.execute('DROP TABLE IF EXISTS pairs')
     destination_db.execute('CREATE TABLE pairs (destination TEXT, source TEXT, record TEXT, PRIMARY KEY(destination, source))')
     fallbacks, alternatives, routed, routed_rides, census_volumes = Counter(), 0, 0, 0, Counter()
-    for sid in origins:
-        records = records_for(sid)
-        for pair in records:
-            for route in pair['routes']:
-                route['segments'] = encode_segments(route.pop('nodes'), edges)
-                alternatives += 1
-            count = counts[pair['source'], pair['destination']]
-            if add_volumes(pair, count, census_volumes):
-                routed += 1
-                routed_rides += count
-            else:
-                fallbacks[pair['fallback']] += 1
-            destination_ids.add(pair['destination'])
-            destination_db.execute('INSERT INTO pairs VALUES (?, ?, ?)', (pair['destination'], sid, dumps(pair, sort_keys=True, separators=(',', ':'))))
-        encoded_origins[sid] = store.publish({'version': 1, 'pairs': records})
-        destination_db.commit()
-    encoded_destinations = {}
-    for sid in sorted(destination_ids):
-        records = [loads(row[0]) for row in destination_db.execute('SELECT record FROM pairs WHERE destination = ? ORDER BY source', (sid,))]
-        encoded_destinations[sid] = store.publish({'version': 1, 'pairs': records})
+    def origin_catalogs() -> Iterable[tuple[str, dict]]:
+        nonlocal alternatives, routed, routed_rides
+        for sid in origins:
+            records = records_for(sid)
+            for pair in records:
+                for route in pair['routes']:
+                    route['segments'] = encode_segments(route.pop('nodes'), edges)
+                    alternatives += 1
+                count = counts[pair['source'], pair['destination']]
+                if add_volumes(pair, count, census_volumes):
+                    routed += 1
+                    routed_rides += count
+                else:
+                    fallbacks[pair['fallback']] += 1
+                destination_ids.add(pair['destination'])
+                destination_db.execute('INSERT INTO pairs VALUES (?, ?, ?)', (pair['destination'], sid, dumps(pair, sort_keys=True, separators=(',', ':'))))
+            destination_db.commit()
+            yield sid, {'version': 1, 'pairs': records}
+
+    err(f'Publishing {len(origins)} origin catalogs with at most 8 uploads in flight')
+    encoded_origins = publish_catalogs(store, origin_catalogs())
+
+    def destination_catalogs() -> Iterable[tuple[str, dict]]:
+        for sid in sorted(destination_ids):
+            records = [loads(row[0]) for row in destination_db.execute('SELECT record FROM pairs WHERE destination = ? ORDER BY source', (sid,))]
+            yield sid, {'version': 1, 'pairs': records}
+
+    err(f'Publishing {len(destination_ids)} destination catalogs with at most 8 uploads in flight')
+    encoded_destinations = publish_catalogs(store, destination_catalogs())
     destination_db.close()
     system = store.publish({'version': 1, 'context': context, 'graph': graph_meta, 'volumes': sorted(census_volumes.items()), 'dateRange': population['dateRange'], 'selectedRides': sum(counts.values()), 'routedRides': routed_rides})
     summary = {
@@ -236,7 +271,7 @@ def city(
         'system': system, 'context': context, 'osmMd5': osm_md5, 'engine': OSRM_IMAGE,
         'selectedRides': sum(counts.values()), 'routedRides': routed_rides, 'nonRoundTripRides': census_index['nonRoundTripRides'],
         'bytes': graph_meta['bytes'] + sum(m['bytes'] for m in encoded_origins.values()) + sum(m['bytes'] for m in encoded_destinations.values()) + system['bytes'],
-        'timings': {'preprocessingSeconds': preprocessing_seconds, 'routingSeconds': routing_seconds, 'totalSeconds': monotonic() - started, 'resumedOrigins': resumed},
+        'timings': {'preprocessingSeconds': preprocessing_seconds, 'routingSeconds': routing_seconds, 'topologySeconds': topology_seconds, 'publicationSeconds': monotonic() - publication_started, 'totalSeconds': monotonic() - started, 'resumedOrigins': resumed},
         'resources': {'pythonPeakRssKiB': getrusage(RUSAGE_SELF).ru_maxrss, 'childPeakRssKiB': getrusage(RUSAGE_CHILDREN).ru_maxrss},
     }
     (output / 'summary.json').write_text(dumps(summary, indent=2, sort_keys=True) + '\n')
