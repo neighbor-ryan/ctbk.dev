@@ -265,7 +265,7 @@ def test_monthly_system_flow_excludes_carry_and_round_trips_and_reports_missing_
     catalog = {'version': 1, 'context': 'test-context', 'graph': graph_meta, 'origins': {'A': {'key': 'origin', 'bytes': 1}}}
     buckets = {
         'rides-anim-candidate/v1': {'index.json': module.dumps(animation_index).encode(), 'stations': module.dumps(STATIONS).encode(), **{str(i): blob for i, blob in enumerate(blobs)}},
-        'routes-city/v1': {'index.json': module.dumps(catalog).encode(), 'origin': object_blob({'version': 1, 'pairs': [{'source': 'A', 'destination': 'B', 'routes': [{'segments': [1], 'weight': 1}]}]})},
+        'routes-city/v1': {'index.json': module.dumps(catalog).encode(), 'origin': object_blob({'version': 1, 'pairs': [{'source': 'A', 'destination': 'B', 'routes': [{'segments': [1], 'weight': .7}, {'segments': [2], 'weight': .3}]}]})},
         'flows/v1': {},
     }
     class Store:
@@ -292,6 +292,11 @@ def test_monthly_system_flow_excludes_carry_and_round_trips_and_reports_missing_
     module.system.callback(ym='202501', input_prefix='rides-anim-candidate/v1', prefix='flows/v1', routes_prefix='routes-city/v1')
     assert loads(decompress(buckets['flows/v1']['month'])) == {
         'version': 1, 'month': '202501', 'context': 'test-context', 'graph': graph_meta, 'routesPrefix': 'routes-city/v1',
-        'volumes': [[1, 2]], 'sourceRides': 5, 'encodedRides': 5, 'routedRides': 2, 'fallbackRides': 2, 'roundTrips': 1,
+        'volumes': [[1, 1.4], [2, .6]], 'sourceRides': 5, 'encodedRides': 5, 'routedRides': 2, 'fallbackRides': 2, 'roundTrips': 1,
         'provisional': True, 'animationObjects': [md5(blob).hexdigest() for blob in blobs],
     }
+    parallel_objects = dict(buckets['flows/v1'])
+    bounded = module.bounded_results
+    monkeypatch.setattr(module, 'bounded_results', lambda function, items, workers=8: bounded(function, items, workers=1))
+    module.system.callback(ym='202501', input_prefix='rides-anim-candidate/v1', prefix='flows/v1', routes_prefix='routes-city/v1')
+    assert buckets['flows/v1'] == parallel_objects

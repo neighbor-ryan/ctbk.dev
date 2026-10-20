@@ -454,9 +454,13 @@ def system(
             round_trips += count
         else:
             by_origin[a][b] = count
-    for sid, destinations in sorted(by_origin.items()):
+    def read_origin(item: tuple[str, dict[str, int]]) -> tuple[dict[str, int], dict[str, dict]]:
+        sid, destinations = item
         meta = index['origins'].get(sid)
         pairs = {(p['destination']): p for p in routes.packed(meta)['pairs']} if meta else {}
+        return destinations, pairs
+
+    for destinations, pairs in bounded_results(read_origin, sorted(by_origin.items())):
         for destination, count in destinations.items():
             pair = pairs.get(destination)
             if pair and add_volumes(pair, count, volumes):
