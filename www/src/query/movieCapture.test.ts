@@ -16,7 +16,7 @@ describe('bounded movie capture stages', () => {
     const stage = captureStage('Frame 610: committed frame data', (signal) => new Promise<void>((_, reject) => {
       signal.addEventListener('abort', () => { aborted = true; reject(new Error('aborted')) }, { once: true })
     }), () => ({ requested: 976, rendered: 976, totalsReady: false }), 1000)
-    const failure = expect(stage).rejects.toThrow('Frame 610: committed frame data timed out after 1000ms: {"requested":976,"rendered":976,"totalsReady":false}')
+    const failure = expect(stage).rejects.toEqual(new Error('Frame 610: committed frame data timed out after 1000ms: {"requested":976,"rendered":976,"totalsReady":false}'))
     await vi.advanceTimersByTimeAsync(1000)
     await failure
     expect(aborted).toBe(true)
