@@ -145,6 +145,7 @@
 !src/components/MultiSelectBar.tsx
 !src/components/OgCapture.tsx
 !src/components/OverviewAvailabilityChart.tsx
+!src/components/PageSectionSpy.tsx
 !src/components/PipelineContext.tsx
 !src/components/PipelineDiagram.tsx
 !src/components/Radios.tsx
@@ -243,6 +244,7 @@
 !src/lib/pagePreview.test.ts
 !src/lib/pagePreview.ts
 !src/lib/pagePreviewWorker.test.ts
+!src/lib/pageSections.ts
 !src/lib/s2geo.ts
 !src/lib/tlGrid.ts
 !src/lib/useMediaQuery.ts
