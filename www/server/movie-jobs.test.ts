@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { movieJobs, MOVIE_LIMITS, type MovieAudit, type MovieIdentity, type MovieRenderer, type MovieStore, type StoredMovie } from './movie-jobs'
+import { movieJobs, MOVIE_LIMITS, MovieRendererMissing, MovieSubmissionRejected, type MovieAudit, type MovieIdentity, type MovieRenderer, type MovieStore, type StoredMovie } from './movie-jobs'
 
 const query = 'anim=1&b=1m&d=260929-260930&clip=260929T04-260930T04&ll=40.745-73.985+12.15&theme=dark&sp=48&cfps=30&mlen=30&mw=1080&mh=1350'
 const job: StoredMovie = { id: '00000000-0000-0000-0000-000000000001', owner: 'viewer@example.test', state: 'queued', frame: 0, frames: 900, width: 1080, height: 1350, fps: 30, seconds: 30, query, createdAt: '2026-10-20T12:00:00.000Z' }
@@ -15,7 +15,7 @@ describe('hosted movie jobs', () => {
   beforeEach(() => {
     identity = { email: 'viewer@example.test', admin: false }; saved = null
     store = { reserve: vi.fn(async (value) => { saved = { ...value }; return true }), get: vi.fn(async () => saved && { ...saved }), active: vi.fn(async () => []), update: vi.fn(async (value) => { saved = { ...value } }) }
-    renderer = { submit: vi.fn(async () => 'batch-123'), status: vi.fn(async () => ({ state: 'rendering' as const, frame: 30 })), cancel: vi.fn(async () => {}), file: vi.fn(async () => new Response('movie bytes', { headers: { 'content-type': 'video/mp4' } })) }
+    renderer = { submit: vi.fn(async () => job.id), status: vi.fn(async () => ({ state: 'rendering' as const, frame: 30 })), cancel: vi.fn(async () => ({ state: 'cancelled' as const, frame: 30 })), file: vi.fn(async () => new Response('movie bytes', { headers: { 'content-type': 'video/mp4' } })) }
     audit = vi.fn(async () => {})
     api = movieJobs({ identify: async () => identity, store, renderer, audit, signInUrl: '/auth/google', now: () => Date.parse(job.createdAt), id: () => job.id })
   })
@@ -28,9 +28,9 @@ describe('hosted movie jobs', () => {
   it('reserves quota atomically and submits exactly the immutable preview plan', async () => {
     const { owner: _owner, ...publicJob } = job
     expect(await answer(request())).toEqual([202, publicJob])
-    expect(store.reserve).toHaveBeenCalledExactlyOnceWith(job, MOVIE_LIMITS)
+    expect(store.reserve).toHaveBeenCalledExactlyOnceWith({ ...job, rendererId: job.id }, MOVIE_LIMITS)
     expect(renderer.submit).toHaveBeenCalledExactlyOnceWith(publicJob)
-    expect(saved).toEqual({ ...job, rendererId: 'batch-123' })
+    expect(saved).toEqual({ ...job, rendererId: job.id })
     expect(audit.mock.calls).toEqual([[{ kind: 'movie.queued', email: job.owner, job: job.id }]])
   })
   it('rejects foreign-origin writes, invalid settings, oversized bodies and quota overflow', async () => {
@@ -62,10 +62,10 @@ describe('hosted movie jobs', () => {
     expect(audit.mock.calls).toEqual([[{ kind: 'movie.cancelled', email: job.owner, job: job.id }], [{ kind: 'movie.download', email: job.owner, job: job.id }]])
   })
   it('records a failed submission without leaking backend error details', async () => {
-    vi.mocked(renderer.submit).mockRejectedValue(new Error('backend credentials must stay private'))
+    vi.mocked(renderer.submit).mockRejectedValue(new MovieSubmissionRejected('backend credentials must stay private'))
     const { owner: _owner, ...publicJob } = job
     expect(await answer(request())).toEqual([503, { ...publicJob, state: 'failed', error: 'The renderer could not start. Please try again.' }])
-    expect(saved).toEqual({ ...job, state: 'failed', error: 'The renderer could not start. Please try again.' })
+    expect(saved).toEqual({ ...job, rendererId: job.id, state: 'failed', error: 'The renderer could not start. Please try again.' })
     expect(audit.mock.calls).toEqual([[{ kind: 'movie.failed', email: job.owner, job: job.id }]])
   })
   it('releases completed render quota even when the original browser stopped polling', async () => {
@@ -73,6 +73,16 @@ describe('hosted movie jobs', () => {
     vi.mocked(store.active).mockResolvedValue([old])
     vi.mocked(renderer.status).mockResolvedValue({ state: 'complete', frame: 900 })
     expect((await answer(request()))[0]).toBe(202)
-    expect(vi.mocked(store.update).mock.calls).toEqual([[{ ...old, state: 'complete', frame: 900 }], [{ ...job, rendererId: 'batch-123' }]])
+    expect(vi.mocked(store.update).mock.calls).toEqual([[{ ...old, state: 'complete', frame: 900 }], [{ ...job, rendererId: job.id }]])
+  })
+  it('keeps ambiguous submission failures discoverable and expires abandoned reservations', async () => {
+    vi.mocked(renderer.submit).mockRejectedValue(new Error('network disconnected after request'))
+    const { owner: _owner, ...publicJob } = job
+    expect(await answer(request())).toEqual([202, { ...publicJob, error: 'Confirming renderer submission…' }])
+    expect(saved).toEqual({ ...job, rendererId: job.id, error: 'Confirming renderer submission…' })
+    vi.mocked(renderer.status).mockRejectedValue(new MovieRendererMissing())
+    expect(await answer(request('/jobs/' + job.id, 'GET'))).toEqual([200, { ...publicJob, error: 'Confirming renderer submission…' }])
+    saved = { ...job, rendererId: job.id, createdAt: '2026-10-20T11:57:59.000Z' }
+    expect(await answer(request('/jobs/' + job.id, 'GET'))).toEqual([200, { ...publicJob, state: 'failed', frame: 0, createdAt: '2026-10-20T11:57:59.000Z', error: 'Renderer submission expired. Please export again.' }])
   })
 })

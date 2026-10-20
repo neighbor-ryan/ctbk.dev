@@ -21,6 +21,7 @@ def gateway(monkeypatch):
     for name, value in {'MOVIE_BUCKET': 'private-movies', 'MOVIE_QUEUE': 'movie-queue', 'MOVIE_JOB_DEFINITION': 'movie-definition', 'MOVIE_SITE_ORIGIN': 'https://ctbk.dev'}.items():
         monkeypatch.setenv(name, value)
     objects = {}
+    versions = {}
 
     class Missing(Exception):
         pass
@@ -28,15 +29,19 @@ def gateway(monkeypatch):
     def get_object(*, Bucket, Key):
         if Key not in objects:
             raise Missing()
-        return {'Body': BytesIO(dumps(objects[Key]).encode())}
+        return {'Body': BytesIO(dumps(objects[Key]).encode()), 'ETag': f'"{versions.get(Key, 0)}"'}
 
     def put_object(*, Bucket, Key, Body, ContentType, **kwargs):
         if kwargs.get('IfNoneMatch') == '*' and Key in objects:
             raise ClientError({'ResponseMetadata': {'HTTPStatusCode': 412}, 'Error': {'Code': 'PreconditionFailed'}}, 'PutObject')
+        if 'IfMatch' in kwargs and kwargs['IfMatch'] != f'"{versions.get(Key, 0)}"':
+            raise ClientError({'ResponseMetadata': {'HTTPStatusCode': 412}, 'Error': {'Code': 'PreconditionFailed'}}, 'PutObject')
         objects[Key] = loads(Body)
+        versions[Key] = versions.get(Key, 0) + 1
+        return {'ETag': f'"{versions[Key]}"'}
 
     s3 = SimpleNamespace(get_object=get_object, put_object=put_object, exceptions=SimpleNamespace(NoSuchKey=Missing, ClientError=ClientError), generate_presigned_url=Mock(return_value='https://private.s3.amazonaws.com/movie?temporary'))
-    batch = SimpleNamespace(submit_job=Mock(return_value={'jobId': 'batch-123'}), describe_jobs=Mock(return_value={'jobs': [{'status': 'RUNNING'}]}), terminate_job=Mock())
+    batch = SimpleNamespace(submit_job=Mock(return_value={'jobId': 'batch-123'}), describe_jobs=Mock(return_value={'jobs': [{'status': 'RUNNING'}]}), terminate_job=Mock(), list_jobs=Mock(return_value={'jobSummaryList': []}))
     monkeypatch.setattr(module, 'clients', lambda: (batch, s3, None))
     return module, objects, batch, s3
 
@@ -93,3 +98,53 @@ def test_cancelled_jobs_remain_cancelled(gateway):
     assert request(gateway, 'GET', f'/jobs/{ID}/file') == (409, {'error': 'export was cancelled'})
     assert batch.terminate_job.call_args_list == [((), {'jobId': 'batch-123', 'reason': 'Cancelled by movie owner'})]
     assert s3.generate_presigned_url.call_args_list == []
+
+
+def test_submission_crash_recovers_by_deterministic_batch_name_without_resubmitting(gateway):
+    module, objects, batch, s3 = gateway
+    objects[f'jobs/{ID}/job.json'] = {'state': 'submitting', 'submittedAt': 990, 'frames': 900}
+    batch.list_jobs.return_value = {'jobSummaryList': [{'jobId': 'accepted-before-crash'}]}
+    assert request(gateway, 'POST', '/jobs', JOB) == (200, {'id': ID})
+    assert request(gateway, 'GET', f'/jobs/{ID}') == (200, {'state': 'rendering', 'frame': 0})
+    assert objects[f'jobs/{ID}/job.json'] == {'state': 'submitting', 'submittedAt': 990, 'frames': 900, 'batchId': 'accepted-before-crash'}
+    assert batch.submit_job.call_args_list == []
+    assert batch.list_jobs.call_args_list == [call(jobQueue='movie-queue', filters=[{'name': 'JOB_NAME', 'values': ['movie-' + ID]}], maxResults=100)]
+
+
+def test_missing_submissions_expire_instead_of_holding_quota_forever(gateway):
+    module, objects, batch, s3 = gateway
+    objects[f'jobs/{ID}/job.json'] = {'state': 'submitting', 'submittedAt': 990, 'frames': 900}
+    assert request(gateway, 'GET', f'/jobs/{ID}') == (200, {'state': 'queued', 'frame': 0})
+    objects[f'jobs/{ID}/job.json']['submittedAt'] = 800
+    assert request(gateway, 'GET', f'/jobs/{ID}') == (200, {'state': 'failed', 'frame': 0, 'error': 'Renderer submission expired. Please export again.'})
+    assert batch.submit_job.call_args_list == []
+
+
+def test_late_submission_writer_cannot_undo_cancellation(gateway):
+    module, objects, batch, s3 = gateway
+    key = f'jobs/{ID}/job.json'
+    def submitted(**kwargs):
+        module.put_json(key, {'state': 'cancelled'})
+        return {'jobId': 'batch-123'}
+    batch.submit_job.side_effect = submitted
+    assert request(gateway, 'POST', '/jobs', JOB) == (202, {'id': ID})
+    assert objects[key] == {'state': 'cancelled'}
+    assert batch.terminate_job.call_args_list == [call(jobId='batch-123', reason='Cancelled by movie owner')]
+
+
+def test_success_artifacts_survive_batch_control_plane_retention(gateway):
+    module, objects, batch, s3 = gateway
+    objects[f'jobs/{ID}/job.json'] = {'batchId': 'batch-123', 'state': 'queued'}
+    objects[f'jobs/{ID}/progress.json'] = {'frame': 900, 'complete': True}
+    batch.describe_jobs.return_value = {'jobs': []}
+    assert request(gateway, 'GET', f'/jobs/{ID}') == (200, {'state': 'complete', 'frame': 900})
+    assert request(gateway, 'GET', f'/jobs/{ID}/file') == (200, {'url': 'https://private.s3.amazonaws.com/movie?temporary'})
+    assert batch.describe_jobs.call_args_list == []
+
+
+def test_cancel_before_gateway_submission_creates_a_terminal_tombstone(gateway):
+    module, objects, batch, s3 = gateway
+    assert request(gateway, 'DELETE', f'/jobs/{ID}') == (200, {'state': 'cancelled', 'frame': 0})
+    assert request(gateway, 'POST', '/jobs', JOB) == (200, {'id': ID})
+    assert objects[f'jobs/{ID}/job.json'] == {'state': 'cancelled'}
+    assert batch.submit_job.call_args_list == []

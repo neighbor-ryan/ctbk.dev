@@ -2,3 +2,8 @@ encryptionsalt: v1:s1N4/MC2Eds=:v1:g4Oxz8s/eR9KrGG5:uY8nx5FuY7FKhxqa3pAVW/RnGwAO
 config:
   ctbk-movies:cloudflare_account_id: 2363642879f18d37d52dca114059937e
   aws:region: us-east-1
+  ctbk-movies:movie_image: 688066488567.dkr.ecr.us-east-1.amazonaws.com/ctbk-movies:47c93b2f
+  ctbk-movies:movie_gateway_secret:
+    secure: v1:MxphFSMVk7zGepZ5:ze2fkKBW9vEnlZ9XGyzsPlktgEiRAoCVqMFDleORi7YZGVqcnJkAW9RPcWYPq++5fjepbuOBJGIfmqiUyq54YDBdycZo/fbimZs4G35bCCo=
+  ctbk-movies:session_secret:
+    secure: v1:xUkXvwAoop2LSFSR:RjO0rX9D0cjo6kx5DteBlL+JDWcoS5fZTkZsfH26FB/UUPm99l0/HLVezYJ03pqMZYCVjWDcMjdlI0D873S/3ThrJv8L7rkmEe9zgavYvbU=

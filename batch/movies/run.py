@@ -17,6 +17,11 @@ def main() -> None:
     output = root / f"{job['id']}.mp4"
     s3 = boto3.client('s3')
     prefix = f"jobs/{job['id']}/"
+    def cancelled() -> bool:
+        info = s3.get_object(Bucket=environ['MOVIE_BUCKET'], Key=prefix + 'job.json')
+        return loads(info['Body'].read())['state'] == 'cancelled'
+    if cancelled():
+        return
     last_write = 0
     frame = 0
     args = ['node', 'scripts/render-timelapse.mjs', '--width', str(job['width']), '--height', str(job['height']), '--fps', str(job['fps']), environ['MOVIE_SITE_ORIGIN'] + '/timelapse?' + job['query'], str(output)]
@@ -27,14 +32,20 @@ def main() -> None:
             if match:
                 frame = int(match[1])
                 if monotonic() - last_write > 5:
+                    if cancelled():
+                        process.terminate()
+                        process.wait(timeout=30)
+                        return
                     s3.put_object(Bucket=environ['MOVIE_BUCKET'], Key=prefix + 'progress.json', Body=dumps({'frame': frame}).encode(), ContentType='application/json')
                     last_write = monotonic()
         code = process.wait()
     if code:
         raise RuntimeError(f'Renderer exited with code {code}')
+    if cancelled():
+        return
     s3.upload_file(str(output), environ['MOVIE_BUCKET'], prefix + 'movie.mp4', ExtraArgs={'ContentType': 'video/mp4'})
     s3.upload_file(str(output) + '.json', environ['MOVIE_BUCKET'], prefix + 'movie.json', ExtraArgs={'ContentType': 'application/json'})
-    s3.put_object(Bucket=environ['MOVIE_BUCKET'], Key=prefix + 'progress.json', Body=dumps({'frame': job['frames']}).encode(), ContentType='application/json')
+    s3.put_object(Bucket=environ['MOVIE_BUCKET'], Key=prefix + 'progress.json', Body=dumps({'frame': job['frames'], 'complete': True}).encode(), ContentType='application/json')
     output.unlink()
     Path(str(output) + '.json').unlink()
 

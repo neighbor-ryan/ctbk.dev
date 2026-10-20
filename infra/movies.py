@@ -41,7 +41,7 @@ def provision(account_id) -> None:
         aws.iam.RolePolicy('ctbk-movies-gateway-objects', role=role.name, policy=s3_policy)
         aws.iam.RolePolicy('ctbk-movies-gateway-control', role=role.name, policy=pulumi.Output.all(queue.arn, definition.arn, secret.arn).apply(lambda args: json.dumps({'Version': '2012-10-17', 'Statement': [
             {'Effect': 'Allow', 'Action': ['batch:SubmitJob', 'batch:TagResource'], 'Resource': [args[0], args[1]]},
-            {'Effect': 'Allow', 'Action': ['batch:DescribeJobs', 'batch:TerminateJob'], 'Resource': '*'},
+            {'Effect': 'Allow', 'Action': ['batch:DescribeJobs', 'batch:ListJobs', 'batch:TerminateJob'], 'Resource': '*'},
             {'Effect': 'Allow', 'Action': 'secretsmanager:GetSecretValue', 'Resource': args[2]},
         ]})))
         gateway_source = Path(__file__).resolve().parents[1] / 'batch/movies/gateway.py'

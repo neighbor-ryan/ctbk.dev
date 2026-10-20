@@ -4,6 +4,9 @@ export type MovieIdentity = { email: string; admin: boolean }
 export type StoredMovie = MovieJob & { owner: string; rendererId?: string }
 export type MovieLimits = { activePerUser: number; dailyPerUser: number; activeTotal: number }
 export const MOVIE_LIMITS: MovieLimits = { activePerUser: 2, dailyPerUser: 5, activeTotal: 20 }
+export const SUBMISSION_TTL_MS = 120_000
+export class MovieRendererMissing extends Error {}
+export class MovieSubmissionRejected extends Error {}
 
 export interface MovieStore {
   /** Atomically checks quotas and inserts, including jobs awaiting renderer submission. */
@@ -15,7 +18,7 @@ export interface MovieStore {
 export interface MovieRenderer {
   submit(job: MovieJob): Promise<string>
   status(rendererId: string): Promise<Pick<MovieJob, 'state' | 'frame' | 'error'>>
-  cancel(rendererId: string): Promise<void>
+  cancel(rendererId: string): Promise<Pick<MovieJob, 'state' | 'frame' | 'error'>>
   /** Authenticated backend delivery, or a short-lived signed URL; never a permanent public object. */
   file(rendererId: string, request: Request): Promise<Response>
 }
@@ -35,6 +38,19 @@ const active = (job: Pick<MovieJob, 'state'>) => job.state === 'queued' || job.s
 
 /** Hosted counterpart of the localhost API. Authentication happens before job lookup. */
 export function movieJobs({ identify, store, renderer, audit, signInUrl, now = Date.now, id = () => crypto.randomUUID() }: Dependencies) {
+  const refresh = async (job: StoredMovie): Promise<StoredMovie> => {
+    if (!active(job)) return job
+    let status: Pick<MovieJob, 'state' | 'frame' | 'error'>
+    try { status = await renderer.status(job.rendererId ?? job.id) }
+    catch (error) {
+      if (!(error instanceof MovieRendererMissing)) throw error
+      if (now() - Date.parse(job.createdAt) < SUBMISSION_TTL_MS) return job
+      status = { state: 'failed', frame: 0, error: 'Renderer submission expired. Please export again.' }
+    }
+    if (!Number.isInteger(status.frame) || status.frame < 0 || status.frame > job.frames) throw new Error('Renderer returned invalid progress.')
+    await store.update({ ...job, ...status })
+    return await store.get(job.id) ?? { ...job, ...status }
+  }
   return async (request: Request): Promise<Response | null> => {
     const url = new URL(request.url)
     if (!url.pathname.startsWith('/__movies/')) return null
@@ -67,47 +83,44 @@ export function movieJobs({ identify, store, renderer, audit, signInUrl, now = D
       const { settings, query } = plan
       // Finished jobs must release quota even when their browser tab was closed.
       for (const pending of await store.active()) {
-        if (pending.rendererId) {
-          const status = await renderer.status(pending.rendererId)
-          if (!active(status)) await store.update({ ...pending, ...status })
-        }
+        await refresh(pending)
       }
+      const jobId = id()
       const job: StoredMovie = {
-        id: id(), owner: identity.email.toLowerCase(), state: 'queued', frame: 0,
+        id: jobId, rendererId: jobId, owner: identity.email.toLowerCase(), state: 'queued', frame: 0,
         frames: Math.ceil(settings.seconds * settings.fps), width: settings.width, height: settings.height,
         fps: settings.fps, seconds: settings.seconds, query, createdAt: new Date(now()).toISOString(),
       }
       if (!await store.reserve({ ...job }, MOVIE_LIMITS)) return json({ error: 'Export limit reached. Wait for running exports or try again tomorrow.' }, 429)
       try {
-        job.rendererId = await renderer.submit(publicJob(job))
+        const submittedId = await renderer.submit(publicJob(job))
+        if (submittedId !== job.id) throw new Error('Renderer returned an unexpected job identity.')
         await store.update(job)
-      } catch {
-        job.state = 'failed'; job.error = 'The renderer could not start. Please try again.'
+      } catch (error) {
+        const rejected = error instanceof MovieSubmissionRejected
+        job.state = rejected ? 'failed' : 'queued'
+        job.error = rejected ? 'The renderer could not start. Please try again.' : 'Confirming renderer submission…'
         await store.update(job)
-        await audit({ kind: 'movie.failed', email: identity.email, job: job.id })
-        return json(publicJob(job), 503)
+        await audit({ kind: rejected ? 'movie.failed' : 'movie.queued', email: identity.email, job: job.id })
+        return json(publicJob(job), rejected ? 503 : 202)
       }
       await audit({ kind: 'movie.queued', email: identity.email, job: job.id })
       return json(publicJob(job), 202)
     }
     const match = /^\/__movies\/jobs\/([\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12})(\/file)?$/.exec(url.pathname)
     if (!match) return json({ error: 'Export not found.' }, 404)
-    const job = await store.get(match[1])
+    let job = await store.get(match[1])
     // The same response covers absent jobs and another visitor's jobs.
     if (!job || (!identity.admin && job.owner !== identity.email.toLowerCase())) return json({ error: 'Export not found.' }, 404)
     if (!['GET', 'DELETE'].includes(request.method) || (request.method === 'DELETE' && match[2])) return json({ error: 'Method not allowed.' }, 405)
-    if (active(job) && job.rendererId) {
-      const status = await renderer.status(job.rendererId)
-      if (!Number.isInteger(status.frame) || status.frame < 0 || status.frame > job.frames) throw new Error('Renderer returned invalid progress.')
-      job.state = status.state; job.frame = status.frame; job.error = status.error
-      await store.update(job)
-    }
+    job = await refresh(job)
     if (request.method === 'DELETE') {
       if (active(job)) {
-        if (job.rendererId) await renderer.cancel(job.rendererId)
-        job.state = 'cancelled'
+        const status = await renderer.cancel(job.rendererId ?? job.id)
+        job = { ...job, ...status }
         await store.update(job)
-        await audit({ kind: 'movie.cancelled', email: identity.email, job: job.id })
+        job = await store.get(job.id) ?? job
+        if (job.state === 'cancelled') await audit({ kind: 'movie.cancelled', email: identity.email, job: job.id })
       }
       return json(publicJob(job))
     }

@@ -12,8 +12,10 @@ describe('authenticated HCCS Batch gateway', () => {
     const api = batchRenderer('https://gateway.lambda-url.us-east-1.on.aws/', 'test-secret', fetcher)
     expect(await api.status('job-123')).toEqual({ state: 'rendering', frame: 20 })
     const { url, init } = calls[0]
+    const { signal, ...options } = init
+    expect(signal).toBeInstanceOf(AbortSignal)
     const headers = init.headers as Record<string, string>
-    expect({ url, ...init, headers: { ...headers, 'x-movie-timestamp': '<time>', 'x-movie-signature': '<signature>' } }).toEqual({ url: 'https://gateway.lambda-url.us-east-1.on.aws/jobs/job-123', method: 'GET', headers: { 'content-type': 'application/json', 'x-movie-timestamp': '<time>', 'x-movie-signature': '<signature>' } })
+    expect({ url, ...options, headers: { ...headers, 'x-movie-timestamp': '<time>', 'x-movie-signature': '<signature>' } }).toEqual({ url: 'https://gateway.lambda-url.us-east-1.on.aws/jobs/job-123', method: 'GET', headers: { 'content-type': 'application/json', 'x-movie-timestamp': '<time>', 'x-movie-signature': '<signature>' } })
     expect(headers['x-movie-signature']).toBe(createHmac('sha256', 'test-secret').update(`${headers['x-movie-timestamp']}\nGET\n/jobs/job-123\n`).digest('hex'))
   })
   it('returns short-lived download redirects and hides backend error bodies', async () => {
