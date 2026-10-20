@@ -97,6 +97,12 @@ test.describe('Home map embed', () => {
     await page.keyboard.up('Meta')
 
     await expect(page.getByText('2 stations')).toHaveCount(1)
-    await expect(page.getByRole('link', { name: /Compare on the stations page/ })).toHaveAttribute('href', `/stations?sel=${a.id},${b.id}`)
+    const manifest = await (await page.request.get('/assets/station-urls.json')).json()
+    const href = await page.getByRole('link', { name: /Compare on the stations page/ }).getAttribute('href')
+    const url = new URL(href!, page.url())
+    expect({ path: url.pathname, params: Object.fromEntries(url.searchParams) }).toEqual({
+      path: '/stations',
+      params: { theme: 'light', sel: `${a.id},${b.id}`, ll: '40.758-73.965 12.00', m: manifest.latestMonth.slice(2) },
+    })
   })
 })
