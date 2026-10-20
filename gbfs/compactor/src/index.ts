@@ -48,17 +48,6 @@ interface Snapshot {
 	stations: StationRow[];
 }
 
-/** Alias and immutable inputs may describe the same LU. Keep its first
- * observation once; same-LU content variants remain in the immutable JSON WAL. */
-export function distinctSnapshots(snapshots: readonly Snapshot[]): Snapshot[] {
-	const byLu = new Map<number, Snapshot>();
-	for (const snapshot of snapshots) {
-		const prior = byLu.get(snapshot.ts);
-		if (!prior || snapshot.polled_at < prior.polled_at) byLu.set(snapshot.ts, snapshot);
-	}
-	return [...byLu.values()].sort((a, b) => a.ts - b.ts);
-}
-
 export function generationKeysForHour(keys: readonly string[], date: string, hour: string): string[] {
 	const start = Date.parse(`${date}T${hour}:00:00Z`) / 1000;
 	return keys.filter((key) => {
@@ -113,13 +102,14 @@ function h1Key(date: string, hour: string): string {
  * prefix listing is what we need; the trailing `MM.json` filter is implicit
  * in the prefix when we use `gbfs/status/<date>/<hour>-`.
  */
-async function listMinuteKeys(r2: R2Bucket, prefix: string): Promise<string[]> {
+async function listMinuteKeys(r2: R2Bucket, prefix: string, references?: Map<string, string>): Promise<string[]> {
 	const keys: string[] = [];
 	let cursor: string | undefined;
 	while (true) {
-		const result = await r2.list({ prefix, cursor, limit: 1000 });
+		const result = await r2.list({ prefix, cursor, limit: 1000, ...(references ? { include: ['customMetadata' as const] } : {}) });
 		for (const obj of result.objects) {
 			if (obj.key.endsWith('.json')) keys.push(obj.key);
+			if (references && obj.customMetadata?.generation_key) references.set(obj.key, obj.customMetadata.generation_key);
 		}
 		if (!result.truncated) break;
 		cursor = result.cursor;
@@ -170,84 +160,128 @@ interface ColumnData {
  * per shard (~60 rows for that station × that hour) instead of decoding
  * the whole 144k-row file. See `specs/gbfs-r2-only.md` Phase 2.5.
  */
-export function buildColumnData(snapshots: Snapshot[]): ColumnData[] {
-	const flatRows: (StationRow & { ts: number; polled_at: number })[] = [];
-	for (const snap of snapshots) {
-		for (const s of snap.stations) {
-			flatRows.push({ ...s, ts: snap.ts, polled_at: snap.polled_at });
+class SnapshotColumns {
+	private columns: ColumnData[] = [
+		{ name: 'station_id', data: [], type: 'STRING' },
+		{ name: 'ts', data: [], type: 'INT64' },
+		{ name: 'polled_at', data: [], type: 'INT64' },
+		...INT16_COLS.map((name) => ({ name, data: [], type: 'INT32' as const })),
+		{ name: 'last_reported', data: [], type: 'INT64' },
+	];
+
+	private rows = 0;
+	private initialized = false;
+	private stationIds = new Map<string, string>();
+	private reportedTimes = new Map<number, bigint>();
+
+	private expectedSnapshots: number;
+	constructor(expectedSnapshots = 0) { this.expectedSnapshots = expectedSnapshots; }
+
+	add(snapshot: Snapshot): void {
+		if (!this.initialized && snapshot.stations.length) {
+			const expectedRows = this.expectedSnapshots * snapshot.stations.length;
+			for (const col of this.columns) col.data = new Array(expectedRows);
+			this.initialized = true;
+		}
+		const ts = BigInt(snapshot.ts), polled = BigInt(snapshot.polled_at);
+		for (const station of snapshot.stations) {
+			const row = this.rows++;
+			let id = this.stationIds.get(station.station_id);
+			if (id === undefined) { id = station.station_id; this.stationIds.set(id, id); }
+			this.columns[0].data[row] = id;
+			this.columns[1].data[row] = ts;
+			this.columns[2].data[row] = polled;
+			for (let i = 0; i < INT16_COLS.length; i++) this.columns[i + 3].data[row] = (station[INT16_COLS[i]] ?? 0) | 0;
+			const time = station.last_reported ?? 0;
+			let reported = this.reportedTimes.get(time);
+			if (reported === undefined) { reported = BigInt(time); this.reportedTimes.set(time, reported); }
+			this.columns[this.columns.length - 1].data[row] = reported;
 		}
 	}
-	flatRows.sort((a, b) =>
-		a.station_id < b.station_id ? -1 : a.station_id > b.station_id ? 1 : a.ts - b.ts,
-	);
 
-	const n = flatRows.length;
-	const stationIds = new Array<string>(n);
-	const ts = new Array<bigint>(n);
-	const polledAt = new Array<bigint>(n);
-	const lastReported = new Array<bigint>(n);
-	const int32: Record<string, number[]> = {};
-	for (const c of INT16_COLS) int32[c] = new Array<number>(n);
-
-	for (let i = 0; i < n; i++) {
-		const r = flatRows[i];
-		stationIds[i] = r.station_id;
-		ts[i] = BigInt(r.ts);
-		polledAt[i] = BigInt(r.polled_at);
-		lastReported[i] = BigInt(r.last_reported ?? 0);
-		for (const c of INT16_COLS) int32[c][i] = (r[c] ?? 0) | 0;
+	finish(): ColumnData[] {
+		for (const col of this.columns) col.data.length = this.rows;
+		const ids = this.columns[0].data as string[];
+		const ts = this.columns[1].data as bigint[];
+		const order = Array.from({ length: ids.length }, (_, i) => i);
+		order.sort((a, b) => ids[a] < ids[b] ? -1 : ids[a] > ids[b] ? 1 : Number(ts[a] - ts[b]));
+		// Apply the sorted-index permutation in place. Copying every column here
+		// briefly doubles the whole hour's scalar storage before encoding it.
+		const visited = new Uint8Array(order.length);
+		for (const column of this.columns) {
+			visited.fill(0);
+			for (let start = 0; start < order.length; start++) {
+				if (visited[start]) continue;
+				let current = start;
+				const saved = column.data[start];
+				while (order[current] !== start) {
+					column.data[current] = column.data[order[current]];
+					visited[current] = 1;
+					current = order[current];
+				}
+				column.data[current] = saved;
+				visited[current] = 1;
+			}
+		}
+		const sorted = this.columns;
+		this.columns = [];
+		return sorted;
 	}
-
-	return [
-		{ name: 'station_id', data: stationIds, type: 'STRING' },
-		{ name: 'ts', data: ts, type: 'INT64' },
-		{ name: 'polled_at', data: polledAt, type: 'INT64' },
-		...INT16_COLS.map((c) => ({ name: c, data: int32[c], type: 'INT32' as const })),
-		{ name: 'last_reported', data: lastReported, type: 'INT64' },
-	];
 }
 
-/** Build a parquet buffer from snapshots. Returns `null` if there are no rows. */
-async function snapshotsToParquet(snapshots: Snapshot[]): Promise<ArrayBuffer | null> {
-	if (snapshots.length === 0) return null;
-	const columnData = buildColumnData(snapshots);
-	if (columnData[0].data.length === 0) return null;
+export function buildColumnData(snapshots: Snapshot[]): ColumnData[] {
+	const builder = new SnapshotColumns(snapshots.length);
+	for (const snapshot of snapshots) builder.add(snapshot);
+	return builder.finish();
+}
 
+async function columnsToParquet(columnData: ColumnData[]): Promise<ArrayBuffer | null> {
+	if (columnData[0].data.length === 0) return null;
 	const { parquetWriteBuffer } = await import('hyparquet-writer');
-	// codec defaults to 'SNAPPY'; statistics on by default → free index on station_id.
-	// rowGroupSize ~600 ≈ 10 stations × 1 hour: keeps station_id min/max stats
-	// useful for pruning, while bounding rg-count to ~250/shard. hyparquet
-	// parses the full footer eagerly, so rg-count dominates worker parse cost
-	// — tighter (e.g. 60 → 1 station/rg) hits the 128 MB memory limit when
-	// many shards are read concurrently.
 	return parquetWriteBuffer({ columnData, rowGroupSize: 600 });
 }
 
 /** Compact one (date, hour) window. Returns the count of minutes compacted. */
 export async function compactHour(r2: R2Bucket, date: string, hour: string): Promise<{ minutes: number; rows: number; bytes: number }> {
-	const wal = await listMinuteKeys(r2, statusPrefix(date, hour));
+	const references = new Map<string, string>();
+	const wal = await listMinuteKeys(r2, statusPrefix(date, hour), references);
 	const generations = generationKeysForHour(await listMinuteKeys(r2, `gbfs/status-generation/${date}/`), date, hour);
 	const minuteKeys = withV11Fills(wal, await listMinuteKeys(r2, `gbfs/probe/v11/${date}/${hour}-`), generations);
-	const keys = [...generations, ...minuteKeys];
+	const generationSet = new Set(generations);
+	const keys = [...generations, ...minuteKeys.filter((key) => !generationSet.has(references.get(key) ?? ''))];
 	if (minuteKeys.length > wal.length) console.log(`${date} ${hour}h: filled ${minuteKeys.length - wal.length} minute(s) from the 1.1 side-poller`);
 	if (keys.length === 0) {
 		console.log(`No minute JSONs for ${date} hour ${hour}; skipping`);
 		return { minutes: 0, rows: 0, bytes: 0 };
 	}
 
-	const results = await Promise.all(keys.map((k) => readSnapshot(r2, k)));
-	const snapshots = distinctSnapshots(results.filter((s): s is Snapshot => s !== null));
-	const buf = await snapshotsToParquet(snapshots);
+	// Bound decoded bodies rather than retaining alias + generation payloads for
+	// an entire hour. Only scalar columns survive each batch; the large station
+	// objects and JSON strings can be reclaimed before the next four reads.
+	const builder = new SnapshotColumns(keys.length);
+	const seen = new Set<number>();
+	const minuteSet = new Set<number>();
+	let rows = 0;
+	for (let offset = 0; offset < keys.length; offset += 4) {
+		const batch = await Promise.all(keys.slice(offset, offset + 4).map((key) => readSnapshot(r2, key)));
+		for (const snapshot of batch) {
+			if (!snapshot || seen.has(snapshot.ts)) continue;
+			seen.add(snapshot.ts);
+			minuteSet.add(Math.floor(snapshot.ts / 60));
+			rows += snapshot.stations.length;
+			builder.add(snapshot);
+		}
+	}
+	const buf = await columnsToParquet(builder.finish());
 	if (!buf) {
 		console.warn(`No rows for ${date} hour ${hour}; skipping write`);
-		return { minutes: new Set(snapshots.map((s) => Math.floor(s.ts / 60))).size, rows: 0, bytes: 0 };
+		return { minutes: minuteSet.size, rows: 0, bytes: 0 };
 	}
 
 	const outKey = h1Key(date, hour);
 	await r2.put(outKey, buf, { httpMetadata: { contentType: 'application/octet-stream' } });
-	const rows = snapshots.reduce((acc, s) => acc + s.stations.length, 0);
-	const minutes = new Set(snapshots.map((s) => Math.floor(s.ts / 60))).size;
-	console.log(`Compacted ${snapshots.length} generations in ${minutes} minutes (${rows} rows, ${buf.byteLength} bytes) → ${outKey}`);
+	const minutes = minuteSet.size;
+	console.log(`Compacted ${seen.size} generations in ${minutes} minutes (${rows} rows, ${buf.byteLength} bytes) → ${outKey}`);
 	return { minutes, rows, bytes: buf.byteLength };
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { parquetReadObjects } from 'hyparquet';
-import { buildColumnData, compactHour, distinctSnapshots, generationKeysForHour, targetHour, withV11Fills } from './index';
+import { buildColumnData, compactHour, generationKeysForHour, targetHour, withV11Fills } from './index';
 
 describe('immutable generation compaction', () => {
 	test('hourly parquet contains each captured LU once despite minute alias collisions', async () => {
@@ -14,17 +14,24 @@ describe('immutable generation compaction', () => {
 			'gbfs/status/2026-10-20/07-43.json': second,
 		};
 		const written: { key: string; body: ArrayBuffer }[] = [];
+		const readKeys: string[] = [];
 		const bucket = {
 			list: async ({ prefix }: { prefix: string }) => ({
-				objects: Object.keys(objects).filter((key) => key.startsWith(prefix)).map((key) => ({ key })),
+				objects: Object.keys(objects).filter((key) => key.startsWith(prefix)).map((key) => ({
+					key, customMetadata: key.startsWith('gbfs/status/') ? { generation_key: `gbfs/status-generation/2026-10-20/${ts + 59}.json` } : {},
+				})),
 				truncated: false,
 			}),
-			get: async (key: string) => ({ text: async () => JSON.stringify(objects[key]) }),
+			get: async (key: string) => { readKeys.push(key); return { text: async () => JSON.stringify(objects[key]) }; },
 			put: async (key: string, body: ArrayBuffer) => { written.push({ key, body }); },
 		};
 		const result = await compactHour(bucket as unknown as R2Bucket, '2026-10-20', '07');
 		expect({ minutes: result.minutes, rows: result.rows }).toEqual({ minutes: 1, rows: 2 });
 		expect(written.map(({ key }) => key)).toEqual(['gbfs/avail/h1/2026-10-20/07.parquet']);
+		expect(readKeys).toEqual([
+			`gbfs/status-generation/2026-10-20/${ts}.json`,
+			`gbfs/status-generation/2026-10-20/${ts + 59}.json`,
+		]);
 		const buffer = written[0].body;
 		const rows = await parquetReadObjects({ file: { byteLength: buffer.byteLength, slice: (start: number, end?: number) => buffer.slice(start, end) } });
 		expect(rows.map((r) => ({ ts: Number(r.ts), bikes: r.num_bikes_available }))).toEqual([
@@ -32,10 +39,25 @@ describe('immutable generation compaction', () => {
 		]);
 	});
 
-	test('retains two LUs in one minute and removes duplicate minute aliases', () => {
-		const first = { ts: 120, polled_at: 125, stations: [] };
-		const second = { ts: 179, polled_at: 185, stations: [] };
-		expect(distinctSnapshots([second, first, { ...first, polled_at: 190 }, second])).toEqual([first, second]);
+	test('decodes at most four snapshot bodies concurrently', async () => {
+		const ts = Date.parse('2026-10-20T07:00:00Z') / 1000;
+		const keys = Array.from({ length: 13 }, (_, i) => `gbfs/status-generation/2026-10-20/${ts + i * 60}.json`);
+		let active = 0, maxActive = 0;
+		const reads: string[] = [];
+		const bucket = {
+			list: async ({ prefix }: { prefix: string }) => ({ objects: keys.filter((key) => key.startsWith(prefix)).map((key) => ({ key })), truncated: false }),
+			get: async (key: string) => {
+				active++;
+				maxActive = Math.max(maxActive, active);
+				reads.push(key);
+				await new Promise((resolve) => setTimeout(resolve, 0));
+				active--;
+				return { text: async () => JSON.stringify({ ts: Number(key.split('/').at(-1)!.replace('.json', '')), polled_at: ts, stations: [] }) };
+			},
+		};
+		expect(await compactHour(bucket as unknown as R2Bucket, '2026-10-20', '07')).toEqual({ minutes: 13, rows: 0, bytes: 0 });
+		expect(reads).toEqual(keys);
+		expect(maxActive).toBe(4);
 	});
 
 	test('hour selection includes canonical generations at both boundaries only', () => {

@@ -27,4 +27,6 @@ After deployment, verify that a first captured generation is readable under its 
 
 Validation covers immutable collision retention, cold-start idempotence, same-LU content variants, failed raw-write ordering, out-of-order source observations, hourly parquet round-trip retention, alias deduplication, hour boundaries, backup fill preference, and Python daily input selection. No bulk production WAL downloads were used.
 
+The hourly reader limits concurrent snapshot decoding to four and skips full alias reads whose listing metadata points to an included immutable generation. It streams decoded snapshots into preallocated scalar columns, interns station IDs/reported timestamps, and sorts the columns in place, avoiding both retained station objects and a second full set of sorted column arrays. A synthetic 120-generation × 2,500-station hour (300,000 rows) completed with Node's old-space limit set to 64 MiB, producing a 1,193,533-byte parquet; the initial unbounded/copying implementation failed that constraint. Node heap limits are not a substitute for live Cloudflare isolate verification, which remains part of deployment acceptance.
+
 [LU attribution]: ../lu-attribution.md
