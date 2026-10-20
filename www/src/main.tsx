@@ -22,6 +22,8 @@ import NotFound from "./pages/NotFound"
 import { Box } from "@mui/material"
 import { Footer } from "./components/Footer"
 import { OgCapture } from './components/OgCapture'
+import { PageSectionSpy } from './components/PageSectionSpy'
+import { pageSections } from './lib/pageSections'
 
 // Cloudflare Web Analytics (RUM: page views + Core Web Vitals). Manual
 // mode — the beacon reports directly to CF's collector (predates the
@@ -77,6 +79,7 @@ function AppContent() {
   return (
     <>
       <OgCapture />
+      {pathname !== '/' && pathname !== '/v2' && pageSections(pathname).length > 0 && <PageSectionSpy key={pathname} />}
       <Suspense fallback={null}>
         <Routes>
           <Route path="/" element={<Home />} />

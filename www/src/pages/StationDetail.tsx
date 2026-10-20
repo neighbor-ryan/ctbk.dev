@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Box, CircularProgress, Typography } from '@mui/material'
 import css from '../index.module.css'
 import controlCss from '../controls.module.css'
@@ -104,6 +104,7 @@ export default function StationDetail() {
 function StationDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const [stations, setStations] = useState<Stations | null>(null)
   const [pairCounts, setPairCounts] = useState<StationPairCounts | null>(null)
   const [manifest, setManifest] = useState<Manifest | null>(null)
@@ -483,9 +484,13 @@ function StationDetailPage() {
     ? `https://www.google.com/maps?q=${info.lat},${info.lon}`
     : null
 
+  const section = new URLSearchParams(location.search).get('section')
+  const sectionReady = section === 'trips' || section === 'rides'
+    ? (rollupEnabled ? !!rollupData || rollupNoData : processedTripsRows !== null)
+    : section === 'map' ? !!stations : true
   return (
-    <Box p={{ xs: 1, sm: 2, md: 3 }} maxWidth={1200} mx="auto">
-      <Typography variant="h5" gutterBottom>
+    <Box p={{ xs: 1, sm: 2, md: 3 }} maxWidth={1200} mx="auto" data-og-page-ready={!!info && (!hasAvail || !!data) && sectionReady}>
+      <Typography id="overview" variant="h5" gutterBottom>
         {title}
         {retired && (
           <Box
@@ -523,7 +528,7 @@ function StationDetailPage() {
       )}
 
       {hasAvail && (<>
-        <Typography variant="body2" color="text.secondary" gutterBottom>
+        <Typography id="availability" variant="body2" color="text.secondary" gutterBottom>
           {data ? `${data.rows.length.toLocaleString()} snapshots · ` : ''}
           {formatTimeRange(range)}
           {data?.last_polled_at != null && (
@@ -626,7 +631,7 @@ function StationDetailPage() {
           * above (`r`), its own auto bin; drag-pan moves both. */}
         {info?.short_name && (
           <Box sx={{ mt: 2, mx: { xs: -1, sm: -2, md: -3 } }}>
-            <Typography variant="h6" sx={{ px: { xs: 1, sm: 2, md: 3 }, mb: 0.5 }}>Station state</Typography>
+            <Typography id="states" variant="h6" sx={{ px: { xs: 1, sm: 2, md: 3 }, mb: 0.5 }}>Station state</Typography>
             <Box sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
               <SmgPanel
                 sel={smgSel}
@@ -638,11 +643,11 @@ function StationDetailPage() {
                 summary
               />
             </Box>
-            <Typography variant="h6" sx={{ px: { xs: 1, sm: 2, md: 3 }, mt: 2, mb: 0.5 }}>By day and time</Typography>
+            <Typography id="by-day" variant="h6" sx={{ px: { xs: 1, sm: 2, md: 3 }, mt: 2, mb: 0.5 }}>By day and time</Typography>
             <Box sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
               <SmgGrid sel={smgSel} fromS={fromS} toS={toS} />
             </Box>
-            <Typography variant="h6" sx={{ px: { xs: 1, sm: 2, md: 3 }, mt: 2, mb: 0.5 }}>By hour of day</Typography>
+            <Typography id="by-hour" variant="h6" sx={{ px: { xs: 1, sm: 2, md: 3 }, mt: 2, mb: 0.5 }}>By hour of day</Typography>
             <Box sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
               <SmgByHour sel={smgSel} fromS={fromS} toS={toS} />
             </Box>
@@ -652,7 +657,7 @@ function StationDetailPage() {
 
       {mapCenter && mapShortName && (
         <>
-          <Box
+          <Box id="map"
             sx={{
               height: mapHeight,
               width: '100%',
@@ -749,7 +754,7 @@ function StationDetailPage() {
       )}
 
       {rollupEnabled && (
-        <Box sx={{ mt: 4 }}>
+        <Box id="trips" sx={{ mt: 4 }}>
           <Typography variant="subtitle1" gutterBottom>
             Monthly trips <span style={{ fontSize: '0.75em', opacity: 0.6 }}>(rollup path)</span>
           </Typography>
@@ -798,7 +803,7 @@ function StationDetailPage() {
             <Typography variant="body2" sx={{ opacity: 0.65 }}>No rows in window.</Typography>
           )}
           {info?.short_name && (
-            <Box sx={{ mt: 3 }}>
+            <Box id="rides" sx={{ mt: 3 }}>
               <Typography variant="subtitle2" gutterBottom>
                 Rides
                 {ridesPair && (
@@ -820,7 +825,7 @@ function StationDetailPage() {
       )}
 
       {!rollupEnabled && processedTripsRows && processedTripsRows.length === 0 && (
-        <Box sx={{ mt: 4 }}>
+        <Box id="trips" sx={{ mt: 4 }}>
           <Typography variant="subtitle1" gutterBottom>Monthly trips</Typography>
           <Typography variant="body2" sx={{ opacity: 0.65 }}>
             No monthly trip aggregations are indexed for this station yet.
@@ -829,7 +834,7 @@ function StationDetailPage() {
       )}
 
       {!rollupEnabled && processedTripsRows && processedTripsRows.length > 0 && (
-        <Box sx={{ mt: 4 }}>
+        <Box id="trips" sx={{ mt: 4 }}>
           <Typography variant="subtitle1" gutterBottom>Monthly trips</Typography>
           <YmrgtbChart
             rows={processedTripsRows}

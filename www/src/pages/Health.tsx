@@ -148,8 +148,8 @@ export default function Health() {
   if (!data) return <Page><Err msg="no data" /></Page>
 
   return (
-    <Page>
-      <h1 style={{ fontSize: '1.6em', margin: '0 0 0.5em' }}>GBFS pipeline health</h1>
+    <Page ready>
+      <h1 id="overview" style={{ fontSize: '1.6em', margin: '0 0 0.5em' }}>GBFS pipeline health</h1>
       <p style={{ fontSize: '0.85em', opacity: 0.7, marginTop: 0 }}>
         Live checks updated {fmtAge(data.generatedAt)} · refreshed each minute.<br />
         Historical inventory {data.inventoryGeneratedAt ? `updated ${fmtAge(data.inventoryGeneratedAt)}` : 'awaiting its first refresh'} · refreshed hourly.
@@ -166,9 +166,9 @@ export default function Health() {
   )
 }
 
-function Page({ children }: { children: React.ReactNode }) {
+function Page({ children, ready = false }: { children: React.ReactNode; ready?: boolean }) {
   return (
-    <div style={{
+    <div data-og-page-ready={ready} style={{
       maxWidth: 1100,
       margin: '0 auto',
       padding: '1.5em 1.5em 3em',
@@ -183,9 +183,9 @@ function Page({ children }: { children: React.ReactNode }) {
 function Loading() { return <div style={{ opacity: 0.6 }}>loading health snapshot…</div> }
 function Err({ msg }: { msg: string }) { return <div style={{ color: 'salmon' }}>error: {msg}</div> }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
-    <section style={{ marginTop: '1.5em' }}>
+    <section id={id} style={{ marginTop: '1.5em' }}>
       <h2 style={{ fontSize: '1.15em', margin: '0 0 0.4em', borderBottom: '1px solid rgba(127,127,127,0.25)', paddingBottom: '0.2em' }}>
         {title}
       </h2>
@@ -209,7 +209,7 @@ function monthsSince(yyyymm: string): number {
 function TripdataSection({ tripdata }: { tripdata: TripdataHealth | null }) {
   if (!tripdata || !tripdata.latestMonth) {
     return (
-      <Section title="Tripdata (upstream s3://tripdata)">
+      <Section id="tripdata" title="Tripdata (upstream s3://tripdata)">
         <div style={{ opacity: 0.6 }}>no summary yet — waiting for `tripdata.yml` to refresh</div>
       </Section>
     )
@@ -222,7 +222,7 @@ function TripdataSection({ tripdata }: { tripdata: TripdataHealth | null }) {
     ? fmtAge(Math.floor(new Date(tripdata.generatedAt).getTime() / 1000))
     : null
   return (
-    <Section title="Tripdata (upstream s3://tripdata)">
+    <Section id="tripdata" title="Tripdata (upstream s3://tripdata)">
       <div style={{ display: 'flex', gap: '2em', alignItems: 'baseline', flexWrap: 'wrap' }}>
         <Stat
           label="Latest month"
@@ -282,7 +282,7 @@ function FeedSection({ feed, generatedAt }: { feed: FeedHealth; generatedAt: num
   const drift = feed.drift
   const driftSorted = drift ? [...drift.series.map(([, v]) => v)].sort((a, b) => a - b) : []
   return (
-    <Section title="Feed (per-minute WAL polls)">
+    <Section id="feed" title="Feed (per-minute WAL polls)">
       <div style={{ display: 'flex', gap: '2em', alignItems: 'baseline', flexWrap: 'wrap' }}>
         <Stat
           label="Latest poll"
@@ -366,7 +366,7 @@ function FeedSection({ feed, generatedAt }: { feed: FeedHealth; generatedAt: num
 function CompactionsSection({ compactions }: { compactions: CompactionHealth }) {
   const today = todayUtc()
   return (
-    <Section title="Compactions">
+    <Section id="compactions" title="Compactions">
       <div style={{ display: 'flex', gap: '2em', alignItems: 'baseline', flexWrap: 'wrap' }}>
         <Stat
           label="Daily compactions"
@@ -388,7 +388,7 @@ function CompactionsSection({ compactions }: { compactions: CompactionHealth }) 
 function BuildsSection({ builds }: { builds: BuildProgress[] | undefined }) {
   if (!builds || builds.length === 0) return null
   return (
-    <Section title="Pyramid builds">
+    <Section id="builds" title="Pyramid builds">
       {builds.map((b) => <BuildCard key={`${b.pyramid}-${b.startedAt}`} build={b} />)}
     </Section>
   )
@@ -452,7 +452,7 @@ function BuildCard({ build }: { build: BuildProgress }) {
 function PyramidsSection({ pyramids, defaultPyramid }: { pyramids: PyramidsHealth | undefined, defaultPyramid?: string }) {
   if (!pyramids || pyramids.length === 0) {
     return (
-      <Section title="Pyramid min-cover status">
+      <Section id="pyramids" title="Pyramid min-cover status">
         <div style={{ opacity: 0.6, fontSize: '0.9em' }}>
           No pyramid data — D1 unreachable or empty.
         </div>
@@ -479,7 +479,7 @@ function PyramidsSection({ pyramids, defaultPyramid }: { pyramids: PyramidsHealt
     </details>
   )
   return (
-    <Section title="Pyramid min-cover status">
+    <Section id="pyramids" title="Pyramid min-cover status">
       {successors.map((p) => collapsed(p, 'successor — burn-in'))}
       {primary && <PyramidCoverGrid pyramid={primary} />}
       {legacy.map((p) => collapsed(p, 'legacy'))}
@@ -830,7 +830,7 @@ function CascadeSection({ cascade }: { cascade: CascadeHealth }) {
   const activeShards = shards.filter((s) => tiers.some((t) => expectedMap.has(`${t}|${s}`)))
 
   return (
-    <Section title="Legacy cascade (rides v1/v2)">
+    <Section id="cascade" title="Legacy cascade (rides v1/v2)">
       <div style={{ overflowX: 'auto' }}>
         <table style={{ borderCollapse: 'collapse', fontSize: '0.85em', fontVariantNumeric: 'tabular-nums' }}>
           <thead>
@@ -879,7 +879,7 @@ function CascadeSection({ cascade }: { cascade: CascadeHealth }) {
 function BrowseSection({ feed }: { feed: FeedHealth; compactions: CompactionHealth }) {
   const today = feed.latestPoll?.date ?? todayUtc()
   return (
-    <Section title="Browse">
+    <Section id="browse" title="Browse">
       <ul style={{ margin: 0, paddingLeft: '1.2em', lineHeight: 1.8 }}>
         <li><Link to={`/files/gbfs/status/${today}/`}>Today's WAL JSONs</Link> <Hint>raw minute polls</Hint></li>
         <li><Link to={`/files/gbfs/avail/agg=1m/cons=1m/${today}/`}>Today's cascade (1m@1m)</Link> <Hint>per-minute parquets</Hint></li>

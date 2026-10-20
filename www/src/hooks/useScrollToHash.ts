@@ -1,12 +1,12 @@
 import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
+import { pageSections } from '../lib/pageSections'
 
 // Scroll to hash anchor on navigation
 export function useScrollToHash() {
   const { hash, pathname } = useLocation()
   useEffect(() => {
-    // Home owns section navigation and scroll restoration through use-prms.
-    if (pathname === '/' || pathname === '/v2') return
+    if (pageSections(pathname).length) return
     if (hash) {
       // Small delay to ensure DOM is rendered
       const timer = setTimeout(() => {

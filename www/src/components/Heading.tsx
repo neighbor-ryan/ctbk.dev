@@ -1,5 +1,6 @@
 import { ReactNode, createElement } from 'react'
 import styles from './Heading.module.css'
+import { SectionLink } from 'use-prms/sections'
 
 interface HeadingProps {
   id: string
@@ -16,9 +17,9 @@ export function Heading({ id, level = 2, children, offset = 80 }: HeadingProps) 
       {/* Invisible anchor target positioned above the heading */}
       <span id={id} className={styles.anchor} style={{ top: -offset }} />
       {createElement(Tag, {},
-        <a href={`#${id}`} className={styles.link}>
+        <SectionLink id={id} className={styles.link}>
           {children}
-        </a>
+        </SectionLink>
       )}
     </div>
   )

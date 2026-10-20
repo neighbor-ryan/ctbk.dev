@@ -1,8 +1,9 @@
 import { PipelineProvider, PipelineStats, StageByKey } from '../components/PipelineContext'
 import { PipelineDiagram } from '../components/PipelineDiagram'
 import { H2, H3 } from '../components/Heading'
+import { SectionLink } from 'use-prms/sections'
 
-# Data Pipeline
+<h1 id="overview">Data Pipeline</h1>
 
 <PipelineProvider>
 
@@ -29,7 +30,7 @@ Each normalized month directory contains Parquet files split by start and end mo
 
 <H2 id="consolidation">Consolidation</H2>
 
-After [normalization], the "consolidation" stage combines all records that *end* in a given month into a single canonical Parquet file. This is the primary representation used for downstream analysis — and the tile source for the **rides rollup-pyramid** that now serves every rides chart on the site (see [Serving](#serving) below).
+After <SectionLink id="normalization">normalization</SectionLink>, the "consolidation" stage combines all records that *end* in a given month into a single canonical Parquet file. This is the primary representation used for downstream analysis — and the tile source for the **rides rollup-pyramid** that now serves every rides chart on the site (see <SectionLink id="serving">Serving</SectionLink> below).
 
 <StageByKey stageKey="cons" />
 
@@ -56,7 +57,7 @@ To integrate with the main pipeline (which expects normalized files split by sou
 
 <StageByKey stageKey="partition" />
 
-During [consolidation], for months January 2020 through January 2021, the partitioned `v0` records are joined with the newer (scrubbed) data, to backfill the missing columns. Since there's no canonical join key, the merge uses heuristics—matching on start/end times—which works reliably for most records.
+During <SectionLink id="consolidation">consolidation</SectionLink>, for months January 2020 through January 2021, the partitioned `v0` records are joined with the newer (scrubbed) data, to backfill the missing columns. Since there's no canonical join key, the merge uses heuristics—matching on start/end times—which works reliably for most records.
 
 [gender-example]: https://ctbk.dev/?s=g&g=mf&d=1406-2102&y=m&pct&c
 [women-biking]: https://www.peopleforbikes.org/news/more-women-are-biking-than-ever-before
@@ -118,5 +119,3 @@ The homepage rides chart and every `/s/:slug` trips chart are served by the **py
 </PipelineProvider>
 
 [ctbk.dev]: https://ctbk.dev
-[normalization]: #normalization
-[consolidation]: #consolidation

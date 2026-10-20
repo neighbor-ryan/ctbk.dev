@@ -54,8 +54,14 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
 
 export default function FeedHealth() {
   const [params, setParams] = useSearchParams()
-  const [preset, setPresetState] = useState(1)
-  const [wide, setWide] = useState(false)
+  const presetIndex = PRESETS.findIndex(p => p.label === params.get('span'))
+  const preset = presetIndex < 0 ? 1 : presetIndex
+  const wide = params.has('wide')
+  const updateParams = (edit: (next: URLSearchParams) => void) => {
+    const next = new URLSearchParams(window.location.search)
+    edit(next)
+    setParams(next, { replace: true })
+  }
   // `?from=&to=` (UTC days) override the presets — shareable ranges; picking a preset clears them.
   const pFrom = params.get('from'), pTo = params.get('to')
   const explicit = !!(pFrom && pTo && DAY_RE.test(pFrom) && DAY_RE.test(pTo))
@@ -63,8 +69,11 @@ export default function FeedHealth() {
   const days = PRESETS[preset].days
   const from = explicit ? pFrom! : days === null ? COVERAGE_GENESIS : utcDayOffset(-days)
   const setPreset = (i: number) => {
-    setPresetState(i)
-    if (explicit) setParams({}, { replace: true })
+    updateParams(next => {
+      next.delete('from'); next.delete('to')
+      if (i === 1) next.delete('span')
+      else next.set('span', PRESETS[i].label)
+    })
   }
   const { data, error, isLoading } = useQuery({
     queryKey: ['gbfs-coverage', from, to],
@@ -72,9 +81,9 @@ export default function FeedHealth() {
     staleTime: 3_600_000,
   })
   return (
-    <Page wide={wide}>
+    <Page wide={wide} ready={!!data && !error}>
       <div style={{ fontSize: '0.85em', opacity: 0.7 }}><Link to="/health">← pipeline health</Link></div>
-      <h1 style={{ fontSize: '1.6em', margin: '0.2em 0 0.3em' }}>GBFS feed metrics</h1>
+      <h1 id="overview" style={{ fontSize: '1.6em', margin: '0.2em 0 0.3em' }}>GBFS feed metrics</h1>
       <p style={{ margin: '0 0 1em', opacity: 0.8, maxWidth: '60em' }}>
         Per-minute station coverage and the feed's own <code>last_updated</code> cadence, from the availability bitmaps
         (<code>empty-v1p/coverage/&lt;day&gt;.json</code>). A lost minute is one with no <code>last_updated</code> tick for any
@@ -97,7 +106,7 @@ export default function FeedHealth() {
         ))}
         <span style={{ opacity: 0.6 }}>{from} → {to} UTC{explicit ? ' (from URL)' : ''}</span>
         <button
-          onClick={() => setWide((w) => !w)}
+          onClick={() => updateParams(next => { if (wide) next.delete('wide'); else next.set('wide', '') })}
           title="expand the timeline strips to the full window width"
           style={{
             cursor: 'pointer', marginLeft: 'auto', padding: '0.15em 0.7em', borderRadius: 3, border: '1px solid rgba(127,127,127,0.4)',
@@ -109,13 +118,13 @@ export default function FeedHealth() {
       {error && <div style={{ color: 'salmon' }}>error: {String(error)}</div>}
       {data && (
         <>
-          <Section title="Summary">
+          <Section id="summary" title="Summary">
             <Summary range={data} />
           </Section>
-          <Section title="Update intervals" hint="seconds between consecutive feed last_updated values, summed over the range">
+          <Section id="intervals" title="Update intervals" hint="seconds between consecutive feed last_updated values, summed over the range">
             <IntervalHistogram range={data} />
           </Section>
-          <Section title="Per day" hint="one row per UTC day, newest first · top strip = 1,440 minutes (red = no feed tick; blue = missed by 2.3, filled from the 1.1 side-poller); bottom strip = 24 hours (amber = skipped update cycles). Hover a strip to scrub; click a row to list its gaps. Toggle “wide” for full width.">
+          <Section id="days" title="Per day" hint="one row per UTC day, newest first · top strip = 1,440 minutes (red = no feed tick; blue = missed by 2.3, filled from the 1.1 side-poller); bottom strip = 24 hours (amber = skipped update cycles). Hover a strip to scrub; click a row to list its gaps. Toggle “wide” for full width.">
             <CoverageTable range={data} />
           </Section>
         </>
@@ -124,17 +133,17 @@ export default function FeedHealth() {
   )
 }
 
-function Page({ wide, children }: { wide?: boolean; children: React.ReactNode }) {
+function Page({ wide, ready, children }: { wide?: boolean; ready: boolean; children: React.ReactNode }) {
   return (
-    <div style={{ maxWidth: wide ? '100%' : 1100, margin: '0 auto', padding: '1.5em 1.5em 3em', fontFamily: 'system-ui, -apple-system, sans-serif', lineHeight: 1.5 }}>
+    <div data-og-page-ready={ready} style={{ maxWidth: wide ? '100%' : 1100, margin: '0 auto', padding: '1.5em 1.5em 3em', fontFamily: 'system-ui, -apple-system, sans-serif', lineHeight: 1.5 }}>
       {children}
     </div>
   )
 }
 
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function Section({ id, title, hint, children }: { id: string; title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <section style={{ marginTop: '1.5em' }}>
+    <section id={id} style={{ marginTop: '1.5em', scrollMarginTop: 64 }}>
       <h2 style={{ fontSize: '1.15em', margin: '0 0 0.4em', borderBottom: '1px solid rgba(127,127,127,0.25)', paddingBottom: '0.2em' }}>
         {title}{hint && <span style={{ fontSize: '0.75em', opacity: 0.6, fontWeight: 400 }}> — {hint}</span>}
       </h2>

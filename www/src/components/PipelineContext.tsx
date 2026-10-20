@@ -55,7 +55,7 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
 
   if (loading) {
     return (
-      <Box sx={{ textAlign: 'center', my: 4 }}>
+      <Box sx={{ textAlign: 'center', my: 4 }} data-og-page-ready="false">
         <LinearProgress />
         <Typography sx={{ mt: 2 }}>Loading pipeline data...</Typography>
       </Box>
@@ -64,7 +64,7 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
 
   if (error || !dag) {
     return (
-      <Box sx={{ color: 'error.main', my: 4 }}>
+      <Box sx={{ color: 'error.main', my: 4 }} data-og-page-ready="false">
         <Typography>Error: {error || 'No data'}</Typography>
       </Box>
     )
@@ -72,7 +72,7 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
 
   return (
     <PipelineContext.Provider value={dag}>
-      {children}
+      <div data-og-page-ready="true">{children}</div>
     </PipelineContext.Provider>
   )
 }
