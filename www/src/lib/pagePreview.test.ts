@@ -6,6 +6,7 @@ describe('public page previews', () => {
     expect(publicView(new URL('https://ctbk.dev/?r=jh&section=states&api=dev&token=private&job=123&s=b'))?.href).toBe('https://ctbk.dev/?r=jh&s=b&section=states')
     expect(publicView(new URL('https://ctbk.dev/admin/sessions'))).toBeNull()
     expect(publicView(new URL('https://ctbk.dev/__movies/jobs/123'))).toBeNull()
+    expect(publicView(new URL('https://ctbk.dev/stations?m=2609&network=1'))?.href).toBe('https://ctbk.dev/stations?m=2609&network=1')
   })
   test('includes section, filters, deploy version and refresh hour in the image URL', () => {
     const view = publicView(new URL('https://ctbk.dev/?s=b&section=states'))!

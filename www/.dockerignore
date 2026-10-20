@@ -16,6 +16,7 @@
 !e2e/month-range.spec.ts
 !e2e/movie-signin.spec.ts
 !e2e/movie-studio.spec.ts
+!e2e/page-previews.spec.ts
 !e2e/ride-animation.spec.ts
 !e2e/shortcuts.spec.ts
 !e2e/station-map-gl.spec.ts
@@ -103,6 +104,7 @@
 !scripts/gen-version.js
 !scripts/movie-export-server.test.ts
 !scripts/movie-export-server.ts
+!scripts/movie-smoke.mjs
 !scripts/push-screenshots.py
 !scripts/render-timelapse.mjs
 !scrns.config.json
@@ -114,6 +116,9 @@
 !server/movie-schema.sql
 !server/movie-store.test.ts
 !server/movie-store.ts
+!server/page-previews.ts
+!server/preview-env.d.ts
+!server/public-worker.ts
 !server/worker.ts
 !src/chart/YmrgtbChart.tsx
 !src/chart/inactive.test.ts
@@ -137,6 +142,7 @@
 !src/components/MultiSelect.module.css
 !src/components/MultiSelect.tsx
 !src/components/MultiSelectBar.tsx
+!src/components/OgCapture.tsx
 !src/components/OverviewAvailabilityChart.tsx
 !src/components/PipelineContext.tsx
 !src/components/PipelineDiagram.tsx
@@ -233,6 +239,9 @@
 !src/lib/mapSelection/selection.test.ts
 !src/lib/mapSelection/selection.ts
 !src/lib/mergeReview.ts
+!src/lib/pagePreview.test.ts
+!src/lib/pagePreview.ts
+!src/lib/pagePreviewWorker.test.ts
 !src/lib/s2geo.ts
 !src/lib/tlGrid.ts
 !src/lib/useMediaQuery.ts
@@ -301,6 +310,7 @@
 !sync.yml
 !tsconfig.json
 !tsconfig.node.json
+!tsconfig.worker.json
 !vite.config.ts
 !vitest.config.ts
 !wrangler.jsonc

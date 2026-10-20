@@ -1,6 +1,6 @@
 /** Public URL state shared by metadata generation and the capture renderer. */
 const PUBLIC_PATH = /^(?:\/(?:v2|stations|timelapse|movie|health(?:\/feed)?|pipeline)?|\/s\/[a-zA-Z0-9+._-]+)$/
-const VISUAL_KEYS = new Set(('section theme y s pct r pyramid u g rt d avg cc ar m sel ll gl flow fan dir c side lens mark pies pr t tt tm b w wk st sz src sp len lru lp clr trail clip cfps mw mh mlen anim cap fpb tileBase tr tbin ts ty tpct tu tg trt tavg td tcc rollup rt_pair').split(' '))
+const VISUAL_KEYS = new Set(('section theme y s pct r pyramid u g rt d avg cc ar m sel ll gl flow network fan dir c side lens mark pies pr t tt tm b w wk st sz src sp len lru lp clr trail clip cfps mw mh mlen anim cap fpb tileBase tr tbin ts ty tpct tu tg trt tavg td tcc rollup rt_pair').split(' '))
 export const PREVIEW_WIDTH = 1200
 export const PREVIEW_HEIGHT = 630
 export const PREVIEW_TTL = 3600

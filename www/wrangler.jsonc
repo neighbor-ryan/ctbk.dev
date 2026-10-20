@@ -8,7 +8,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ctbk-dev",
   "main": "server/public-worker.ts",
-  "compatibility_date": "2026-07-13",
+  "compatibility_date": "2026-10-20",
   "compatibility_flags": ["nodejs_compat"],
   "browser": { "binding": "BROWSER" },
   "ratelimits": [{ "name": "OG_RENDER_LIMIT", "namespace_id": "2026102001", "simple": { "limit": 10, "period": 60 } }],
