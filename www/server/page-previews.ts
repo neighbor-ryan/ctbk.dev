@@ -24,7 +24,7 @@ async function version(env: PreviewEnv, origin: string): Promise<string> {
 async function render(view: URL, env: PreviewEnv): Promise<Response> {
   if (!env.BROWSER) return new Response('Page preview renderer unavailable\n', { status: 503 })
   const browser = await puppeteer.launch(env.BROWSER, { guardrails: { allowedDomains: [
-    'ctbk.dev', 'dev.ctbk.dev', 'data.ctbk.dev', 'ctbk-gbfs-api.hccs-ctbk.workers.dev',
+    'ctbk.dev', 'dev.ctbk.dev', 'data.ctbk.dev', 'ctbk-gbfs-api.hccs-ctbk.workers.dev', 'ctbk-gbfs-api-dev.hccs-ctbk.workers.dev',
     '*.basemaps.cartocdn.com', 'basemaps.cartocdn.com', 'tiles.stadiamaps.com', '*.tile.openstreetmap.org',
     'ctbk.s3.amazonaws.com',
   ] } })
@@ -36,7 +36,7 @@ async function render(view: URL, env: PreviewEnv): Promise<Response> {
     const section = view.searchParams.get('section')
     if (section && /^[a-zA-Z0-9_-]{1,64}$/.test(section)) {
       await page.waitForSelector(`[id="${section}"]`, { timeout: 15000 })
-      await page.addStyleTag({ content: `html[data-og-capture] body { padding-bottom: ${PREVIEW_HEIGHT}px !important; }` })
+      await page.addStyleTag({ content: `html[data-og-capture] body { padding-bottom: ${PREVIEW_HEIGHT}px !important; } html[data-og-capture] :focus { outline: none !important; }` })
       await page.$eval(`[id="${section}"]`, (el) => el.scrollIntoView({ block: 'start' }))
     }
     await page.waitForFunction(() => document.documentElement.dataset.ogReady === 'true', { timeout: 25000 })
@@ -60,7 +60,12 @@ export async function servePublicPage(request: Request, env: PreviewEnv, ctx: Co
     const key = imageUrl(view, sha)
     const cacheRequest = new Request(key.href)
     const hit = await caches.default.match(cacheRequest)
-    if (hit) return request.method === 'HEAD' ? new Response(null, hit) : hit
+    if (hit) {
+      // Cache API responses may inherit a larger zone Browser Cache TTL.
+      const headers = new Headers(hit.headers)
+      headers.set('cache-control', `public, max-age=${previewTtl(view)}`)
+      return new Response(request.method === 'HEAD' ? null : hit.body, { status: hit.status, headers })
+    }
     let pending = inFlight.get(key.href)
     if (!pending) {
       // Bound concurrent cold screenshots per isolate; cache hits remain cheap.

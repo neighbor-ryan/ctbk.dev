@@ -96,6 +96,7 @@ export interface StationMapGLProps {
   center: [number, number]
   zoom: number
   onMove?: (lat: number, lng: number, zoom: number) => void
+  onReady?: (map: MaplibreMapInstance) => void
   /** Top-right caption (non-interactive). */
   overlay?: ReactNode
   /** Extra chrome rendered over the map (outside the gesture surface). */
@@ -120,6 +121,7 @@ export default function StationMapGL({
   center,
   zoom,
   onMove,
+  onReady,
   overlay,
   children,
   className,
@@ -325,6 +327,7 @@ export default function StationMapGL({
       center={center}
       zoom={zoom}
       onMove={onMove}
+      onReady={onReady}
       onOverlay={(o, m) => { overlayRef.current = o; setMap(m) }}
       cursor={hoveredId ? 'pointer' : 'grab'}
       className={className ?? css.homeMap}

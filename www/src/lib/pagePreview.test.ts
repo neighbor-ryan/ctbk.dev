@@ -2,11 +2,15 @@ import { describe, expect, test } from 'vitest'
 import { captureView, imageUrl, previewTitle, publicView } from './pagePreview'
 
 describe('public page previews', () => {
-  test('canonicalizes visual state while removing auth, export job, and backend parameters', () => {
-    expect(publicView(new URL('https://ctbk.dev/?r=jh&section=states&api=dev&token=private&job=123&s=b'))?.href).toBe('https://ctbk.dev/?r=jh&s=b&section=states')
+  test('canonicalizes visual state while removing auth, export jobs, and arbitrary backend URLs', () => {
+    expect(publicView(new URL('https://ctbk.dev/?r=jh&section=states&api=dev&token=private&job=123&s=b'))?.href).toBe('https://ctbk.dev/?api=dev&r=jh&s=b&section=states')
     expect(publicView(new URL('https://ctbk.dev/admin/sessions'))).toBeNull()
     expect(publicView(new URL('https://ctbk.dev/__movies/jobs/123'))).toBeNull()
     expect(publicView(new URL('https://ctbk.dev/stations?m=2609&network=1'))?.href).toBe('https://ctbk.dev/stations?m=2609&network=1')
+    expect(publicView(new URL('https://ctbk.dev/stations?api=1&pr=2h'))?.href).toBe('https://ctbk.dev/stations?api=&pr=2h')
+    expect(publicView(new URL('https://ctbk.dev/?api=https://example.com&backend=https://example.com'))?.href).toBe('https://ctbk.dev/')
+    expect(publicView(new URL('https://ctbk.dev/?api=prod&api=dev'))?.href).toBe('https://ctbk.dev/?api=prod')
+    expect(publicView(new URL('https://ctbk.dev/?mapSel=JC014&mapLl=40.724-74.04+14&section=map&s=b&r=jh'))?.href).toBe('https://ctbk.dev/?mapLl=40.724-74.04+14&mapSel=JC014&r=jh&s=b&section=map')
   })
   test('includes section, filters, deploy version and refresh hour in the image URL', () => {
     const view = publicView(new URL('https://ctbk.dev/?s=b&section=states'))!

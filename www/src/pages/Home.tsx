@@ -12,6 +12,8 @@
  */
 import { useUrlState, boolParam, numberArrayParam } from 'use-prms'
 import { useSectionSpy } from 'use-prms/sections'
+import { embedViewParam } from '../query/embedMap'
+import { selParam } from '../lib/mapSelection'
 import { PlotRelayoutEvent } from 'plotly.js'
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
 import { Plot } from 'pltly/react'
@@ -80,19 +82,23 @@ export const RideableTypesExample = "/?y=m&s=b&rt=ce&d=2002-"
 const StationMapEmbed = lazy(() => import("../components/StationMapEmbed"))
 
 function LazyStationMap() {
+  const [selection, setSelection] = useUrlState('mapSel', selParam, { push: true })
+  const [view, setView] = useUrlState('mapLl', embedViewParam)
+  const location = useLocation()
+  const capturingMap = new URLSearchParams(location.search).get('section') === 'map'
   // Small lead margin: the GL map's chunks (deck.gl + MapLibre, ~0.5 MB gz)
   // should load only once the map is about to scroll into view, not with the
   // above-the-fold content (the map starts ~850px down on desktop and phone).
   const [ref, isInView] = useIsInView<HTMLDivElement>('100px')
-  const fullScreen = <Link to="/stations">Full screen version →</Link>
+  const fullScreen = (href: string) => <Link to={href}>Full screen version →</Link>
   return (
     <div ref={ref}>
       {isInView ? (
-        <Suspense fallback={<div className={css.map} />}>
-          <StationMapEmbed mapClassName={css.map} captionTrailing={fullScreen} />
+        <Suspense fallback={<div className={css.map} data-og-page-ready={capturingMap ? false : undefined} />}>
+          <StationMapEmbed mapClassName={css.map} captionTrailing={fullScreen} selection={selection} onSelectionChange={setSelection} view={view} onViewChange={setView} />
         </Suspense>
       ) : (
-        <div className={css.map} />
+        <div className={css.map} data-og-page-ready={capturingMap ? false : undefined} />
       )}
     </div>
   )

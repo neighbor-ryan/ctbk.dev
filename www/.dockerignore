@@ -263,6 +263,8 @@
 !src/pages/Stations.tsx
 !src/pages/Timelapse.tsx
 !src/query/client.ts
+!src/query/embedMap.test.ts
+!src/query/embedMap.ts
 !src/query/flowRoutes.test.ts
 !src/query/flowRoutes.ts
 !src/query/mergeReview.ts

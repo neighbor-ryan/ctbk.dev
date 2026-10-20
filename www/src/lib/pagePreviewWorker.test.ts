@@ -60,4 +60,13 @@ describe('public preview Worker', () => {
     expect({ status: response.status, retry: response.headers.get('retry-after'), text: await response.text() }).toEqual({ status: 429, retry: '60', text: 'Preview capture rate exceeded\n' })
     expect(capture.launch).toHaveBeenCalledTimes(0)
   })
+  test('restores route freshness on cache hits and HEAD when the cache inflates Browser TTL', async () => {
+    const { env, ctx, stored } = runtime()
+    stored.set('https://ctbk.dev/og.jpg?view=%2Fhealth&v=version-a&at=24', new Response(new Uint8Array([255, 216, 255, 217]), { headers: { 'cache-control': 'public, max-age=14400', 'content-type': 'image/jpeg' } }))
+    const request = new Request('https://ctbk.dev/og.jpg?view=%2Fhealth')
+    const get = await servePublicPage(request, env, ctx)
+    const head = await servePublicPage(new Request(request, { method: 'HEAD' }), env, ctx)
+    expect({ get: { status: get.status, cache: get.headers.get('cache-control'), bytes: [...new Uint8Array(await get.arrayBuffer())] }, head: { status: head.status, cache: head.headers.get('cache-control'), text: await head.text() } }).toEqual({ get: { status: 200, cache: 'public, max-age=300', bytes: [255, 216, 255, 217] }, head: { status: 200, cache: 'public, max-age=300', text: '' } })
+    expect(capture.launch).toHaveBeenCalledTimes(0)
+  })
 })

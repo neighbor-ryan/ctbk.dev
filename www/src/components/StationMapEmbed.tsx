@@ -3,22 +3,24 @@
  * `<StationMapGL>` (deck.gl + MapLibre, loaded lazily with this module), and
  * keeps selected-source details in the map's drawer. Selection is the
  * shared `lib/mapSelection` model (tap / long-press multi-select / rectangle,
- * as on `/stations`), held in local state (no URL sync), so it can drop into
- * any page without clobbering the host page's URL params; a multi-station
- * set links out to `/stations?sel=…`.
+ * as on `/stations`). Hosts may control selection and camera, while other
+ * embeds retain local state. Links to `/stations` preserve the same view.
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type { LLZ } from 'use-prms'
 import { Link } from 'react-router-dom'
 import { flowArcs, flowLens } from './flowLens'
 import MultiSelectBar from './MultiSelectBar'
 import StationMapGL from './StationMapGL'
-import { selParam, useSelection } from '../lib/mapSelection'
+import { useSelection } from '../lib/mapSelection'
 import css from '../stations.module.css'
 import type { Stations, StationPairCounts } from './stationMapCommon'
+import type { Map as MaplibreMap } from 'maplibre-gl'
+import { useTheme } from '../contexts/ThemeContext'
+import { EMBED_DEFAULT_VIEW, stationsMapHref } from '../query/embedMap'
 
 const MANIFEST_URL = '/assets/station-urls.json'
-const DEFAULT_CENTER: [number, number] = [40.758, -73.965]
-const DEFAULT_ZOOM = 12
+const sameView = (a: LLZ, b: LLZ) => a.lat === b.lat && a.lng === b.lng && a.zoom === b.zoom
 
 type Manifest = {
   stations: Record<string, string>
@@ -39,15 +41,37 @@ interface Props {
   mapClassName?: string
   /** Optional extra content appended to the caption below the map (e.g. a link
    *  to the full-screen `/stations` page). Rendered after a `·` separator. */
-  captionTrailing?: ReactNode
+  captionTrailing?: ReactNode | ((stationsHref: string) => ReactNode)
+  selection?: string[]
+  onSelectionChange?: (ids: string[]) => void
+  view?: LLZ
+  onViewChange?: (view: LLZ) => void
 }
 
-export default function StationMapEmbed({ mapClassName, captionTrailing }: Props) {
+export default function StationMapEmbed({ mapClassName, captionTrailing, selection, onSelectionChange, view: controlledView, onViewChange }: Props) {
   const [manifest, setManifest] = useState<Manifest | null>(null)
   const [stations, setStations] = useState<Stations | null>(null)
   const [pairCounts, setPairCounts] = useState<StationPairCounts | null>(null)
-  const [selIds, setSelIds] = useState<string[]>([])
+  const [localSel, setLocalSel] = useState<string[]>([])
+  const [localView, setLocalView] = useState(EMBED_DEFAULT_VIEW)
+  const selIds = selection ?? localSel
+  const setSelIds = onSelectionChange ?? setLocalSel
+  const view = controlledView ?? localView
+  const lastMovedView = useRef(view)
+  const [map, setMap] = useState<MaplibreMap | null>(null)
+  const { actualTheme } = useTheme()
   const { multi, apply } = useSelection(selIds, setSelIds)
+  const move = useCallback((lat: number, lng: number, zoom: number) => {
+    const next = { lat, lng, zoom }
+    lastMovedView.current = next
+    setLocalView(next)
+    onViewChange?.(next)
+  }, [onViewChange])
+  useEffect(() => {
+    if (!map || sameView(view, lastMovedView.current)) return
+    lastMovedView.current = view
+    map.jumpTo({ center: [view.lng, view.lat], zoom: view.zoom })
+  }, [map, view])
 
   useEffect(() => {
     fetch(MANIFEST_URL)
@@ -89,6 +113,8 @@ export default function StationMapEmbed({ mapClassName, captionTrailing }: Props
   }, [manifest])
 
   const monthLabel = manifest ? formatMonth(manifest.latestMonth) : null
+  const stationsHref = stationsMapHref(view, selIds, actualTheme, manifest?.latestMonth)
+  const trailing = typeof captionTrailing === 'function' ? captionTrailing(stationsHref) : captionTrailing
 
   // Flow lens: once stations are selected, size + color every other station
   // by the set's outbound trips ending there (the `/stations` default; no URL
@@ -105,7 +131,7 @@ export default function StationMapEmbed({ mapClassName, captionTrailing }: Props
 
   return (
     <>
-      <div className={mapClassName}>
+      <div className={mapClassName} data-og-page-ready={!!stations && Object.keys(stations).length > 0 && !!map}>
         <StationMapGL
           stations={stations ?? {}}
           pinnedIds={selIds}
@@ -115,8 +141,10 @@ export default function StationMapEmbed({ mapClassName, captionTrailing }: Props
           stationColors={lens?.colors ?? null}
           stationRadii={lens?.radii ?? null}
           arcs={arcs}
-          center={DEFAULT_CENTER}
-          zoom={DEFAULT_ZOOM}
+          center={[view.lat, view.lng]}
+          zoom={view.zoom}
+          onMove={move}
+          onReady={setMap}
           className={css.embedMap}
           overlay={monthLabel && <>Citi Bike rides, {monthLabel}</>}
         >
@@ -125,20 +153,20 @@ export default function StationMapEmbed({ mapClassName, captionTrailing }: Props
           )}
         </StationMapGL>
       </div>
-      {(selIds.length !== 1 || captionTrailing) && <div className={css.embedCaption}>
+      {(selIds.length !== 1 || trailing) && <div className={css.embedCaption}>
         {selIds.length > 1 ? (
           <>
             <strong>{selIds.length} stations</strong>
             {' — '}
-            <Link to={`/stations?sel=${selParam.encode(selIds)}`}>Compare on the stations page →</Link>
+            <Link to={stationsHref}>Compare on the stations page →</Link>
           </>
         ) : selIds.length === 0 ? (
           <span className={css.placeholder}>Tap a station to see its top destinations and open its page.</span>
         ) : null}
-        {captionTrailing && (
+        {trailing && (
           <>
             {selIds.length !== 1 && <span className={css.captionSep}> · </span>}
-            {captionTrailing}
+            {trailing}
           </>
         )}
       </div>}
