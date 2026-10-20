@@ -18,7 +18,7 @@ from ctbk.cli.git_dvc_cmd import git_dvc_cmd
 @ctbk.command('update')
 @git_dvc_cmd
 @flag('-S', '--no-station-harmonize', help="Skip station-harmonize (requires all consolidated parquets)")
-@flag('-W', '--no-www', help="Skip www asset updates (station-urls)")
+@flag('-W', '--no-www', help="Skip www asset updates (station URLs and pipeline DAG)")
 @argument('ym')
 def update(
     ym: str,
@@ -65,5 +65,6 @@ def update(
     if not no_www:
         err(f"--- WWW assets ---")
         run('node', 'www/scripts/gen-station-urls.js', dry_run=dry_run)
+        ctbk_run('dag', '-fjson', '-o', 'www/public/assets/dag.json')
 
     return f'Process month {ym}'

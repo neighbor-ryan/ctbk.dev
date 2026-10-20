@@ -208,16 +208,33 @@ def render_json(input_file: str | None = None) -> str:
         with open(input_file) as f:
             raw_dag = json.load(f)
     else:
-        result = subprocess.run(
-            ['dvx', 'dag', '--json'],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        raw_dag = json.loads(result.stdout)
+        raw_dag = metadata_dag()
 
     transformed = _transform_dvx_dag(raw_dag)
     return json.dumps(transformed, indent=2)
+
+
+def metadata_dag() -> dict:
+    """Read project metadata without traversing ignored worktrees or data caches.
+
+    Newly generated .dvc files participate before the monthly driver commits
+    them. DVX's metadata reader never downloads the referenced artifact blobs.
+    """
+    from dvx.run.dvc_files import read_dvc_file
+
+    paths = subprocess.check_output([
+        'git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', '*.dvc',
+    ], text=True).split('\0')
+    nodes = {}
+    edges = []
+    for path in sorted(set(paths) - {''}):
+        info = read_dvc_file(Path(path))
+        if info is None:
+            continue
+        artifact = path[:-4]
+        nodes[artifact] = {'md5': info.md5, 'size': info.size or 0, 'cmd': info.cmd, 'deps': info.deps or {}}
+        edges.extend({'from': dep, 'to': artifact} for dep in sorted(info.deps or {}))
+    return {'nodes': nodes, 'edges': edges}
 
 
 def print_dag(fmt: str = 'ascii', output: str | None = None, input_file: str | None = None):
@@ -232,7 +249,7 @@ def print_dag(fmt: str = 'ascii', output: str | None = None, input_file: str | N
         raise ValueError(f"Unknown format: {fmt}")
 
     if output:
-        Path(output).write_text(result)
+        Path(output).write_text(result.rstrip('\n') + '\n')
         from utz import err
         err(f"Wrote {output}")
     else:
@@ -241,7 +258,7 @@ def print_dag(fmt: str = 'ascii', output: str | None = None, input_file: str | N
 
 @ctbk.command('dag', help="Show stage-level pipeline DAG")
 @option('-f', '--format', 'fmt', default='ascii', type=str, help="Output format: ascii, mermaid, json")
-@option('-i', '--input', 'input_file', type=str, help="Input file for json format (default: run `dvx dag --json`)")
+@option('-i', '--input', 'input_file', type=str, help="Input file for json format (default: Git-visible DVC metadata)")
 @option('-o', '--output', type=str, help="Output file (default: stdout)")
 def dag_cmd(fmt: str, input_file: str | None, output: str | None):
     """Show stage-level pipeline DAG."""
