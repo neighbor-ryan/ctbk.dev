@@ -1,5 +1,6 @@
 from collections import Counter
 from gzip import decompress
+from hashlib import md5
 from io import BytesIO
 from json import loads
 from pathlib import Path
@@ -73,7 +74,7 @@ def test_parallel_publication_bounds_live_payloads_keeps_caller_reads_and_serial
                 assert parallel.state['generated'] - parallel.state['completed'] < 2
                 parallel.state['generated'] += 1
             yield sid, data
-    result = publish_catalogs(parallel, generate(), workers=2)
+    result = publish_catalogs(parallel.publish, generate(), workers=2)
     assert list(result) == ['A', 'B', 'C', 'D']
     assert result == expected
     assert parallel.objects == serial.objects
@@ -85,9 +86,92 @@ def test_parallel_publication_propagates_upload_failure():
         def publish(self, data):
             raise RuntimeError('upload failed')
     with pytest.raises(RuntimeError, match='^upload failed$'):
-        publish_catalogs(Store(), [('A', {'version': 1})])
-    with pytest.raises(ValueError, match='^publication workers must be positive$'):
-        publish_catalogs(Store(), [], workers=0)
+        publish_catalogs(Store().publish, [('A', {'version': 1})])
+    with pytest.raises(ValueError, match='^catalog workers must be positive$'):
+        publish_catalogs(Store().publish, [], workers=0)
+
+
+@pytest.fixture
+def promotion(monkeypatch, tmp_path):
+    import ctbk.flow_routes_city as module
+    source, target = 'routes-city-candidate/v1', 'routes-city/v1'
+    objects, metas = {}, []
+    for data in [{'version': 1, 'segments': []}, {'version': 1, 'pairs': []}, {'version': 1, 'volumes': []}]:
+        blob = object_blob(data)
+        key = f'objects/{md5(blob).hexdigest()}.json.gz'
+        objects[f'{source}/{key}'] = blob
+        metas.append({'key': key, 'bytes': len(blob)})
+    index = {'version': 1, 'limit': 0, 'context': 'accepted', 'pairs': 1, 'graph': metas[0], 'origins': {'A': metas[1]}, 'destinations': {'B': metas[1]}, 'system': metas[2]}
+    blob = module.dumps(index, sort_keys=True).encode()
+    objects[f'{source}/index.json'] = blob
+    objects[f'{source}/checkpoints/unindexed.json.gz'] = b'not copied'
+    objects[f'{target}/index.json'] = b'previous production index'
+    audit = tmp_path / 'audit.json'
+    audit.write_text(module.dumps({'indexMd5': md5(blob).hexdigest(), 'context': 'accepted'}))
+    state = SimpleNamespace(objects=objects, events=[], copy_error=False, lock=Lock(), index=index, source=source, target=target, audit=audit, module=module, metas=metas)
+    class Client:
+        def head_object(self, Bucket, Key):
+            data = objects[Key]
+            return {'ContentLength': len(data), 'ETag': f'"{md5(data).hexdigest()}"'}
+
+        def copy_object(self, **kwargs):
+            if state.copy_error:
+                raise RuntimeError('copy failed')
+            source_key = kwargs['CopySource']['Key']
+            data = objects[source_key]
+            assert kwargs == {'Bucket': 'test', 'Key': f'{target}/{source_key.removeprefix(source + "/")}', 'CopySource': {'Bucket': 'test', 'Key': source_key}, 'CopySourceIfMatch': f'"{md5(data).hexdigest()}"', 'MetadataDirective': 'COPY'}
+            with state.lock:
+                objects[kwargs['Key']] = data
+                state.events.append(('copy', kwargs['Key']))
+            return {'CopyObjectResult': {'ETag': f'"{md5(data).hexdigest()}"'}}
+    class Store:
+        def __init__(self, prefix, rw=True):
+            self.prefix, self.bucket, self.r2 = prefix, 'test', Client()
+
+        def get(self, key):
+            state.events.append(('get', f'{self.prefix}/{key}'))
+            return objects[f'{self.prefix}/{key}']
+
+        def put(self, key, data, mutable=False):
+            assert mutable is True
+            state.events.append(('put', f'{self.prefix}/{key}'))
+            objects[f'{self.prefix}/{key}'] = data
+    monkeypatch.setattr(module, 'RouteStore', Store)
+    return state
+
+
+def test_promotion_copies_only_indexed_ca_objects_and_publishes_index_last(promotion):
+    p = promotion
+    p.module.promote_city.callback(audit=p.audit, input_prefix=p.source, prefix=p.target)
+    assert p.events[0] == ('get', f'{p.source}/index.json')
+    assert sorted(p.events[1:-1]) == [('copy', f'{p.target}/{meta["key"]}') for meta in sorted(p.metas, key=lambda meta: meta['key'])]
+    assert p.events[-1] == ('put', f'{p.target}/index.json')
+    assert {key.removeprefix(p.target + '/'): value for key, value in p.objects.items() if key.startswith(p.target + '/')} == {
+        'index.json': p.objects[f'{p.source}/index.json'],
+        **{meta['key']: p.objects[f'{p.source}/{meta["key"]}'] for meta in p.metas},
+    }
+
+
+@pytest.mark.parametrize('failure', ['capped', 'index_changed', 'object_changed', 'copy_failed'])
+def test_promotion_keeps_previous_index_on_rejection_or_copy_failure(promotion, failure):
+    p = promotion
+    exception, message = ValueError, '^candidate index differs from the accepted audit$'
+    if failure == 'capped':
+        p.index['limit'] = 10000
+        p.objects[f'{p.source}/index.json'] = p.module.dumps(p.index).encode()
+        exception, message = p.module.UsageError, '^promotion requires an uncapped version-one city catalog$'
+    elif failure == 'index_changed':
+        p.objects[f'{p.source}/index.json'] += b' '
+    elif failure == 'object_changed':
+        p.objects[f'{p.source}/{p.metas[0]["key"]}'] = b'corrupt graph'
+        message = '^source CA object hash or size disagrees with index$'
+    else:
+        p.copy_error = True
+        exception, message = RuntimeError, '^copy failed$'
+    with pytest.raises(exception, match=message):
+        p.module.promote_city.callback(audit=p.audit, input_prefix=p.source, prefix=p.target)
+    assert p.objects[f'{p.target}/index.json'] == b'previous production index'
+    assert [event for event in p.events if event[0] == 'put'] == []
 
 
 def test_city_builder_publishes_sparse_both_way_catalogs_and_exact_trip_coverage(monkeypatch, tmp_path):
@@ -148,6 +232,12 @@ def test_city_builder_publishes_sparse_both_way_catalogs_and_exact_trip_coverage
     assert {k: loads((tmp_path / 'audit.json').read_text())[k] for k in ['pairs', 'routedPairs', 'routedRides', 'alternatives', 'fallbacks']} == {
         'pairs': 2, 'routedPairs': 1, 'routedRides': 100, 'alternatives': 1, 'fallbacks': {'NoRoute': 1},
     }
+    parallel_report = loads((tmp_path / 'audit.json').read_text())
+    bounded = module.bounded_results
+    with monkeypatch.context() as serial:
+        serial.setattr(module, 'bounded_results', lambda function, items, workers=8: bounded(function, items, workers=1))
+        module.check_city.callback(prefix='test-city', output=tmp_path / 'serial-audit.json')
+    assert loads((tmp_path / 'serial-audit.json').read_text()) == parallel_report
     # A second run reads the saved origin checkpoints rather than contacting the router.
     monkeypatch.setattr(module, 'urlopen', lambda *args, **kwargs: pytest.fail('checkpoint route was recomputed'))
     city.callback(input_prefix='routes-census/v1', prefix='test-city', limit=0, output=tmp_path, snapshot='20261012')

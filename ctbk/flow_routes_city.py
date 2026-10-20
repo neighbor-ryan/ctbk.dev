@@ -15,7 +15,7 @@ from resource import RUSAGE_CHILDREN, RUSAGE_SELF, getrusage
 from sqlite3 import connect
 from subprocess import Popen, run
 from time import monotonic
-from typing import Iterable
+from typing import Callable, Iterable, Iterator, TypeVar
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import urlopen
@@ -30,6 +30,8 @@ from .gbfs_cli import _r2_client
 from .ride_animation import decode_day
 
 PREFIX = 'routes-city/v1'
+T = TypeVar('T')
+U = TypeVar('U')
 
 
 def city_population(population: dict, limit: int = 0) -> dict[str, list[dict]]:
@@ -103,25 +105,30 @@ class RouteStore:
         return loads(decompress(blob))
 
 
+def bounded_results(
+    function: Callable[[T], U],
+    items: Iterable[T],
+    workers: int = 8,
+) -> Iterator[U]:
+    """Consume input and ordered results on the caller, retaining at most N tasks."""
+    if workers < 1:
+        raise ValueError('catalog workers must be positive')
+    pending: deque[Future[U]] = deque()
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for item in items:
+            pending.append(pool.submit(function, item))
+            if len(pending) >= workers:
+                yield pending.popleft().result()
+        for future in pending:
+            yield future.result()
+
+
 def publish_catalogs(
-    store: RouteStore,
+    publish: Callable[[dict], dict],
     catalogs: Iterable[tuple[str, dict]],
     workers: int = 8,
 ) -> dict[str, dict]:
-    """Bound independent CA uploads, consuming SQLite-backed input on the caller."""
-    if workers < 1:
-        raise ValueError('publication workers must be positive')
-    published = {}
-    pending: deque[tuple[str, Future[dict]]] = deque()
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        for sid, data in catalogs:
-            pending.append((sid, pool.submit(store.publish, data)))
-            if len(pending) >= workers:
-                oldest_sid, future = pending.popleft()
-                published[oldest_sid] = future.result()
-        for sid, future in pending:
-            published[sid] = future.result()
-    return published
+    return dict(bounded_results(lambda item: (item[0], publish(item[1])), catalogs, workers))
 
 
 @flow_routes.command('city')
@@ -250,7 +257,7 @@ def city(
             yield sid, {'version': 1, 'pairs': records}
 
     err(f'Publishing {len(origins)} origin catalogs with at most 8 uploads in flight')
-    encoded_origins = publish_catalogs(store, origin_catalogs())
+    encoded_origins = publish_catalogs(store.publish, origin_catalogs())
 
     def destination_catalogs() -> Iterable[tuple[str, dict]]:
         for sid in sorted(destination_ids):
@@ -258,7 +265,7 @@ def city(
             yield sid, {'version': 1, 'pairs': records}
 
     err(f'Publishing {len(destination_ids)} destination catalogs with at most 8 uploads in flight')
-    encoded_destinations = publish_catalogs(store, destination_catalogs())
+    encoded_destinations = publish_catalogs(store.publish, destination_catalogs())
     destination_db.close()
     system = store.publish({'version': 1, 'context': context, 'graph': graph_meta, 'volumes': sorted(census_volumes.items()), 'dateRange': population['dateRange'], 'selectedRides': sum(counts.values()), 'routedRides': routed_rides})
     summary = {
@@ -304,7 +311,8 @@ def validate_catalog_pair(pair: dict, segments: list[dict]) -> None:
 @option('-o', '--output', type=ClickPath(path_type=Path), default=Path('tmp/routes-city-audit.json'))
 def check_city(prefix: str, output: Path) -> None:
     store = RouteStore(prefix, rw=False)
-    index = loads(store.get('index.json'))
+    index_blob = store.get('index.json')
+    index = loads(index_blob)
     if index['version'] != 1:
         raise ValueError('unsupported city catalog')
     census = RouteStore(index['populationPrefix'], rw=False)
@@ -321,8 +329,11 @@ def check_city(prefix: str, output: Path) -> None:
     fallbacks, volumes = Counter(), Counter()
     if set(index['origins']) != set(population):
         raise ValueError('origin catalog disagrees with census population')
-    for sid, meta in index['origins'].items():
-        catalog = store.packed(meta)
+    def read_catalog(item: tuple[str, dict]) -> tuple[str, dict]:
+        sid, meta = item
+        return sid, store.packed(meta)
+
+    for sid, catalog in bounded_results(read_catalog, index['origins'].items()):
         keys = [(p['source'], p['destination']) for p in catalog['pairs']]
         wanted = [(sid, p['destination']['id']) for p in population[sid]]
         if catalog['version'] != 1 or keys != wanted:
@@ -339,8 +350,7 @@ def check_city(prefix: str, output: Path) -> None:
                 fallbacks[pair['fallback']] += 1
     if set(index['destinations']) != {b for a, b in expected}:
         raise ValueError('destination catalog disagrees with census population')
-    for sid, meta in index['destinations'].items():
-        catalog = store.packed(meta)
+    for sid, catalog in bounded_results(read_catalog, index['destinations'].items()):
         for pair in catalog['pairs']:
             key = pair['source'], pair['destination']
             if pair['destination'] != sid or fingerprints.pop(key, None) != md5(object_blob(pair)).hexdigest():
@@ -353,10 +363,54 @@ def check_city(prefix: str, output: Path) -> None:
     system = store.packed(index['system'])
     if system['context'] != index['context'] or system['graph'] != index['graph'] or system['volumes'] != [list(p) for p in sorted(volumes.items())]:
         raise ValueError('census flow volumes disagree with route assignment')
-    report = actual | {'context': index['context'], 'segments': len(segments), 'bytes': index['bytes'], 'timings': index['timings'], 'resources': index['resources']}
+    report = actual | {'indexMd5': md5(index_blob).hexdigest(), 'context': index['context'], 'segments': len(segments), 'bytes': index['bytes'], 'timings': index['timings'], 'resources': index['resources']}
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(dumps(report, indent=2, sort_keys=True) + '\n')
     print(dumps(report, indent=2, sort_keys=True))
+
+
+@flow_routes.command('promote-city')
+@option('-a', '--audit', type=ClickPath(path_type=Path, exists=True), default=Path('tmp/routes-city-audit.json'), show_default=True)
+@option('-i', '--input-prefix', default='routes-city-candidate/v1', show_default=True)
+@option('-k', '--prefix', default=PREFIX, show_default=True)
+def promote_city(
+    audit: Path,
+    input_prefix: str,
+    prefix: str,
+) -> None:
+    if input_prefix == prefix:
+        raise UsageError('promotion source and destination must differ')
+    source, target = RouteStore(input_prefix, rw=False), RouteStore(prefix)
+    blob = source.get('index.json')
+    index, accepted = loads(blob), loads(audit.read_text())
+    if index['version'] != 1 or index.get('limit') != 0:
+        raise UsageError('promotion requires an uncapped version-one city catalog')
+    if accepted.get('indexMd5') != md5(blob).hexdigest() or accepted.get('context') != index['context']:
+        raise ValueError('candidate index differs from the accepted audit')
+    objects = {}
+    for meta in [index['graph'], index['system'], *index['origins'].values(), *index['destinations'].values()]:
+        key, size = meta['key'], meta['bytes']
+        if not fullmatch(r'objects/[a-f0-9]{32}\.json\.gz', key) or not isinstance(size, int) or size <= 0:
+            raise ValueError('invalid indexed CA object')
+        if key in objects and objects[key] != meta:
+            raise ValueError('inconsistent indexed CA object metadata')
+        objects[key] = meta
+
+    def copy_object(meta: dict) -> dict:
+        key, size = meta['key'], meta['bytes']
+        expected_etag = '"' + Path(key).name.split('.')[0] + '"'
+        source_key = f'{source.prefix}/{key}'
+        head = source.r2.head_object(Bucket=source.bucket, Key=source_key)
+        if head['ContentLength'] != size or head['ETag'] != expected_etag:
+            raise ValueError('source CA object hash or size disagrees with index')
+        copied = target.r2.copy_object(Bucket=target.bucket, Key=f'{target.prefix}/{key}', CopySource={'Bucket': source.bucket, 'Key': source_key}, CopySourceIfMatch=expected_etag, MetadataDirective='COPY')
+        if copied['CopyObjectResult']['ETag'] != expected_etag:
+            raise ValueError('copied CA object hash disagrees with index')
+        return meta
+
+    publish_catalogs(copy_object, sorted(objects.items()))
+    target.put('index.json', blob, mutable=True)
+    print(dumps({'source': input_prefix, 'prefix': prefix, 'context': index['context'], 'indexMd5': accepted['indexMd5'], 'objects': len(objects), 'bytes': sum(meta['bytes'] for meta in objects.values()), 'pairs': index['pairs']}, indent=2, sort_keys=True))
 
 
 @flow_routes.command('system')
