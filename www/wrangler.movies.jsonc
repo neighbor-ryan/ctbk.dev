@@ -1,0 +1,22 @@
+// Isolated hosted movie preview. The primary site's deployment stays unchanged.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ctbk-movies-preview",
+  "account_id": "2363642879f18d37d52dca114059937e",
+  "main": "server/worker.ts",
+  "compatibility_date": "2026-10-20",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/__movies/*", "/auth/*", "/api/auth/*"]
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "ctbk-movies",
+    "database_id": "87ed908c-33af-494e-980b-9b7f21a94696",
+    "migrations_dir": "node_modules/@open-athena/auth/migrations"
+  }],
+  "observability": { "enabled": true },
+  "dev": { "port": 3497 }
+}

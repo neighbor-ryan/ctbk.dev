@@ -5,10 +5,11 @@ import { useAction } from 'use-kbd'
 import { localDateTime, parseLocalDateTime, studioDefaults, studioQuery } from '../query/movieStudio'
 import { formatLength, parseLength } from '../query/timelapseLinked'
 import { useTheme } from '../contexts/ThemeContext'
+import type { MovieCapabilities, MovieJob } from '../query/movieExport'
 import css from './MovieStudio.module.css'
 
 type Plan = NonNullable<Window['__tl']>
-type Job = { id: string; state: 'queued' | 'rendering' | 'complete' | 'failed' | 'cancelled'; frame: number; frames: number; error?: string; query: string }
+type Job = MovieJob
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init)
   const value = await response.json()
@@ -45,7 +46,7 @@ export default function MovieStudio() {
   const seekChain = useRef(Promise.resolve())
   const currentFrame = useRef(0)
   const generation = useRef(0)
-  const { data: capabilities } = useQuery({ queryKey: ['movie-export-capabilities'], queryFn: () => json<{ available: boolean }>('/__movies/capabilities'), retry: false, staleTime: Infinity })
+  const { data: capabilities } = useQuery({ queryKey: ['movie-export-capabilities'], queryFn: () => json<MovieCapabilities>('/__movies/capabilities'), retry: false, staleTime: 60_000 })
   const job = useQuery({ queryKey: ['movie-export', jobId], queryFn: () => json<Job>(`/__movies/jobs/${jobId}`), enabled: !!jobId, refetchInterval: (q) => q.state.data && ['complete', 'failed', 'cancelled'].includes(q.state.data.state) ? false : 1500, retry: false })
   const exportMovie = useMutation({
     mutationFn: () => json<Job>('/__movies/jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: currentQuery.current }) }),
@@ -202,7 +203,8 @@ export default function MovieStudio() {
         </form>
         <section className={css.export}>
           <h2>Export</h2>
-          <p>{capabilities?.available ? 'Render an MP4 on this computer. You can keep editing while it renders.' : 'Open this page on localhost to render an MP4.'}</p>
+          <p>{capabilities?.mode === 'hosted' ? capabilities.authenticationRequired ? 'Sign in to render and download your movie. Any email is welcome.' : `Render an MP4 for ${capabilities.email}. You can keep editing while it renders.` : capabilities?.available ? 'Render an MP4 on this computer. You can keep editing while it renders.' : 'Open this page on localhost to render an MP4.'}</p>
+          {capabilities?.authenticationRequired && capabilities.signInUrl && <p><a href={`${capabilities.signInUrl}${capabilities.signInUrl.includes('?') ? '&' : '?'}next=${encodeURIComponent(window.location.pathname + window.location.search)}`}>Sign in to export</a></p>}
           <button type="button" className={css.exportButton} disabled={!plan || dirty || !capabilities?.available || exportMovie.isPending || !!activeJob} onClick={() => exportMovie.mutate()}>{exportMovie.isPending ? 'Starting…' : 'Export MP4'}</button>
           {dirty && <p>Apply clip settings before exporting.</p>}
           {exportMovie.error && <p role="alert" className={css.error}>{exportMovie.error.message}</p>}

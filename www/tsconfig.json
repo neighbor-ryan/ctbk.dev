@@ -23,6 +23,6 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src", "vite.config.ts", "scripts/movie-export-server*.ts"],
+  "include": ["src", "server", "vite.config.ts", "scripts/movie-export-server*.ts"],
   "exclude": ["src/_legacy"]
 }

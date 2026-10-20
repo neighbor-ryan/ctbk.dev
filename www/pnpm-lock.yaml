@@ -45,6 +45,9 @@ importers:
       '@mui/material':
         specifier: ^6.1.9
         version: 6.5.0(@emotion/react@11.14.0(@types/react@18.3.27)(react@18.3.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@18.3.27)(react@18.3.1))(@types/react@18.3.27)(react@18.3.1))(@types/react@18.3.27)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@open-athena/auth':
+        specifier: github:Open-Athena/auth#0e81feafae4fd54676ec1bc2ea1459e96dd6d887
+        version: https://codeload.github.com/Open-Athena/auth/tar.gz/0e81feafae4fd54676ec1bc2ea1459e96dd6d887(@tanstack/react-query@5.99.2(react@18.3.1))(react@18.3.1)
       '@rdub/base':
         specifier: 0.7.9
         version: 0.7.9(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -1443,6 +1446,21 @@ packages:
 
   '@nodable/entities@3.1.0':
     resolution: {integrity: sha512-LsS/DjHr+uDM647Gru/cA8+J3a3HfhttwCKLyuoyN7yXTFCxKBtSgMQBvrW9yNPa2/zDRUNuGPaH5QUFoa4arQ==}
+
+  '@open-athena/auth@https://codeload.github.com/Open-Athena/auth/tar.gz/0e81feafae4fd54676ec1bc2ea1459e96dd6d887':
+    resolution: {tarball: https://codeload.github.com/Open-Athena/auth/tar.gz/0e81feafae4fd54676ec1bc2ea1459e96dd6d887}
+    version: 0.1.0-dist.b3eb445
+    peerDependencies:
+      '@cloudflare/workers-types': '*'
+      '@tanstack/react-query': ^5.0.0
+      react: ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@cloudflare/workers-types':
+        optional: true
+      '@tanstack/react-query':
+        optional: true
+      react:
+        optional: true
 
   '@parcel/watcher-android-arm64@2.6.0':
     resolution: {integrity: sha512-trgpLSCKRC/huFjXX/Smh+0sWe4+YtKfktIToiMl59ghz7z+qkH6kMvNnUbLyRs9N11t8l4svSCs1+5B3rOAhA==}
@@ -6835,6 +6853,11 @@ snapshots:
       glob: 10.3.10
 
   '@nodable/entities@3.1.0': {}
+
+  '@open-athena/auth@https://codeload.github.com/Open-Athena/auth/tar.gz/0e81feafae4fd54676ec1bc2ea1459e96dd6d887(@tanstack/react-query@5.99.2(react@18.3.1))(react@18.3.1)':
+    optionalDependencies:
+      '@tanstack/react-query': 5.99.2(react@18.3.1)
+      react: 18.3.1
 
   '@parcel/watcher-android-arm64@2.6.0':
     optional: true

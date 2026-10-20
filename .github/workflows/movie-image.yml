@@ -1,0 +1,21 @@
+name: Movie renderer image
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build
+        run: docker build --platform linux/amd64 -f batch/movies/Dockerfile -t "688066488567.dkr.ecr.us-east-1.amazonaws.com/ctbk-movies:${GITHUB_SHA:0:8}" .
+      - name: Push to HCCS ECR
+        run: |
+          .github/scripts/hccs-aws.sh bash -c '
+            aws ecr get-login-password | docker login --username AWS --password-stdin 688066488567.dkr.ecr.us-east-1.amazonaws.com
+            docker push "688066488567.dkr.ecr.us-east-1.amazonaws.com/ctbk-movies:${GITHUB_SHA:0:8}"
+          '
+      - name: Summary
+        run: echo "Image \`688066488567.dkr.ecr.us-east-1.amazonaws.com/ctbk-movies:${GITHUB_SHA:0:8}\`" >> "$GITHUB_STEP_SUMMARY"

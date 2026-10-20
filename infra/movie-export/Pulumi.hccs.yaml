@@ -1,0 +1,4 @@
+encryptionsalt: v1:s1N4/MC2Eds=:v1:g4Oxz8s/eR9KrGG5:uY8nx5FuY7FKhxqa3pAVW/RnGwAOLQ==
+config:
+  ctbk-movies:cloudflare_account_id: 2363642879f18d37d52dca114059937e
+  aws:region: us-east-1

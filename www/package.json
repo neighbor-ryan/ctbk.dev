@@ -17,6 +17,7 @@
     "@mdx-js/react": "^3.1.1",
     "@mdx-js/rollup": "^3.1.1",
     "@mui/material": "^6.1.9",
+    "@open-athena/auth": "github:Open-Athena/auth#0e81feafae4fd54676ec1bc2ea1459e96dd6d887",
     "@rdub/base": "0.7.9",
     "@rdub/file-tree": "https://github.com/runsascoded/file-tree#288625c9a81057ad29314a6141819e0a5538c4c8",
     "@rdub/icons": "0.1.0",

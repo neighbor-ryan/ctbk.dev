@@ -5,18 +5,12 @@ import { randomUUID } from 'node:crypto'
 import { resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
-import { studioDefaults, studioQuery } from '../src/query/movieStudio'
-import { parseT } from '../src/query/timelapseFrames'
+import { movieRequest, type MovieJob } from '../src/query/movieExport'
 
-type Job = {
-  id: string; state: 'queued' | 'rendering' | 'complete' | 'failed' | 'cancelled'
-  frame: number; frames: number; width: number; height: number; fps: number; seconds: number
-  query: string; createdAt: string; error?: string
-}
+type Job = MovieJob
 export type Launch = (command: string, args: string[], options: SpawnOptions) => ChildProcess
 type Options = { root: string; launch?: Launch; freeBytes?: () => Promise<number> }
 const loopback = (ip: string | undefined) => ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1'
-const allowedParams = new Set(['anim', 'b', 'd', 'clip', 'sp', 'cfps', 'mlen', 'mw', 'mh', 'll', 'theme', 'flow', 'clr', 'trail', 'w', 'wk', 'st', 'sz', 'src', 'cap'])
 
 /** Local dev only: same-origin browser requests, bounded serial jobs, no caller URLs/paths. */
 export function movieExportMiddleware({ root, launch = spawn, freeBytes }: Options) {
@@ -94,16 +88,8 @@ export function movieExportMiddleware({ root, launch = spawn, freeBytes }: Optio
           body += chunk
           if (Buffer.byteLength(body) > 8192) return json(res, 413, { error: 'Export request is too large.' })
         }
-        const input = JSON.parse(body)
-        if (typeof input.query !== 'string') return json(res, 400, { error: 'Export needs the preview query.' })
-        const params = new URLSearchParams(input.query)
-        for (const key of params.keys()) if (!allowedParams.has(key)) return json(res, 400, { error: `Unsupported movie setting: ${key}` })
-        if (!params.has('clip') || !params.has('mlen') || !params.has('mw') || !params.has('mh') || !params.has('cfps')) return json(res, 400, { error: 'Export needs an explicit clip, length, FPS, width and height.' })
-        const clip = params.get('clip')!.split('-').map(parseT)
-        if (clip.length !== 2 || clip.some((value) => value === null)) return json(res, 400, { error: 'Export needs a valid clip.' })
-        const settings = { ...studioDefaults(params), start: clip[0]!, end: clip[1]!, seconds: Number(params.get('mlen')), fps: Number(params.get('cfps')), width: Number(params.get('mw')), height: Number(params.get('mh')) }
-        const canonical = studioQuery(params, settings)
-        const job: Job = { id: randomUUID(), state: 'queued', frame: 0, frames: Math.ceil(settings.seconds * settings.fps), width: settings.width, height: settings.height, fps: settings.fps, seconds: settings.seconds, query: canonical.toString(), createdAt: new Date().toISOString() }
+        const { query, settings } = movieRequest(JSON.parse(body))
+        const job: Job = { id: randomUUID(), state: 'queued', frame: 0, frames: Math.ceil(settings.seconds * settings.fps), width: settings.width, height: settings.height, fps: settings.fps, seconds: settings.seconds, query, createdAt: new Date().toISOString() }
         jobs.set(job.id, job)
         queue.push({ job, origin })
         void runNext()

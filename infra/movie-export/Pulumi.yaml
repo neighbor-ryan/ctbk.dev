@@ -1,0 +1,7 @@
+name: ctbk-movies
+description: HCCS authenticated Citi Bike movie rendering
+runtime:
+  name: python
+  options:
+    toolchain: pip
+    virtualenv: ../venv
