@@ -1358,7 +1358,7 @@ export default {
 			const obj = await env.R2.get('health/snapshot.json');
 			if (!obj) return errorResponse('Health snapshot not available', 503, env);
 			const snapshot = await obj.json<import('./health').HealthSnapshot>();
-			const { healthCardSvg } = await import('./healthCard');
+			const { healthCardSvg } = await import('../../../www/src/lib/healthCard');
 			const { rasterizeSvg } = await import('./og');
 			const response = new Response(await rasterizeSvg(healthCardSvg(snapshot)) as BodyInit, {
 				headers: { ...corsHeaders(env), 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=60' },

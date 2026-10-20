@@ -1,5 +1,5 @@
-import type { FeedHealth } from '../../../gbfs/lib/feedHealth'
-import { healthCardSvg } from '../../../gbfs/api/src/healthCard'
+import type { FeedHealth } from '../lib/feedHealth'
+import { healthCardSvg } from '../lib/healthCard'
 /** `/health` — GBFS pipeline health overview.
  *
  *  Backed by a single `/api/health` snapshot endpoint on the worker.

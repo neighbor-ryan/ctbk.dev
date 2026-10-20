@@ -1,4 +1,4 @@
-import type { FeedHealth } from '../../lib/feedHealth';
+import type { FeedHealth } from './feedHealth';
 
 const escape = (text: string) => text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]!));
 const text = (x: number, y: number, body: string, size = 20, fill = '#d8e2ed') =>

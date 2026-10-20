@@ -1,5 +1,5 @@
-import type { FeedObservation, FeedDaySummary, FeedDrift, FeedHealth, FeedCoverageDay, FeedCoverage, FeedGaps } from '../../lib/feedHealth';
-export type { FeedObservation, FeedDaySummary, FeedDrift, FeedHealth, FeedCoverageDay, FeedCoverage, FeedGaps } from '../../lib/feedHealth';
+import type { FeedObservation, FeedDaySummary, FeedDrift, FeedHealth, FeedCoverageDay, FeedCoverage, FeedGaps } from '../../../www/src/lib/feedHealth';
+export type { FeedObservation, FeedDaySummary, FeedDrift, FeedHealth, FeedCoverageDay, FeedCoverage, FeedGaps } from '../../../www/src/lib/feedHealth';
 /**
  * `/api/health` — GBFS pipeline health snapshot.
  *

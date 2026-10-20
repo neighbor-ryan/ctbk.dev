@@ -3,7 +3,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { initWasm, Resvg } from '@resvg/resvg-wasm';
-import { healthCardSvg } from '../src/healthCard.ts';
+import { healthCardSvg } from '../../../www/src/lib/healthCard.ts';
 
 const [input, output] = process.argv.slice(2);
 if (!input || !output) throw new Error('Usage: node scripts/render-health-card.mjs HEALTH.json OUTPUT.png');
