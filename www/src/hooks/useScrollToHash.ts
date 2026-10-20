@@ -5,6 +5,8 @@ import { useLocation } from 'react-router-dom'
 export function useScrollToHash() {
   const { hash, pathname } = useLocation()
   useEffect(() => {
+    // Home owns section navigation and scroll restoration through use-prms.
+    if (pathname === '/' || pathname === '/v2') return
     if (hash) {
       // Small delay to ensure DOM is rendered
       const timer = setTimeout(() => {

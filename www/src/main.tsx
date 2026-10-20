@@ -21,13 +21,14 @@ import Home from "./pages/Home"
 import NotFound from "./pages/NotFound"
 import { Box } from "@mui/material"
 import { Footer } from "./components/Footer"
+import { OgCapture } from './components/OgCapture'
 
 // Cloudflare Web Analytics (RUM: page views + Core Web Vitals). Manual
 // mode — the beacon reports directly to CF's collector (predates the
 // Workers-Assets hosting; still fine under it). Prod-only: the RUM endpoint
 // rejects CORS preflight from origins not in the token's allowed-domains
 // list, which would spam the console on `localhost` dev.
-if (import.meta.env.PROD) {
+if (import.meta.env.PROD && !new URLSearchParams(location.search).has('__og')) {
   const s = document.createElement('script')
   s.defer = true
   s.src = 'https://static.cloudflareinsights.com/beacon.min.js'
@@ -75,6 +76,7 @@ function AppContent() {
 
   return (
     <>
+      <OgCapture />
       <Suspense fallback={null}>
         <Routes>
           <Route path="/" element={<Home />} />

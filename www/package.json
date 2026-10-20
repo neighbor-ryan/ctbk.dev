@@ -6,6 +6,7 @@
   "author": "Ryan Williams <ryan@runsascoded.com",
   "type": "module",
   "dependencies": {
+    "@cloudflare/puppeteer": "^1.4.0",
     "@deck.gl/core": "^9.4.0",
     "@deck.gl/geo-layers": "^9.4.0",
     "@deck.gl/layers": "^9.4.0",
@@ -43,9 +44,10 @@
     "react-router-dom": "^6.30.6",
     "uplot": "^1.6.32",
     "use-kbd": "https://github.com/runsascoded/use-kbd#e8de7954c2d39b639dc1b99203659b91fd8fd269",
-    "use-prms": "https://github.com/runsascoded/use-prms#3db90a820b4372cea3efb7e02bac317dc049fa04"
+    "use-prms": "github:runsascoded/use-prms#bb731063bf4202c0501e9c3d6fdada0817f699a4"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261019.1",
     "@playwright/test": "^1.60.0",
     "@rdub/eslint-config": "^0.0.3",
     "@types/leaflet": "^1.9.8",

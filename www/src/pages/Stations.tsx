@@ -469,7 +469,7 @@ export default function Stations() {
   }
 
   return (
-    <div className={css.container}>
+    <div className={css.container} data-og-page-ready={!loading && !(api && apiTotals.isPending && !apiTotals.data)}>
       <main className={css.main}>
         <Suspense fallback={<div className={css.homeMap} />}>
         {tm ? (

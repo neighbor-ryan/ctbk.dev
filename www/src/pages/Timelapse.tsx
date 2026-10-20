@@ -245,7 +245,7 @@ export default function Timelapse() {
   const showSettings = wide || settingsOpen
 
   return (
-    <div ref={pageRef} className={css.page} data-tl-frame={mv ? undefined : i} onMouseLeave={() => setHover(null)}>
+    <div ref={pageRef} className={css.page} data-og-page-ready={anim ? ready : shownFrames.ready && (windowWidth === 1 || shownWindows.ready)} data-tl-frame={mv ? undefined : i} onMouseLeave={() => setHover(null)}>
       {mv && pv && <MoviePreviewKeys />}
       <GLMap
         layers={layers}

@@ -11,10 +11,11 @@
  * harness use (see `www/scrns.config.json`).
  */
 import { useUrlState, boolParam, numberArrayParam } from 'use-prms'
+import { useSectionSpy } from 'use-prms/sections'
 import { PlotRelayoutEvent } from 'plotly.js'
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
 import { Plot } from 'pltly/react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigationType } from 'react-router-dom'
 import css from "../index.module.css"
 import controlCss from "../controls.module.css"
 import { Checkbox } from "../components/Checkbox"
@@ -22,7 +23,6 @@ import { Checklist } from "../components/Checklist"
 import { Footer } from "../components/Footer"
 import { Tip } from "../components/Tip"
 import MonthRangePicker from "../components/MonthRangePicker"
-import { useHashScroll } from "../hooks/useHashScroll"
 import { Radios } from "../components/Radios"
 import { useIsInView } from "../hooks/useIsInView"
 import { useTheme } from "../contexts/ThemeContext"
@@ -113,8 +113,8 @@ const StackByV2QueryStrings: [StackByV2, string][] = [
 ]
 
 export default function Home() {
-  useLocation()
-  useHashScroll()
+  const location = useLocation()
+  const navType = useNavigationType()
   const { actualTheme, toggleTheme } = useTheme()
 
   const [yAxis, setYAxis] = useUrlState('y', codeParam<YAxis>('Rides', YAxisQueryStrings))
@@ -201,6 +201,12 @@ export default function Home() {
   // query (rows get summed). 3 parallel queries → TSQ caches them
   // independently, so toggling regions off doesn't re-fetch.
   const { data, isLoading, error } = useRidesV1({ regions: Regions, pyramid, api })
+  useSectionSpy({
+    sections: ['plot', 'map', 'states', 'pipeline'],
+    mode: { kind: 'param', key: 'section' },
+    nav: { location, navType },
+    deps: [data],
+  })
 
   const { start, end } = useMemo(() => {
     if (!data || data.length === 0) return { start: '', end: '' }
@@ -279,10 +285,10 @@ export default function Home() {
   }, [dataBounds, dateRange, setDateRange])
 
   if (isLoading) {
-    return <div className={css.container}><main className={css.main}><h1 className={css.title}>Loading…</h1></main></div>
+    return <div className={css.container} data-og-page-ready="false"><main className={css.main}><h1 className={css.title}>Loading…</h1></main></div>
   }
   if (error) {
-    return <div className={css.container}><main className={css.main}><h1 className={css.title}>Error: {error.message}</h1></main></div>
+    return <div className={css.container} data-og-page-ready="false"><main className={css.main}><h1 className={css.title}>Error: {error.message}</h1></main></div>
   }
 
   const gridcolor = isDark ? '#505050' : '#ccc'
@@ -315,7 +321,7 @@ export default function Home() {
   const isDurationActive = (dur: string) => currentDuration === dur
 
   return (
-    <div id="plot" className={css.container}>
+    <div id="plot" className={css.container} data-og-page-ready="true">
       <main className={css.main}>
         <div className={css.titleContainer}>
           <h1 className={css.title}>{title}</h1>

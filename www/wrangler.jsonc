@@ -1,6 +1,4 @@
-// ctbk.dev static site as a Workers-Assets-only worker (no `main` —
-// pure asset serving; free tier, atomic manifest deploys). See
-// `specs/www-cfw-migration.md`.
+// Assets plus public per-view OG metadata and browser screenshots.
 //
 // `not_found_handling: single-page-application` serves `index.html`
 // (HTTP 200) for any path with no asset — replaces the GH Pages
@@ -9,10 +7,16 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ctbk-dev",
+  "main": "server/public-worker.ts",
   "compatibility_date": "2026-07-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "browser": { "binding": "BROWSER" },
+  "ratelimits": [{ "name": "OG_RENDER_LIMIT", "namespace_id": "2026102001", "simple": { "limit": 10, "period": 60 } }],
   "assets": {
+    "binding": "ASSETS",
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/", "/v2", "/stations", "/s/*", "/timelapse", "/movie", "/health", "/health/feed", "/pipeline", "/og.jpg"]
   },
   // NOTE: the `ctbk.dev` custom domain is deliberately NOT declared here
   // (`routes` + `custom_domain`): it's attached once via the dashboard and
@@ -32,9 +36,13 @@
   // not config.
   "env": {
     "dev": {
+      "browser": { "binding": "BROWSER" },
+      "ratelimits": [{ "name": "OG_RENDER_LIMIT", "namespace_id": "2026102002", "simple": { "limit": 10, "period": 60 } }],
       "assets": {
+        "binding": "ASSETS",
         "directory": "./dist",
-        "not_found_handling": "single-page-application"
+        "not_found_handling": "single-page-application",
+        "run_worker_first": ["/", "/v2", "/stations", "/s/*", "/timelapse", "/movie", "/health", "/health/feed", "/pipeline", "/og.jpg"]
       },
       "observability": {
         "enabled": true

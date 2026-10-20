@@ -72,11 +72,8 @@ for (const { slug, aliases, name, capacity, station_type, first_seen, last_seen,
   html = setMeta(html, 'og:description', desc)
   html = setMeta(html, 'og:image', `${API_BASE}/og/s/${slug}.png`)
   html = setMeta(html, 'og:url', `${SITE}/s/${slug}`)
-  // Dimension hints let crawlers reserve layout before fetching the image.
-  html = html.replace(
-    /(<meta property="og:image"[^>]*\/>)/,
-    `$1\n    <meta property="og:image:width" content="1200" />\n    <meta property="og:image:height" content="630" />`,
-  )
+  html = setMeta(html, 'og:image:width', '1200')
+  html = setMeta(html, 'og:image:height', '630')
   for (const s of [slug, ...(aliases ? aliases.split(' ') : [])]) {
     writeFileSync(join(stubDir, `${s}.html`), html)
     stubs++

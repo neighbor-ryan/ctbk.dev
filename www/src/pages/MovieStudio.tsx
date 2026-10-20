@@ -166,7 +166,7 @@ export default function MovieStudio() {
   const dirty = start !== localDateTime(applied.start) || end !== localDateTime(applied.end) || parseLength(length) !== applied.seconds || Number(fps) !== applied.fps || size !== `${applied.width}x${applied.height}`
   const mapQuery = new URLSearchParams(currentQuery.current)
   for (const key of ['mlen', 'mw', 'mh', 'cfps', 'clip']) mapQuery.delete(key)
-  return <div className={css.page}>
+  return <div className={css.page} data-og-page-ready={!!plan}>
     <header className={css.heading}><div><h1>Movie preview</h1><p>Pan or zoom the frame. Export uses this exact view.</p></div><Link to={`/timelapse?${mapQuery}`}>Back to map</Link></header>
     <div className={css.workspace}>
       <div className={css.viewer}>
