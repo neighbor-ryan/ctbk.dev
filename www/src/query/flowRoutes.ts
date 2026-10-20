@@ -105,9 +105,9 @@ function useRouteCatalog(base: string, enabled: boolean, selected: readonly stri
       return data
     },
   })
-  const keys = [...new Set((selected ?? Object.keys(index.data?.origins ?? {}))
+  const keys = enabled ? [...new Set((selected ?? Object.keys(index.data?.origins ?? {}))
     .map((id) => (direction === 'in' ? index.data?.destinations : index.data?.origins)?.[id]?.key)
-    .filter((key): key is string => !!key))].sort()
+    .filter((key): key is string => !!key))].sort() : []
   const graph = useQuery({
     queryKey: ['flow-routes-graph', base, index.data?.graph.key], enabled: enabled && !!keys.length, staleTime: Infinity,
     queryFn: () => packed<Pick<RouteSample, 'segments'>>(base, index.data!.graph.key),
@@ -117,11 +117,11 @@ function useRouteCatalog(base: string, enabled: boolean, selected: readonly stri
     queryFn: () => packed<Pick<RouteSample, 'pairs'>>(base, key),
   })) })
   const error = index.error ?? graph.error ?? catalogs.find((q) => q.error)?.error
-  const complete = !!error || index.isSuccess && (!index.data || !keys.length || !!graph.data && catalogs.every((q) => !!q.data))
-  return { index: index.data, graph: graph.data, catalogs, keys, error, complete }
+  const complete = !enabled || !!error || index.isSuccess && (!index.data || !keys.length || !!graph.data && catalogs.every((q) => !!q.data))
+  return { index: enabled ? index.data : undefined, graph: enabled ? graph.data : undefined, catalogs, keys, error: enabled ? error : null, complete }
 }
 
-export function useFlowRoutes(enabled: boolean, selected?: readonly string[], direction: FlowDirection = 'out') {
+export function useFlowRoutes(enabled: boolean, selected?: readonly string[], direction: FlowDirection = 'out', { city: includeCity = true }: { city?: boolean } = {}) {
   const index = useQuery({
     queryKey: ['flow-routes-index', BASE], enabled, staleTime: 60000,
     queryFn: () => get('index.json').then((r) => r.json() as Promise<{ version: number; key: string }>),
@@ -135,7 +135,7 @@ export function useFlowRoutes(enabled: boolean, selected?: readonly string[], di
       return data
     },
   })
-  const city = useRouteCatalog(CITY_BASE, enabled, selected, direction, true)
+  const city = useRouteCatalog(CITY_BASE, enabled && includeCity, selected, direction, true)
   const nj = useRouteCatalog(NJ_BASE, enabled, selected, direction)
   const error = index.error ?? sample.error ?? city.error ?? nj.error
   const complete = !!sample.data && city.complete && nj.complete

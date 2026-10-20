@@ -27,7 +27,11 @@ test('street flows toggle preserves the source and view and survives reload', as
 })
 
 test('routed animation preserves actual concurrency and deterministic movie seek', async ({ page }) => {
-  await page.route('https://data.ctbk.dev/routes-city/v1/index.json', (route) => route.fulfill({ status: 404 }))
+  const cityRequests: string[] = []
+  await page.route('https://data.ctbk.dev/routes-city/v1/**', (route) => {
+    cityRequests.push(route.request().url())
+    return route.fulfill({ status: 404 })
+  })
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   await page.goto('/timelapse?anim=1&flow=routes&b=1m&d=250610-250610&t=250610T1800&len=60')
@@ -43,6 +47,7 @@ test('routed animation preserves actual concurrency and deterministic movie seek
   await expect(page.locator('[data-tl-frame="1350"]')).toHaveCount(1)
   await expect(page.getByTestId('ride-routed')).toHaveCount(0)
   await expect(page.getByText('3,870 rides in progress', { exact: true })).toBeVisible()
+  expect(cityRequests).toEqual([])
   expect(errors).toEqual([])
 })
 

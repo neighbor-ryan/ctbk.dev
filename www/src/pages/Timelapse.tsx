@@ -87,7 +87,7 @@ export default function Timelapse() {
   const animation = useRideAnimation(shownMs, anim)
   const bucket = floor(animation.seconds / 900) * 900
   const routeOrigins = useMemo(() => rideRouteOrigins(animation.day, bucket, trail), [animation.day, bucket, trail])
-  const routeData = useFlowRoutes(anim && routeMode, routeOrigins)
+  const routeData = useFlowRoutes(anim && routeMode, routeOrigins, 'out', { city: false })
   const ready = animation.ready && (!routeMode || !!routeData.data || !!routeData.error)
   animationReady.current = ready
   const midnight = floor(shownMs / 86400000) * 86400

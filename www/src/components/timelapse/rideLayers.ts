@@ -18,6 +18,7 @@ export function rideRgb(flags: number, colorBy: 'bike' | 'user'): readonly [numb
     : flags & 16 ? [160, 160, 160] : flags & 2 ? [255, 100, 190] : [100, 220, 110]
 }
 
+/** City animation needs a bounded pair/bucket bundle before expanding beyond NJ. */
 export function rideRouteOrigins(day: LoadedRideDay | undefined, bucket: number, trail: number): string[] {
   if (!day) return []
   const ids = new Set<string>()

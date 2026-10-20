@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pathTimes, rideHead, ridePaths, rideRgb, routeFraction } from './rideLayers'
+import { pathTimes, rideHead, ridePaths, rideRgb, rideRouteOrigins, routeFraction } from './rideLayers'
 
 describe('inferred ride paths', () => {
   it('uses light purple for electric and blue for classic while keeping unknown flags distinct', () => {
@@ -18,6 +18,20 @@ describe('inferred ride paths', () => {
       destinations: new Uint16Array([1, 1, 1]), flags: new Uint8Array([0, 1, 5]),
     },
   }
+  it('bounds animation catalogs to NJ origins overlapping the current bucket and trail', () => {
+    const routeDay = {
+      stations: ['JC014', 'HB001', 'NYC001'].map((id) => ({ id, lng: -74, lat: 40 })),
+      rides: {
+        stationCount: 3, carry: 0, starts: new Int32Array([0, 779, 1020, 1021, 0]),
+        durations: new Uint16Array([10, 1, 30, 30, 30]), sources: new Uint16Array([0, 1, 0, 1, 2]),
+        destinations: new Uint16Array([1, 0, 1, 0, 0]), flags: new Uint8Array(5),
+      },
+    }
+    expect(rideRouteOrigins(undefined, 0, 120)).toEqual([])
+    expect(rideRouteOrigins(routeDay, 0, 120)).toEqual(['HB001', 'JC014'])
+    expect(rideRouteOrigins(routeDay, 900, 120)).toEqual(['HB001', 'JC014'])
+    expect(rideRouteOrigins(routeDay, 1800, 120)).toEqual([])
+  })
   it('renders carry-in once, with local seconds and a visible round-trip loop', () => {
     const paths = ridePaths(day, 0, 120)
     expect(paths).toEqual([
