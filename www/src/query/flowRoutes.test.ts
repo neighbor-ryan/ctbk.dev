@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assignRoutes, mergeRoutes, routeGeometry, type RouteSample } from './flowRoutes'
+import { assignRoutes, mergeRoutes, routeGeometry, systemFlowPaths, type RouteSample } from './flowRoutes'
 
 const stations = Object.fromEntries(['A', 'B', 'C', 'D'].map((name, i) => [name, { name, lng: i, lat: i, ends: 0 }]))
 const sample: RouteSample = {
@@ -12,6 +12,14 @@ const sample: RouteSample = {
   ],
 }
 describe('street assignment', () => {
+  it('renders precomputed network volumes with directional geometry and a shared floor', () => {
+    expect(systemFlowPaths(sample, [[1, 100], [-2, 30], [3, 3]])).toEqual([
+      { code: -2, count: 30, path: [[2, 2], [1, 1]] },
+      { code: 1, count: 100, path: [[0, 0], [1, 1]] },
+    ])
+    expect(() => systemFlowPaths(sample, [[0, 100]])).toThrow('Invalid system street volume')
+    expect(() => systemFlowPaths(sample, [[4, 100]])).toThrow('Invalid system street volume')
+  })
   it('merges namespaces without losing direction and honors explicit NJ fallbacks', () => {
     const merged = mergeRoutes(sample, [{ path: [[4, 4], [5, 5]] }], [{ pairs: [
       { source: 'A', destination: 'B', routes: [{ weight: 1, segments: [-1] }] },

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 test('street flows toggle preserves the source and view and survives reload', async ({ page }) => {
+  await page.route('https://data.ctbk.dev/routes-city/v1/index.json', (route) => route.fulfill({ status: 404 }))
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   await page.goto('/stations?m=2506&sel=JC014&fan=1&flow=routes&ll=40.724-74.040+14.00')
@@ -26,6 +27,7 @@ test('street flows toggle preserves the source and view and survives reload', as
 })
 
 test('routed animation preserves actual concurrency and deterministic movie seek', async ({ page }) => {
+  await page.route('https://data.ctbk.dev/routes-city/v1/index.json', (route) => route.fulfill({ status: 404 }))
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   await page.goto('/timelapse?anim=1&flow=routes&b=1m&d=250610-250610&t=250610T1800&len=60')

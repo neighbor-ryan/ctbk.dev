@@ -294,7 +294,7 @@ export default function Timelapse() {
                 <span><i style={{ background: rgbCss(BIKE_COLORS.classic) }} /> classic</span>
               </div>}
               {legendOpen && !mv && <>
-              <div className={css.clockSub}>Animation preview · {routeMode ? <><span data-testid="ride-routed">{moving.routed.toLocaleString('en-US')} active rides on inferred bike routes</span> · {routeData.nj ? 'JC/Hoboken catalog + NYC sample' : 'sample coverage'}; other rides use straight paths</> : 'inferred straight paths'} · round-trip loops · rides over 3h fade out</div>
+              <div className={css.clockSub}>Animation preview · {routeMode ? <><span data-testid="ride-routed">{moving.routed.toLocaleString('en-US')} active rides on inferred bike routes</span> · {routeData.city ? 'city catalog' : routeData.nj ? 'JC/Hoboken catalog + NYC sample' : 'sample coverage'}; other rides use straight paths</> : 'inferred straight paths'} · round-trip loops · rides over 3h fade out</div>
               <div className={css.clockSub}>{colorBy === 'bike' ? 'light purple: electric · blue: classic · gray: unknown' : 'green: member · pink: casual · gray: unknown'}</div>
               {animation.month && (animation.month.invalidDuration > 0 || animation.month.unmapped > 0) && <div className={css.clockSub} data-testid="ride-exclusions">
                 This month excludes {animation.month.invalidDuration.toLocaleString('en-US')} invalid-duration records and {animation.month.unmapped.toLocaleString('en-US')} rides with unmapped stations.

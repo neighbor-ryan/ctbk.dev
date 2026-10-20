@@ -17,7 +17,7 @@ import { useStationsOmnibarEndpoint } from '../hooks/useStationsOmnibarEndpoint'
 import { selParam, useSelection, type SelAction } from '../lib/mapSelection'
 import { useCanHover, useWide } from '../lib/useMediaQuery'
 import { useTotalsQuery, type Side } from '../query/rollups'
-import { assignRoutes, useFlowRoutes } from '../query/flowRoutes'
+import { assignRoutes, useFlowRoutes, useSystemFlows } from '../query/flowRoutes'
 import { timeRangeParam } from '../time-range'
 import css from "../stations.module.css"
 
@@ -150,6 +150,7 @@ export default function Stations() {
   const [dir, setDir] = useUrlState('dir', codeParam<FlowDirection>('out', [['out', 'o'], ['in', 'i']]))
   const [fan, setFan] = useUrlState('fan', boolParam)
   const [flow, setFlow] = useUrlState('flow', stringParam())
+  const [network, setNetwork] = useUrlState('network', boolParam)
   const streetRoutes = flow === 'routes'
   const [gl] = useUrlState('gl', glParam)
   // Time mode (GL only): `/api/tl` frames drive the circles, with the
@@ -370,7 +371,7 @@ export default function Stations() {
   // for the color channel; also drives the radius channel when `?lens=` asks.
   // Lens source: the pinned set, or (GL only, nothing pinned) the hovered
   // station for a live preview.
-  const lensSourceIds = tm ? [] : sel.length ? sel : (gl && canHover && hoverPreviewId ? [hoverPreviewId] : [])
+  const lensSourceIds = tm ? [] : sel.length ? sel : (gl && !network && canHover && hoverPreviewId ? [hoverPreviewId] : [])
   const flowStyle = useMemo(
     () => (lensSourceIds.length && effectiveStations
       ? flowLens(effectiveStations, pairCounts, lensSourceIds, lens, dir)
@@ -394,10 +395,12 @@ export default function Stations() {
     [gl, fan, streetRoutes, routeData.data, effectiveStations, pairCounts, lensSourceIds.join(','), dir],
   )
   const routeStatus = routeData.error ? `Route catalog unavailable: ${routeData.error.message} · ${routed ? 'partial routes' : 'showing arcs'}`
-    : routed ? `${routed.total ? Math.round(100 * routed.routed / routed.total) : 0}% routed · ${routeData.nj ? 'JC/Hoboken catalog + NYC sample' : 'sample coverage'} · chevrons show direction`
+    : routed ? `${routed.total ? Math.round(100 * routed.routed / routed.total) : 0}% routed · ${routeData.city ? 'city catalog' : routeData.nj ? 'JC/Hoboken catalog + NYC sample' : 'sample coverage'} · chevrons show direction`
       : 'Loading bike routes… · showing arcs'
   const visibleArcs = routed?.arcs ?? arcs
   const lineMax = Math.max(routed?.paths.length ? routed.paths[routed.paths.length - 1].count : 0, visibleArcs?.length ? visibleArcs[visibleArcs.length - 1].count : 0)
+  const networkActive = gl && !tm && network && !sel.length
+  const system = useSystemFlows(networkActive, effectiveMonth)
   const effectiveColors = flowStyle?.colors ?? stationColors
   const effectiveRadii = flowStyle?.radii ?? null
 
@@ -493,7 +496,7 @@ export default function Stations() {
             stationRadii={effectiveRadii}
             mark={mark}
               arcs={visibleArcs}
-              flowPaths={routed?.paths}
+              flowPaths={networkActive ? system.paths : routed?.paths}
             setSelectedId={setSelectedId}
             onHoverStation={setHoverPreviewId}
             center={[view.lat, view.lng]}
@@ -528,6 +531,17 @@ export default function Stations() {
           <div className={css.loading}>Loading...</div>
         )}
         {flowStyle && wide && lensLegend(false)}
+        {gl && !tm && !sel.length && !flowStyle && <div className={`${css.legend} ${css.lensLegend}`} data-testid="network-legend">
+          <label className={css.lensArcsToggle}>
+            <input type="checkbox" checked={network} onChange={(event) => setNetwork(event.target.checked)} />
+            Whole-network bike routes
+          </label>
+          {network && <div className={css.keyTitle}>
+            {system.error ? `Street flows unavailable: ${system.error.message}` : system.missing ? 'Street flows have not been built for this month.' : system.data
+              ? <>{Math.round(100 * system.data.routedRides / Math.max(1, system.data.encodedRides - system.data.roundTrips))}% of non-roundtrip rides routed · inferred streets · width shows trips{system.data.provisional ? ' · provisional month' : ''}</>
+              : 'Loading whole-network flows…'}
+          </div>}
+        </div>}
         {colorByAge && births && !flowStyle && !tm && <ColorLegend births={births} actualTheme={actualTheme} />}
         {(pies || api) && (
           <div className={css.piesControl}>

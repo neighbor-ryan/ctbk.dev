@@ -12,6 +12,7 @@ export interface RouteSample {
 export interface FlowPath { code: number; path: Position[]; count: number }
 const BASE = 'https://data.ctbk.dev/routes-sample/v1/'
 const NJ_BASE = 'https://data.ctbk.dev/routes-nj/v1/'
+const CITY_BASE = 'https://data.ctbk.dev/routes-city/v1/'
 interface ObjectMeta { key: string; bytes: number }
 interface NjIndex { version: number; graph: ObjectMeta; origins: Record<string, ObjectMeta>; destinations: Record<string, ObjectMeta> }
 
@@ -92,6 +93,34 @@ async function packed<T>(base: string, key: string): Promise<T> {
   return response.json() as Promise<T>
 }
 
+function useRouteCatalog(base: string, enabled: boolean, selected: readonly string[] | undefined, direction: FlowDirection, optional = false) {
+  const index = useQuery({
+    queryKey: ['flow-routes-index', base], enabled, staleTime: 60000,
+    queryFn: async () => {
+      const response = await fetch(base + 'index.json')
+      if (optional && response.status === 404) return null
+      if (!response.ok) throw new Error(`Route catalog: HTTP ${response.status}`)
+      const data = await response.json() as NjIndex
+      if (data.version !== 1) throw new Error('Unsupported route catalog')
+      return data
+    },
+  })
+  const keys = [...new Set((selected ?? Object.keys(index.data?.origins ?? {}))
+    .map((id) => (direction === 'in' ? index.data?.destinations : index.data?.origins)?.[id]?.key)
+    .filter((key): key is string => !!key))].sort()
+  const graph = useQuery({
+    queryKey: ['flow-routes-graph', base, index.data?.graph.key], enabled: enabled && !!keys.length, staleTime: Infinity,
+    queryFn: () => packed<Pick<RouteSample, 'segments'>>(base, index.data!.graph.key),
+  })
+  const catalogs = useQueries({ queries: keys.map((key) => ({
+    queryKey: ['flow-routes-pairs', base, key], enabled, staleTime: Infinity,
+    queryFn: () => packed<Pick<RouteSample, 'pairs'>>(base, key),
+  })) })
+  const error = index.error ?? graph.error ?? catalogs.find((q) => q.error)?.error
+  const complete = !!error || index.isSuccess && (!index.data || !keys.length || !!graph.data && catalogs.every((q) => !!q.data))
+  return { index: index.data, graph: graph.data, catalogs, keys, error, complete }
+}
+
 export function useFlowRoutes(enabled: boolean, selected?: readonly string[], direction: FlowDirection = 'out') {
   const index = useQuery({
     queryKey: ['flow-routes-index', BASE], enabled, staleTime: 60000,
@@ -106,32 +135,71 @@ export function useFlowRoutes(enabled: boolean, selected?: readonly string[], di
       return data
     },
   })
-  const nj = useQuery({
-    queryKey: ['flow-routes-index', NJ_BASE], enabled, staleTime: 60000,
+  const city = useRouteCatalog(CITY_BASE, enabled, selected, direction, true)
+  const nj = useRouteCatalog(NJ_BASE, enabled, selected, direction)
+  const error = index.error ?? sample.error ?? city.error ?? nj.error
+  const complete = !!sample.data && city.complete && nj.complete
+  const data = useMemo(() => {
+    if (!sample.data || !complete && !error) return undefined
+    let merged = sample.data
+    for (const catalog of [city, nj]) if (catalog.graph && catalog.catalogs.every((q) => !!q.data)) {
+      merged = mergeRoutes(merged, catalog.graph.segments, catalog.catalogs.map((q) => q.data!))
+    }
+    return merged
+    // Immutable query objects identify the merged payload; selection changes keys.
+  }, [sample.data, nj.graph, city.graph, complete, error, [...city.catalogs, ...nj.catalogs].map((q) => q.dataUpdatedAt).join(','), [...city.keys, ...nj.keys].join(',')])
+  return { data, error, nj: !!nj.index && !nj.error, city: !!city.index && !city.error }
+}
+
+export interface SystemFlow {
+  version: number
+  month: string
+  context: string
+  graph: ObjectMeta
+  routesPrefix: string
+  volumes: [number, number][]
+  encodedRides: number
+  routedRides: number
+  fallbackRides: number
+  roundTrips: number
+  provisional: boolean
+}
+
+export function systemFlowPaths(graph: Pick<RouteSample, 'segments'>, volumes: [number, number][], floor = .04): FlowPath[] {
+  const maximum = volumes.reduce((maximum, [, count]) => Math.max(maximum, count), 0)
+  return volumes.map(([code, count]) => {
+    const segment = graph.segments[Math.abs(code) - 1]
+    if (!Number.isSafeInteger(code) || !code || !segment || !Number.isFinite(count) || count <= 0) throw new Error('Invalid system street volume')
+    return { code, count, path: code > 0 ? segment.path : [...segment.path].reverse() }
+  }).filter((p) => p.count >= maximum * floor).sort((a, b) => a.count - b.count || a.code - b.code)
+}
+
+export function useSystemFlows(enabled: boolean, month: string | undefined) {
+  const base = 'https://data.ctbk.dev/flows/v1/'
+  const index = useQuery({
+    queryKey: ['system-flow-index', base], enabled, staleTime: 60000,
     queryFn: async () => {
-      const data = await (await get('index.json', NJ_BASE)).json() as NjIndex
-      if (data.version !== 1) throw new Error('Unsupported NJ route catalog')
+      const response = await fetch(base + 'index.json')
+      if (response.status === 404) return null
+      if (!response.ok) throw new Error(`System flows: HTTP ${response.status}`)
+      const data = await response.json() as { version: number; months: Record<string, ObjectMeta> }
+      if (data.version !== 1) throw new Error('Unsupported system-flow index')
       return data
     },
   })
-  const keys = [...new Set((selected ?? Object.keys(nj.data?.origins ?? {}))
-    .map((id) => (direction === 'in' ? nj.data?.destinations : nj.data?.origins)?.[id]?.key)
-    .filter((key): key is string => !!key))].sort()
-  const graph = useQuery({
-    queryKey: ['flow-routes-nj-graph', nj.data?.graph.key], enabled: enabled && !!keys.length, staleTime: Infinity,
-    queryFn: () => packed<Pick<RouteSample, 'segments'>>(NJ_BASE, nj.data!.graph.key),
+  const meta = month ? index.data?.months[month] : undefined
+  const data = useQuery({
+    queryKey: ['system-flow-month', base, meta?.key], enabled: enabled && !!meta, staleTime: Infinity,
+    queryFn: async () => {
+      const data = await packed<SystemFlow>(base, meta!.key)
+      if (data.version !== 1 || data.month !== month || !/^routes-(city|nj)\/v1$/.test(data.routesPrefix)) throw new Error('Unsupported system-flow month')
+      return data
+    },
   })
-  const catalogs = useQueries({ queries: keys.map((key) => ({
-    queryKey: ['flow-routes-nj-pairs', key], enabled, staleTime: Infinity,
-    queryFn: () => packed<Pick<RouteSample, 'pairs'>>(NJ_BASE, key),
-  })) })
-  const error = index.error ?? sample.error ?? nj.error ?? graph.error ?? catalogs.find((q) => q.error)?.error
-  const complete = !!sample.data && (!!nj.error || !!nj.data && (!keys.length || !!graph.data && catalogs.every((q) => !!q.data)))
-  const data = useMemo(() => {
-    if (!sample.data || !complete && !error) return undefined
-    if (!graph.data || !catalogs.every((q) => !!q.data)) return sample.data
-    return mergeRoutes(sample.data, graph.data.segments, catalogs.map((q) => q.data!))
-    // Immutable query objects identify the merged payload; selection changes keys.
-  }, [sample.data, graph.data, complete, error, catalogs.map((q) => q.dataUpdatedAt).join(','), keys.join(',')])
-  return { data, error, nj: !!nj.data && !error }
+  const graph = useQuery({
+    queryKey: ['system-flow-graph', data.data?.routesPrefix, data.data?.graph.key], enabled: enabled && !!data.data, staleTime: Infinity,
+    queryFn: () => packed<Pick<RouteSample, 'segments'>>(`https://data.ctbk.dev/${data.data!.routesPrefix}/`, data.data!.graph.key),
+  })
+  const paths = useMemo(() => data.data && graph.data ? systemFlowPaths(graph.data, data.data.volumes) : undefined, [data.data, graph.data])
+  return { data: data.data, paths, missing: index.isSuccess && !meta, error: index.error ?? data.error ?? graph.error }
 }

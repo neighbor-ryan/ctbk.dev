@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from collections.abc import Iterable
 from gzip import compress, decompress
 from hashlib import file_digest, md5
 from itertools import groupby
@@ -29,11 +30,8 @@ def route_weights(lengths: list[float]) -> list[float]:
     return [weight / total for weight in weights]
 
 
-def segment_graph(
-    paths: list[list[int]],
-    points: dict[int, tuple[float, float]],
-) -> tuple[list[dict], list[list[int]]]:
-    """Contract nonbranching union chains; signed IDs carry direction."""
+def segment_topology(paths: Iterable[list[int]]) -> tuple[list[tuple[int, ...]], dict[tuple[int, int], int]]:
+    """Contract a streamed union; retain topology, not every route's node list."""
     neighbors = defaultdict(set)
     ends = set()
     for path in paths:
@@ -63,22 +61,32 @@ def segment_graph(
                 chain.append(following)
                 previous, current = current, following
             chains.append(min(tuple(chain), tuple(reversed(chain))))
-    segments = []
     edges = {}
-    for sid, chain in enumerate(sorted(chains)):
-        segments.append({'nodes': list(chain), 'path': [list(points[node]) for node in chain]})
+    chains = sorted(chains)
+    for sid, chain in enumerate(chains):
         for a, b in zip(chain, chain[1:]):
             edges[a, b] = sid + 1
             edges[b, a] = -(sid + 1)
-    lists = []
-    for path in paths:
-        codes = []
-        for a, b in zip(path, path[1:]):
-            code = edges[a, b]
-            if not codes or codes[-1] != code:
-                codes.append(code)
-        lists.append(codes)
-    return segments, lists
+    return chains, edges
+
+
+def encode_segments(path: list[int], edges: dict[tuple[int, int], int]) -> list[int]:
+    codes = []
+    for a, b in zip(path, path[1:]):
+        code = edges[a, b]
+        if not codes or codes[-1] != code:
+            codes.append(code)
+    return codes
+
+
+def segment_graph(
+    paths: list[list[int]],
+    points: dict[int, tuple[float, float]],
+) -> tuple[list[dict], list[list[int]]]:
+    """Contract nonbranching union chains; signed IDs carry direction."""
+    chains, edges = segment_topology(paths)
+    segments = [{'nodes': list(chain), 'path': [list(points[node]) for node in chain]} for chain in chains]
+    return segments, [encode_segments(path, edges) for path in paths]
 
 
 @ctbk.group('flow-routes')

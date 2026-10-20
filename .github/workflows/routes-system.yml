@@ -1,0 +1,31 @@
+name: Whole-network bicycle street flows
+on:
+  workflow_dispatch:
+    inputs:
+      month:
+        description: Published animation month (YYYYMM)
+        default: '202609'
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: ctbk-system-flow-writer
+  cancel-in-progress: false
+jobs:
+  flows:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.13'
+          enable-cache: true
+      - run: uv sync --frozen --no-dev
+      - name: Assign the month's actual rides to shared directional streets
+        env:
+          MONTH: ${{ inputs.month }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: .venv/bin/ctbk flow-routes system -d "$MONTH"
