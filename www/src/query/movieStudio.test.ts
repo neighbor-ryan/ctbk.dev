@@ -6,7 +6,7 @@ const start = Date.UTC(2026, 8, 29, 4), end = start + 86_400_000
 const settings = { start, end, seconds: 30, fps: 30, width: 1080, height: 1350 }
 describe('movie studio snapshot', () => {
   it('preserves the exact clip, current view and styling, removing linked controls', () => {
-    const input = new URLSearchParams('anim=1&b=1m&d=260929-260930&clip=260929T04-260930T04&len=60&ll=40.745-73.985+12.15&theme=dark&flow=routes&clr=user&trail=300&job=old&fpb=4&t=260929T12')
+    const input = new URLSearchParams('anim=1&b=1m&d=260929-260930&clip=260929T04-260930T04&len=60&ll=40.745-73.985+12.15&theme=dark&flow=routes&clr=user&trail=300&job=old&fpb=4&t=260929T12&__og=1')
     expect(studioDefaults(input)).toEqual(settings)
     expect(studioQuery(input, settings).toString()).toBe('anim=1&b=1m&d=260929-260930&clip=260929T04-260930T04&ll=40.745-73.985+12.15&theme=dark&flow=routes&clr=user&trail=300&sp=48&cfps=30&mlen=30&mw=1080&mh=1350')
   })

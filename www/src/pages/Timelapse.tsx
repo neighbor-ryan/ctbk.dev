@@ -43,6 +43,7 @@ import { clockLabel, shortLabel, binUnit } from '../query/timelapseControls'
 import { ANCHORS, chunksCovering, chunkOf, formatT, formatYmd, frameStartMs, type Bin, type StationTable } from '../query/timelapseFrames'
 import { radiusFactor } from '../query/timelapseSize'
 import { movieGrid, movieRange } from '../query/timelapseMovie'
+import { captureStage } from '../query/movieCapture'
 import { useRideAnimation } from '../query/useRideAnimation'
 import { BIKE_COLORS, movingRideLayers, ridePaths, rideRouteOrigins } from '../components/timelapse/rideLayers'
 import { DayClock } from '../components/timelapse/DayClock'
@@ -102,7 +103,17 @@ export default function Timelapse() {
   const [captureFps] = useUrlState('cfps', intParam(30))
   const [clip] = useUrlState('clip', stringParam())
   const [captureStart, captureAfter] = useMemo(() => movieRange(bin, iStart, iEnd, mv ? clip : undefined), [bin, iStart, iEnd, mv, clip])
-  const movieSeries = useMemo(() => tl.totals.slice(captureStart - iStart, captureAfter - iStart), [tl.totals, captureStart, captureAfter, iStart])
+  const liveMovieSeries = useMemo(() => tl.totals.slice(captureStart - iStart, captureAfter - iStart), [tl.totals, captureStart, captureAfter, iStart])
+  const movieSeriesKey = `${src}:${bin}:${captureStart}:${captureAfter}`
+  const [movieSnapshot, setMovieSnapshot] = useState<{ key: string; values: Float64Array }>()
+  useEffect(() => {
+    // A capture can outlive the inactive query chunks' GC interval. Retain only
+    // the complete totals vector, rather than pinning every station chunk.
+    if (mv && liveMovieSeries.length && liveMovieSeries.every(Number.isFinite)) {
+      setMovieSnapshot((previous) => previous?.key === movieSeriesKey ? previous : { key: movieSeriesKey, values: liveMovieSeries })
+    }
+  }, [mv, movieSeriesKey, liveMovieSeries])
+  const movieSeries = mv && movieSnapshot?.key === movieSeriesKey ? movieSnapshot.values : liveMovieSeries
   const movieTotalsReady = movieSeries.every(Number.isFinite)
   const fpb = /^\d+$/.test(fpbRaw ?? '') ? max(1, Number(fpbRaw)) : undefined
   const grid = useMemo(() => movieGrid(captureAfter - captureStart, sp, max(1, captureFps), fpb), [captureStart, captureAfter, sp, captureFps, fpb])
@@ -143,17 +154,20 @@ export default function Timelapse() {
   const mapRef = useRef<MaplibreMapInstance | null>(null)
   const waiters = useRef(new Set<() => void>())
   const notify = useCallback(() => { for (const w of Array.from(waiters.current)) w() }, [])
-  const waitFor = useCallback((pred: () => boolean) => new Promise<void>((resolve) => {
+  const waitFor = useCallback((pred: () => boolean, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
     if (pred()) return resolve()
-    const w = () => { if (pred()) { waiters.current.delete(w); resolve() } }
+    const cleanup = () => { waiters.current.delete(w); signal.removeEventListener('abort', abort) }
+    const abort = () => { cleanup(); reject(new Error('Movie capture aborted')) }
+    const w = () => { if (pred()) { cleanup(); resolve() } }
     waiters.current.add(w)
+    signal.addEventListener('abort', abort, { once: true })
   }), [])
-  const rendered = useRef({ t: NaN, ready: false, layers: [] as Layer[] })
+  const rendered = useRef({ t: NaN, ready: false, totalsReady: false, layers: [] as Layer[] })
   const drawn = useRef<Layer[] | null>(null)
   const layersRef = useRef(layers)
   layersRef.current = layers
   useLayoutEffect(() => {
-    rendered.current = { t: shown, ready: (!mv || movieTotalsReady) && (anim ? ready : shownFrames.ready && (windowWidth === 1 || shownWindows.ready) && scaleFrozen && layers.length > 0), layers }
+    rendered.current = { t: shown, ready: (!mv || movieTotalsReady) && (anim ? ready : shownFrames.ready && (windowWidth === 1 || shownWindows.ready) && scaleFrozen && layers.length > 0), totalsReady: movieTotalsReady, layers }
     notify()
   })
   const onAfterRender = useCallback(() => {
@@ -165,18 +179,28 @@ export default function Timelapse() {
     if (!mv) return
     const totalsReady = Promise.all(chunksCovering(bin, captureStart, captureAfter - 1).map((k) => ensureChunk(qc, src, 'start', bin, k)))
     const doSeek = async (i: number) => {
-      await totalsReady
       const tt = captureStart + grid.offset(i)
+      const diagnostic = () => ({ frame: i, requested: tt, rendered: rendered.current.t, ready: rendered.current.ready, totalsReady: rendered.current.totalsReady, drawn: drawn.current === rendered.current.layers, mapLoaded: mapRef.current?.loaded(), tilesLoaded: mapRef.current?.areTilesLoaded() })
+      const stage = <T,>(label: string, run: (signal: AbortSignal) => Promise<T>) => captureStage(`Frame ${i}: ${label}`, run, diagnostic)
+      await stage('totals data', () => totalsReady)
       const a = floor(tt)
       const ks = Array.from(new Set([chunkOf(bin, a), chunkOf(bin, a + 1)]))
-      if (!anim) await Promise.all(ks.flatMap((k) => ANCHORS.map((anchor) => ensureChunk(qc, src, anchor, bin, k))))
+      if (!anim) await stage('station data', () => Promise.all(ks.flatMap((k) => ANCHORS.map((anchor) => ensureChunk(qc, src, anchor, bin, k)))))
       tRef.current = tt
       setT(tt)
-      await waitFor(() => rendered.current.t === tt && rendered.current.ready)
-      await waitFor(() => drawn.current === rendered.current.layers)
-      await waitFor(() => !!mapRef.current)
+      await stage('committed frame data', (signal) => waitFor(() => rendered.current.t === tt && rendered.current.ready, signal))
+      await stage('deck redraw', (signal) => waitFor(() => drawn.current === rendered.current.layers, signal))
+      await stage('map mount', (signal) => waitFor(() => !!mapRef.current, signal))
       const m = mapRef.current!
-      if (!m.loaded() || !m.areTilesLoaded()) await new Promise((r) => m.once('idle', r))
+      await stage('map idle', (signal) => new Promise<void>((resolve, reject) => {
+        const cleanup = () => { m.off('idle', check); signal.removeEventListener('abort', abort) }
+        const abort = () => { cleanup(); reject(new Error('Movie capture aborted')) }
+        const check = () => { if (m.loaded() && m.areTilesLoaded()) { cleanup(); resolve() } }
+        // Listen before checking, so an idle transition cannot be missed.
+        m.on('idle', check)
+        signal.addEventListener('abort', abort, { once: true })
+        check()
+      }))
       pageRef.current?.setAttribute('data-tl-frame', String(i))
     }
     const seek = (i: number) => {

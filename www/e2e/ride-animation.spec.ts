@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 test('movie clips 04:00–04:00 with a complete fixed sparkline and minimal header', async ({ page }) => {
+  await page.clock.install()
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   // Pin immutable payloads: September's public candidate index is provisional.
@@ -23,6 +24,13 @@ test('movie clips 04:00–04:00 with a complete fixed sparkline and minimal head
   await expect(page.getByTestId('movie-strip')).toHaveText('Ride starts per minuteTue, Sep 29, 2026 · 04:00Wed, Sep 30, 2026 · 04:00')
   const sparkline = await page.getByTestId('movie-sparkline').getAttribute('d')
   expect(sparkline?.match(/[ML]/g)?.length).toBe(1440)
+  // Software capture can outlive the inactive count chunks' ten-minute GC.
+  await page.clock.fastForward(11 * 60_000)
+  expect(await page.getByTestId('movie-sparkline').getAttribute('d')).toBe(sparkline)
+  for (const frame of [609, 610, 611, 620]) {
+    await page.evaluate((i) => window.__tl!.seek(i), frame)
+    await expect(page.locator('[data-tl-frame]')).toHaveAttribute('data-tl-frame', String(frame))
+  }
   await page.evaluate(() => window.__tl!.seek(750))
   await expect(page.locator('[data-tl-frame="750"]')).toHaveCount(1)
   await expect(page.getByTestId('tl-clock')).toHaveText('Wed, Sep 30, 2026 · 00:00')

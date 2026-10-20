@@ -38,7 +38,13 @@ def provision(account_id) -> None:
         aws.secretsmanager.SecretVersion('ctbk-movie-gateway-secret-value', secret_id=secret.id, secret_string=config.require_secret('movie_gateway_secret'))
         role = aws.iam.Role('ctbk-movies-gateway-role', name='ctbk-movies-gateway', assume_role_policy=_assume('lambda.amazonaws.com'))
         aws.iam.RolePolicyAttachment('ctbk-movies-gateway-basic', role=role.name, policy_arn='arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole')
-        aws.iam.RolePolicy('ctbk-movies-gateway-objects', role=role.name, policy=s3_policy)
+        # GetObject on a not-yet-created progress/submission key must return 404,
+        # rather than S3's existence-hiding 403 when ListBucket is absent.
+        gateway_policy = bucket.arn.apply(lambda arn: json.dumps({'Version': '2012-10-17', 'Statement': [
+            {'Effect': 'Allow', 'Action': ['s3:GetObject', 's3:PutObject'], 'Resource': arn + '/jobs/*'},
+            {'Effect': 'Allow', 'Action': 's3:ListBucket', 'Resource': arn},
+        ]}))
+        aws.iam.RolePolicy('ctbk-movies-gateway-objects', role=role.name, policy=gateway_policy)
         aws.iam.RolePolicy('ctbk-movies-gateway-control', role=role.name, policy=pulumi.Output.all(queue.arn, definition.arn, secret.arn).apply(lambda args: json.dumps({'Version': '2012-10-17', 'Statement': [
             {'Effect': 'Allow', 'Action': ['batch:SubmitJob', 'batch:TagResource'], 'Resource': [args[0], args[1]]},
             {'Effect': 'Allow', 'Action': ['batch:DescribeJobs', 'batch:ListJobs', 'batch:TerminateJob'], 'Resource': '*'},

@@ -31,7 +31,7 @@ export function studioQuery(input: URLSearchParams, s: MovieSettings): URLSearch
   if (![s.width, s.height].every((n) => Number.isInteger(n) && n >= 256 && n <= 1920 && n % 2 === 0) || s.width * s.height > 2_073_600) throw new Error('Use even dimensions from 256 to 1920, up to 1920×1080 pixels.')
   const speed = (after - first) / s.seconds
   const grid = movieGrid(after - first, speed, s.fps)
-  for (const key of ['mv', 'pv', 'len', 'lru', 'fpb', 't', 'lp', 'job']) p.delete(key)
+  for (const key of ['mv', 'pv', 'len', 'lru', 'fpb', 't', 'lp', 'job', '__og']) p.delete(key)
   p.set('b', bin)
   p.set('d', `${formatYmd(s.start)}-${formatYmd(s.end - 1)}`)
   p.set('clip', `${formatT(s.start)}-${formatT(s.end)}`)
