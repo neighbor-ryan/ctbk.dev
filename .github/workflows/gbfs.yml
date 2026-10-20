@@ -12,6 +12,8 @@ on:
       - 'gbfs/fetcher/**'
       - 'gbfs/lib/**'
       - 'www/src/lib/tlGrid.ts'
+      - 'www/src/lib/feedHealth.ts'
+      - 'www/src/lib/healthCard.ts'
       - '.github/workflows/gbfs.yml'
   workflow_dispatch:
     inputs:
@@ -59,6 +61,8 @@ jobs:
             api:
               - 'gbfs/api/**'
               - 'www/src/lib/tlGrid.ts'
+              - 'www/src/lib/feedHealth.ts'
+              - 'www/src/lib/healthCard.ts'
             compactor:
               - 'gbfs/compactor/**'
             cascade:
