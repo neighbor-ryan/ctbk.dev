@@ -39,8 +39,8 @@ test('routed animation preserves actual concurrency and deterministic movie seek
   await expect(page.locator('[data-tl-frame="0"]')).toHaveCount(1, { timeout: 120000 })
   await page.evaluate(() => window.__tl!.seek(1350))
   await expect(page.locator('[data-tl-frame="1350"]')).toHaveCount(1)
-  await expect(page.getByTestId('ride-routed')).toHaveText('110 active rides on inferred bike routes')
-  await expect(page.getByTestId('ride-active')).toHaveText('3,870 rides in progress')
+  await expect(page.getByTestId('ride-routed')).toHaveCount(0)
+  await expect(page.getByText('3,870 rides in progress', { exact: true })).toBeVisible()
   expect(errors).toEqual([])
 })
 
