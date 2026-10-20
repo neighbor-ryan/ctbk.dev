@@ -2,9 +2,10 @@
  * GBFS hourly compactor — Cloudflare Worker with cron trigger.
  *
  * On each fire (cron `5 * * * *`), compacts the previous UTC hour's
- * per-minute WAL JSONs into a single parquet shard:
+ * raw generations and legacy minute JSONs into a single parquet shard:
  *
  *   gbfs/status/YYYY-MM-DD/HH-MM.json   (n0, ~580 KB / file × ≤60)
+ *   gbfs/status-generation/YYYY-MM-DD/<LU>.json (all captured generations)
  *      ↓
  *   gbfs/avail/h1/YYYY-MM-DD/HH.parquet  (h1)
  *
@@ -45,6 +46,26 @@ interface Snapshot {
 	ts: number;
 	polled_at: number;
 	stations: StationRow[];
+}
+
+/** Alias and immutable inputs may describe the same LU. Keep its first
+ * observation once; same-LU content variants remain in the immutable JSON WAL. */
+export function distinctSnapshots(snapshots: readonly Snapshot[]): Snapshot[] {
+	const byLu = new Map<number, Snapshot>();
+	for (const snapshot of snapshots) {
+		const prior = byLu.get(snapshot.ts);
+		if (!prior || snapshot.polled_at < prior.polled_at) byLu.set(snapshot.ts, snapshot);
+	}
+	return [...byLu.values()].sort((a, b) => a.ts - b.ts);
+}
+
+export function generationKeysForHour(keys: readonly string[], date: string, hour: string): string[] {
+	const start = Date.parse(`${date}T${hour}:00:00Z`) / 1000;
+	return keys.filter((key) => {
+		const match = key.match(/\/(\d+)\.json$/);
+		const ts = match ? Number(match[1]) : NaN;
+		return ts >= start && ts < start + 3600;
+	});
 }
 
 interface Env {
@@ -111,9 +132,13 @@ async function listMinuteKeys(r2: R2Bucket, prefix: string): Promise<string[]> {
  *  keying and slim station fields, minus `vehicle_types_available`; the same
  *  system on another publish phase). Which minutes were filled is exactly the
  *  v11 keys returned. Sorted by minute. */
-export function withV11Fills(walKeys: readonly string[], v11Keys: readonly string[]): string[] {
+export function withV11Fills(walKeys: readonly string[], v11Keys: readonly string[], generations: readonly string[] = []): string[] {
 	const base = (k: string) => k.slice(k.lastIndexOf('/') + 1);
 	const have = new Set(walKeys.map(base));
+	for (const key of generations) {
+		const ts = Number(base(key).replace('.json', ''));
+		have.add(new Date(ts * 1000).toISOString().slice(11, 16).replace(':', '-') + '.json');
+	}
 	const fills = v11Keys.filter((k) => !have.has(base(k)));
 	return [...walKeys, ...fills].sort((a, b) => (base(a) < base(b) ? -1 : base(a) > base(b) ? 1 : 0));
 }
@@ -201,26 +226,29 @@ async function snapshotsToParquet(snapshots: Snapshot[]): Promise<ArrayBuffer | 
 /** Compact one (date, hour) window. Returns the count of minutes compacted. */
 export async function compactHour(r2: R2Bucket, date: string, hour: string): Promise<{ minutes: number; rows: number; bytes: number }> {
 	const wal = await listMinuteKeys(r2, statusPrefix(date, hour));
-	const keys = withV11Fills(wal, await listMinuteKeys(r2, `gbfs/probe/v11/${date}/${hour}-`));
-	if (keys.length > wal.length) console.log(`${date} ${hour}h: filled ${keys.length - wal.length} minute(s) from the 1.1 side-poller`);
+	const generations = generationKeysForHour(await listMinuteKeys(r2, `gbfs/status-generation/${date}/`), date, hour);
+	const minuteKeys = withV11Fills(wal, await listMinuteKeys(r2, `gbfs/probe/v11/${date}/${hour}-`), generations);
+	const keys = [...generations, ...minuteKeys];
+	if (minuteKeys.length > wal.length) console.log(`${date} ${hour}h: filled ${minuteKeys.length - wal.length} minute(s) from the 1.1 side-poller`);
 	if (keys.length === 0) {
 		console.log(`No minute JSONs for ${date} hour ${hour}; skipping`);
 		return { minutes: 0, rows: 0, bytes: 0 };
 	}
 
 	const results = await Promise.all(keys.map((k) => readSnapshot(r2, k)));
-	const snapshots = results.filter((s): s is Snapshot => s !== null);
+	const snapshots = distinctSnapshots(results.filter((s): s is Snapshot => s !== null));
 	const buf = await snapshotsToParquet(snapshots);
 	if (!buf) {
 		console.warn(`No rows for ${date} hour ${hour}; skipping write`);
-		return { minutes: snapshots.length, rows: 0, bytes: 0 };
+		return { minutes: new Set(snapshots.map((s) => Math.floor(s.ts / 60))).size, rows: 0, bytes: 0 };
 	}
 
 	const outKey = h1Key(date, hour);
 	await r2.put(outKey, buf, { httpMetadata: { contentType: 'application/octet-stream' } });
 	const rows = snapshots.reduce((acc, s) => acc + s.stations.length, 0);
-	console.log(`Compacted ${snapshots.length} minutes (${rows} rows, ${buf.byteLength} bytes) → ${outKey}`);
-	return { minutes: snapshots.length, rows, bytes: buf.byteLength };
+	const minutes = new Set(snapshots.map((s) => Math.floor(s.ts / 60))).size;
+	console.log(`Compacted ${snapshots.length} generations in ${minutes} minutes (${rows} rows, ${buf.byteLength} bytes) → ${outKey}`);
+	return { minutes, rows, bytes: buf.byteLength };
 }
 
 export default {

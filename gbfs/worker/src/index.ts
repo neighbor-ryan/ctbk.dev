@@ -8,7 +8,8 @@
  * is handled by GHA (gbfs-compact.yml) using compact-r2.py.
  *
  * R2 layout:
- *   gbfs/status/YYYY-MM-DD/HH-MM.json     — per-LU-minute WAL snapshots (JSON)
+ *   gbfs/status-generation/YYYY-MM-DD/<LU>.json — immutable raw generations
+ *   gbfs/status/YYYY-MM-DD/HH-MM.json     — latest LU per minute (normalized alias)
  *   gbfs/heartbeat/YYYY-MM-DD/HH-MM.txt   — cron-fire trace (3 bytes/tick)
  *   gbfs/info/YYYY-MM-DD.json             — daily station_information
  *
@@ -54,6 +55,7 @@ const KEEP_COLS = [
 ] as const;
 
 import type { MinuteRecord, StationStatus } from '../../lib/avail-monoid';
+import { statusContentHash, writeStatusSnapshot } from '../../lib/status-wal';
 // Re-export so this worker's existing test file can keep its import surface.
 export { buildMinuteShard } from '../../lib/avail-monoid';
 
@@ -110,14 +112,13 @@ function slimStation(s: Record<string, unknown>): StationStatus {
 	return slim as unknown as StationStatus;
 }
 
-// Last LU written by this isolate. Cold starts reset it to 0 — the next
-// sample then re-writes its LU's key, which is idempotent (same key,
-// same content mod `polled_at`).
-let lastLu = 0;
+// Avoid repeated R2 writes while retaining changed contents for the same LU
+// and out-of-order source observations. Cold starts use immutable conditional
+// writes; they cannot replace the original first-observed record.
+const seenGenerations = new Map<string, number>();
 
-/** One sample: fetch the feed; if its LU is new, write the WAL record
- *  under the LU's minute key (`floor(LU/60)` — attribution and key agree;
- *  see specs/lu-attribution.md). Returns the LU when a write happened. */
+/** One sample: preserve each distinct observed LU/content, then advance its
+ * normalized minute alias when newer. Returns the LU when storage was visited. */
 async function sampleStatus(bucket: R2Bucket): Promise<number | null> {
 	const polledAt = Math.floor(Date.now() / 1000);
 	const resp = await getFeed(STATUS_URL);
@@ -125,9 +126,11 @@ async function sampleStatus(bucket: R2Bucket): Promise<number | null> {
 
 	const data = (await resp.json()) as StatusResponse;
 	const lu = data.last_updated;
-	if (lu <= lastLu) return null;
 
 	const stations = data.data.stations.map(slimStation);
+	const hash = await statusContentHash({ ts: lu, stations });
+	const identity = `${lu}:${hash}`;
+	if (seenGenerations.has(identity)) return null;
 	// `pop`: the CloudFront edge that served this snapshot (health's
 	// `feed-pop` alert: a non-US edge means stale, update-skipping reads).
 	const record: MinuteRecord & { pop?: string; fetch_headers: Record<string, string> } = {
@@ -145,12 +148,9 @@ async function sampleStatus(bucket: R2Bucket): Promise<number | null> {
 		stations,
 	};
 
-	const luDate = new Date(lu * 1000);
-	const jsonKey = `gbfs/status/${utcDateStr(luDate)}/${utcTimeStr(luDate)}.json`;
-	await bucket.put(jsonKey, JSON.stringify(record), {
-		httpMetadata: { contentType: 'application/json' },
-	});
-	lastLu = lu;
+	const jsonKey = await writeStatusSnapshot(bucket, record, hash);
+	seenGenerations.set(identity, polledAt);
+	for (const [key, at] of seenGenerations) if (at < polledAt - 600) seenGenerations.delete(key);
 	const h = (k: string) => resp.headers.get(k) ?? '-';
 	console.log(
 		`Polled ${stations.length} stations, LU=${lu} (+${polledAt - lu}s) → ${jsonKey}` +

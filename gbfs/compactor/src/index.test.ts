@@ -1,5 +1,61 @@
 import { describe, expect, test } from 'vitest';
-import { buildColumnData, targetHour, withV11Fills } from './index';
+import { parquetReadObjects } from 'hyparquet';
+import { buildColumnData, compactHour, distinctSnapshots, generationKeysForHour, targetHour, withV11Fills } from './index';
+
+describe('immutable generation compaction', () => {
+	test('hourly parquet contains each captured LU once despite minute alias collisions', async () => {
+		const ts = Date.parse('2026-10-20T07:43:00Z') / 1000;
+		const station = (bikes: number) => ({ station_id: 'A', num_bikes_available: bikes });
+		const first = { ts, polled_at: ts + 2, stations: [station(1)] };
+		const second = { ts: ts + 59, polled_at: ts + 61, stations: [station(2)] };
+		const objects: Record<string, unknown> = {
+			[`gbfs/status-generation/2026-10-20/${ts}.json`]: first,
+			[`gbfs/status-generation/2026-10-20/${ts + 59}.json`]: second,
+			'gbfs/status/2026-10-20/07-43.json': second,
+		};
+		const written: { key: string; body: ArrayBuffer }[] = [];
+		const bucket = {
+			list: async ({ prefix }: { prefix: string }) => ({
+				objects: Object.keys(objects).filter((key) => key.startsWith(prefix)).map((key) => ({ key })),
+				truncated: false,
+			}),
+			get: async (key: string) => ({ text: async () => JSON.stringify(objects[key]) }),
+			put: async (key: string, body: ArrayBuffer) => { written.push({ key, body }); },
+		};
+		const result = await compactHour(bucket as unknown as R2Bucket, '2026-10-20', '07');
+		expect({ minutes: result.minutes, rows: result.rows }).toEqual({ minutes: 1, rows: 2 });
+		expect(written.map(({ key }) => key)).toEqual(['gbfs/avail/h1/2026-10-20/07.parquet']);
+		const buffer = written[0].body;
+		const rows = await parquetReadObjects({ file: { byteLength: buffer.byteLength, slice: (start: number, end?: number) => buffer.slice(start, end) } });
+		expect(rows.map((r) => ({ ts: Number(r.ts), bikes: r.num_bikes_available }))).toEqual([
+			{ ts, bikes: 1 }, { ts: ts + 59, bikes: 2 },
+		]);
+	});
+
+	test('retains two LUs in one minute and removes duplicate minute aliases', () => {
+		const first = { ts: 120, polled_at: 125, stations: [] };
+		const second = { ts: 179, polled_at: 185, stations: [] };
+		expect(distinctSnapshots([second, first, { ...first, polled_at: 190 }, second])).toEqual([first, second]);
+	});
+
+	test('hour selection includes canonical generations at both boundaries only', () => {
+		const start = Date.parse('2026-10-20T07:00:00Z') / 1000;
+		const key = (ts: number) => `gbfs/status-generation/2026-10-20/${ts}.json`;
+		expect(generationKeysForHour([key(start - 1), key(start), key(start + 3599), key(start + 3600)], '2026-10-20', '07')).toEqual([
+			key(start), key(start + 3599),
+		]);
+	});
+
+	test('a generation survives alias-publication failure without a redundant backup fill', () => {
+		const ts = Date.parse('2026-10-20T07:43:00Z') / 1000;
+		expect(withV11Fills([], [
+			'gbfs/probe/v11/2026-10-20/07-43.json',
+			'gbfs/probe/v11/2026-10-20/07-44.json',
+		], [`gbfs/status-generation/2026-10-20/${ts}.json`])).toEqual([
+			'gbfs/probe/v11/2026-10-20/07-44.json',
+		]);
+	});
+});
 
 describe('targetHour', () => {
 	test('subtracts 1h and buckets to UTC date+hour', () => {

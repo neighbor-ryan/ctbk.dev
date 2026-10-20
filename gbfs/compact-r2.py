@@ -51,6 +51,7 @@ def r2_exists(r2_key: str) -> bool:
 
 
 V11_PREFIX = f'{R2_PREFIX}/probe/v11'
+GENERATION_PREFIX = f'{R2_PREFIX}/status-generation'
 
 
 def list_keys(prefix: str) -> list[str]:
@@ -78,6 +79,10 @@ def fill_from_v11(date_str: str, out_dir: Path) -> int:
     were filled is exactly the set of names absent from `gbfs/status/<date>/`.
     """
     have = {f.name for f in out_dir.glob('*.json')}
+    have.update(
+        datetime.fromtimestamp(int(f.stem), timezone.utc).strftime('%H-%M.json')
+        for f in (out_dir / 'generations').glob('*.json') if f.stem.isdigit()
+    )
     v11 = [k for k in list_keys(f'{V11_PREFIX}/{date_str}/') if k.endswith('.json')]
     missing = [k for k in v11 if k.rsplit('/', 1)[1] not in have]
     for k in missing:
@@ -108,6 +113,18 @@ def download(date_str: str):
 
     count = len(list(out_dir.glob('*.json')))
     print(f"Downloaded {count} WAL files for {date_str}")
+    # Immutable raw generations are kept separately from the latest-per-minute
+    # aliases. Never delete either source while compacting.
+    generations_dir = out_dir / 'generations'
+    generations_dir.mkdir(exist_ok=True)
+    subprocess.run(
+        [
+            'aws', 's3', 'sync', f's3://{R2_BUCKET}/{GENERATION_PREFIX}/{date_str}/', str(generations_dir),
+            '--exclude', '*', '--include', '*.json', *AWS_PROFILE_ARGS,
+        ],
+        capture_output=True, text=True, check=True,
+    )
+    count += sum(1 for path in generations_dir.glob('*.json') if path.stem.isdigit())
     filled = fill_from_v11(date_str, out_dir)
     if filled:
         print(f"Filled {filled} missing minute(s) from the 1.1 side-poller ({V11_PREFIX}/{date_str}/)")
@@ -117,6 +134,25 @@ def download(date_str: str):
         sys.exit(1)
 
 
+def read_wal_records(wal_day_dir: Path) -> list[dict]:
+    """Every distinct captured LU, with aliases deduplicated against raw WAL.
+
+    A same-LU content variant stays available as immutable JSON. The canonical
+    generation file is authoritative for that LU in the standard raw parquet.
+    """
+    records = {}
+    generation_files = sorted((wal_day_dir / 'generations').glob('*.json'))
+    for path in [*generation_files, *sorted(wal_day_dir.glob('*.json'))]:
+        if path.parent.name == 'generations' and not path.stem.isdigit():
+            continue
+        record = json.loads(path.read_text())
+        ts = record['ts']
+        prior = records.get(ts)
+        if prior is None or record['polled_at'] < prior['polled_at']:
+            records[ts] = record
+    return [records[ts] for ts in sorted(records)]
+
+
 def compact(date_str: str):
     """Compact downloaded WAL JSONs into a single parquet."""
     wal_day_dir = WAL_DIR / date_str
@@ -124,15 +160,14 @@ def compact(date_str: str):
         print(f"No WAL directory for {date_str}", file=sys.stderr)
         sys.exit(1)
 
-    json_files = sorted(wal_day_dir.glob('*.json'))
-    if not json_files:
+    records = read_wal_records(wal_day_dir)
+    if not records:
         print(f"No JSON files for {date_str}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Compacting {len(json_files)} files for {date_str}...")
+    print(f"Compacting {len(records)} generations for {date_str}...")
     rows = []
-    for f in json_files:
-        record = json.loads(f.read_text())
+    for record in records:
         ts = record['ts']
         polled_at = record['polled_at']
         for s in record['stations']:
