@@ -96,6 +96,7 @@ jobs:
         if: steps.scrgate.outputs.stale == 'true'
         working-directory: www
         run: |
+          pnpm docker:context
           docker build --platform linux/amd64 -f Dockerfile.screenshots -t ctbk-screenshots .
           docker run --platform linux/amd64 --name ctbk-screenshots-run ctbk-screenshots
           docker cp ctbk-screenshots-run:/app/public/screenshots/. public/screenshots/

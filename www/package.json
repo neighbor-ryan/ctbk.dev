@@ -67,6 +67,7 @@
     "yaml": "^2.9.1"
   },
   "scripts": {
+    "docker:context": "node scripts/docker-context.mjs",
     "clean": "rm -rf node_modules/.vite",
     "predev": "node scripts/fetch-screenshots.js",
     "dev": "vite",

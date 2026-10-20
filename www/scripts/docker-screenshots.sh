@@ -10,6 +10,7 @@ IMAGE="ctbk-screenshots"
 CONTAINER="ctbk-screenshots-run"
 
 # Build the Docker image (x64, matching GHA runners)
+pnpm docker:context
 docker build --platform "$PLATFORM" -f Dockerfile.screenshots -t "$IMAGE" .
 
 # Run, copy screenshots out, clean up
