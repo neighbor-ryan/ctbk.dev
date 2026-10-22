@@ -32,7 +32,7 @@ import { useAction } from 'use-kbd'
 import { boolParam, intParam, llzParam, stringParam, useUrlState, type LLZ } from 'use-prms'
 import GLMap from '../components/GLMap'
 import {
-  Chevron, edgeX, HoverCard, Legend, LegendBar, PIN_RGB, rgbCss, scaleNote, sparkPath, Stats, TlSettings, TlTransport, WIDE, WindowNote,
+  Chevron, HoverCard, Legend, LegendBar, PIN_RGB, rgbCss, scaleNote, sparkPath, Stats, TlSettings, TlTransport, WIDE, WindowNote,
 } from '../components/timelapse/controls'
 import { pinIndices, timelapseLayers } from '../components/timelapse/layers'
 import { useTimelapse } from '../components/timelapse/useTimelapse'
@@ -47,6 +47,7 @@ import { captureStage } from '../query/movieCapture'
 import { useRideAnimation } from '../query/useRideAnimation'
 import { BIKE_COLORS, movingRideLayers, ridePaths, rideRouteOrigins } from '../components/timelapse/rideLayers'
 import { DayClock } from '../components/timelapse/DayClock'
+import { MovieTimeline } from '../components/timelapse/MovieTimeline'
 import { useFlowRoutes } from '../query/flowRoutes'
 import css from '../timelapse.module.css'
 import type { Layer, PickingInfo } from '@deck.gl/core'
@@ -359,17 +360,7 @@ export default function Timelapse() {
           </div>
         </div>
         {cap && <div className={css.caption}>{cap}</div>}
-        {mv && <div className={css.movieStrip} data-testid="movie-strip">
-          <div className={css.movieStripLabel}>Ride starts per {binUnit(bin)}</div>
-          <svg viewBox="0 0 1000 48" preserveAspectRatio="none" aria-label="Ride starts timeline">
-            <path data-testid="movie-sparkline" d={sparkPath(movieSeries, 1000, 48, 'edge')} fill="none" stroke="#7fb3ff" strokeWidth={2} vectorEffect="non-scaling-stroke" />
-            <line data-testid="movie-playhead" x1={edgeX(shown - captureStart, movieSeries.length) * 1000} x2={edgeX(shown - captureStart, movieSeries.length) * 1000} y1={0} y2={48} stroke="#ffd24a" strokeWidth={3} vectorEffect="non-scaling-stroke" />
-          </svg>
-          <div className={css.movieStripDates}>
-            <span>{clockLabel(bin, frameStartMs(bin, captureStart))}</span>
-            <span>{clockLabel(bin, frameStartMs(bin, captureAfter))}</span>
-          </div>
-        </div>}
+        {mv && <MovieTimeline series={movieSeries} start={frameStartMs(bin, captureStart)} end={frameStartMs(bin, captureAfter)} frame={shown - captureStart} unit={binUnit(bin)} />}
         {dragRect && (
           <div className={css.dragRect} style={{ left: dragRect.x0, top: dragRect.y0, width: dragRect.x1 - dragRect.x0, height: dragRect.y1 - dragRect.y0 }} />
         )}

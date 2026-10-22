@@ -212,16 +212,30 @@
     margin: 4px 0;
 }
 
-.movieStripLabel,
-.movieStripDates {
+.movieStripLabel {
     font-size: 12px;
     opacity: 0.8;
 }
 
-.movieStripDates {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
+.movieStripAxis {
+    position: relative;
+    height: 30px;
+    font-size: 11px;
+    line-height: 14px;
+    font-variant-numeric: tabular-nums;
+}
+
+.movieStripTick {
+    position: absolute;
+    white-space: nowrap;
+}
+
+.movieStripTick > span {
+    display: block;
+}
+
+.movieStripDay {
+    opacity: 0.7;
 }
 
 .badges {

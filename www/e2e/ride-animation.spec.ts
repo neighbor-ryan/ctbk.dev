@@ -18,10 +18,11 @@ test('movie clips 04:00–04:00 with a complete fixed sparkline and minimal head
     return { frames, fps, seconds, start, end }
   })).toEqual({ frames: 900, fps: 30, seconds: 30, start: '260929T04', end: '260930T04' })
   await expect(page.getByTestId('tl-clock')).toHaveText('Tue, Sep 29, 2026 · 04:00')
-  await expect(page.getByTestId('tl-header')).toHaveText('00061218Tue, Sep 29, 2026 · 04:0081 rides in progress electric classic')
-  await expect(page.getByRole('img', { name: '24-hour clock, 04:00', exact: true })).toBeVisible()
-  await expect(page.getByTestId('ride-clock-hand')).toHaveAttribute('transform', 'rotate(60 44 44)')
-  await expect(page.getByTestId('movie-strip')).toHaveText('Ride starts per minuteTue, Sep 29, 2026 · 04:00Wed, Sep 30, 2026 · 04:00')
+  await expect(page.getByTestId('tl-header')).toHaveText('12369AMTue, Sep 29, 2026 · 04:0081 rides in progress electric classic')
+  await expect(page.getByRole('img', { name: '12-hour clock, 4:00 AM', exact: true })).toBeVisible()
+  await expect(page.getByTestId('ride-clock-hand')).toHaveAttribute('transform', 'rotate(120 44 44)')
+  await expect(page.getByTestId('ride-clock-minute-hand')).toHaveAttribute('transform', 'rotate(0 44 44)')
+  await expect(page.getByTestId('movie-time-tick')).toHaveText(['04:00Tue Sep 29', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00', '00:00Wed Sep 30', '04:00Wed Sep 30'])
   const sparkline = await page.getByTestId('movie-sparkline').getAttribute('d')
   expect(sparkline?.match(/[ML]/g)?.length).toBe(1440)
   // Software capture can outlive the inactive count chunks' ten-minute GC.
@@ -39,7 +40,7 @@ test('movie clips 04:00–04:00 with a complete fixed sparkline and minimal head
   expect(Number(await page.getByTestId('movie-playhead').getAttribute('x1'))).toBe(1200 / 1439 * 1000)
   await page.evaluate(() => window.__tl!.seek(751))
   await expect(page.locator('[data-tl-frame="751"]')).toHaveCount(1)
-  expect(Number((await page.getByTestId('ride-clock-hand').getAttribute('transform'))!.split(' ')[0].slice(7))).toBeCloseTo(0.4, 8)
+  expect(Number((await page.getByTestId('ride-clock-hand').getAttribute('transform'))!.split(' ')[0].slice(7))).toBeCloseTo(0.8, 8)
   expect(errors).toEqual([])
 })
 
