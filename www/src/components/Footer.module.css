@@ -2,11 +2,38 @@
   margin-top: 2em;
   margin-bottom: 3em;
   text-align: center;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.75em 1.25em;
+}
+
+.item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  color: inherit;
+  text-decoration: none;
+}
+
+.item:hover {
+  text-decoration: underline;
 }
 
 .icon {
   width: 2em;
   height: 2em;
-  margin-right: 1em;
   vertical-align: middle;
 }
+
+.home { color: #1f77b4; }
+.code { color: #8250df; }
+.data { color: #f38020; }
+.pipeline { color: #526b83; }
+.health { color: #16845b; }
+.author { color: #1185fe; }
+
+:global([data-theme="dark"]) .home { color: #6cb4ee; }
+:global([data-theme="dark"]) .code { color: #b794f6; }
+:global([data-theme="dark"]) .pipeline { color: #a0b8cc; }
+:global([data-theme="dark"]) .health { color: #4cce9a; }
