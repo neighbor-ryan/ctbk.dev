@@ -33,7 +33,7 @@ const DESC: Record<number, { what: string; fold?: (s: SmgSummary) => string }> =
   7: { what: 'No open docks, and no e-bike either.', fold: (s) => `Full (with or without e-bikes) ${pct(s.full)} of usable minutes.` },
   8: { what: 'Classic bikes only: no e-bike available (but not empty or full).', fold: (s) => `No e-bike available (empty, full without e-bikes, or classic-only) ${pct(s.noEbikes)} of usable minutes.` },
   3: { what: 'Reported not renting or not returning.', fold: (s) => `Offline ${pct(s.offline)} of measured minutes.` },
-  4: { what: 'Feed reported 0 bikes and 0 docks.' },
+  4: { what: 'Feed reported 0 available bikes and 0 available docks.' },
   9: { what: 'Bikes, e-bikes, and open docks all available.' },
   2: { what: 'Not in the feed\'s station list.', fold: (s) => `Unmeasured (no poll, stale feed, or absent) ${pct(s.unmeasured)} of all minutes.` },
   1: { what: 'The feed\'s timestamp hadn\'t advanced.', fold: (s) => `Unmeasured (no poll, stale feed, or absent) ${pct(s.unmeasured)} of all minutes.` },

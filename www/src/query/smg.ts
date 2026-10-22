@@ -25,11 +25,6 @@ export const SMG_GENESIS_S = Date.UTC(2026, 3, 7) / 1000
  *  parity check used, so `/` sums exactly the vocab's station set. */
 export const SYSTEM_BBOX = '40.5,-74.3,41.0,-73.6'
 
-/** Era boundaries worth marking on any SMG time axis:
- *  - heartbeat era: before it a minute with no snapshot is `no_poll`
- *    whether the poller ran or not (`stale_feed` ≡ 0 pre-2026-05-03);
- *  - poller v2: pre-v2 `stale_feed` is inflated by the CloudFront-cached
- *    1.1 feed. */
 /** Poller v2 cutover. Pre-v2 `stale_feed` is a collection artifact (the old
  *  poller served CloudFront-cached 1.1 feed), so it measures our instrumentation
  *  rather than station state — hence this is the default lower bound for the
@@ -37,9 +32,10 @@ export const SYSTEM_BBOX = '40.5,-74.3,41.0,-73.6'
  *  preset; the clamp floor remains `SMG_GENESIS_S`). */
 export const SMG_POLLER_V2_S = Date.UTC(2026, 7, 4) / 1000
 
+/** Before heartbeats, a missing snapshot cannot distinguish a missed poll
+ *  from a stale feed (`stale_feed` ≡ 0 before this boundary). */
 export const SMG_ERAS: readonly { atS: number; label: string }[] = [
   { atS: Date.UTC(2026, 4, 3, 12, 20) / 1000, label: 'heartbeats' },
-  { atS: SMG_POLLER_V2_S, label: 'poller v2' },
 ]
 
 export type SmgGroup = 'gap' | 'dead' | 'live'
@@ -65,12 +61,12 @@ export interface SmgState {
  *  band on top. "Full, no e-bikes" is "full" plus the no-e-bike hatch it shares
  *  with "no e-bikes": the hatch alone carries the e-bike dimension. */
 export const SMG_STATES: readonly SmgState[] = [
-  { id: 5, key: 'empty',          label: 'Empty',               group: 'live', light: '#a1420f', dark: '#c0561b' },
+  { id: 5, key: 'empty',          label: 'Empty',               group: 'live', light: '#8b1e2d', dark: '#9e273b' },
   { id: 6, key: 'full',           label: 'Full',                group: 'live', light: '#d32f2f', dark: '#ef5350' },
   { id: 7, key: 'full_no_ebikes', label: 'Full, no e-bikes',    group: 'live', light: '#d32f2f', dark: '#ef5350', hatch: true },
   { id: 8, key: 'classic_only',   label: 'No e-bikes',          group: 'live', light: '#f9a825', dark: '#fdd835', hatch: true },
   { id: 3, key: 'offline',        label: 'Offline',             group: 'dead', light: '#616161', dark: '#9e9e9e' },
-  { id: 4, key: 'bogus',          label: 'Bogus (0 bikes, 0 docks)', group: 'dead', light: '#8d6e63', dark: '#a1887f' },
+  { id: 4, key: 'bogus',          label: 'Zero counts',         group: 'dead', light: '#8d6e63', dark: '#a1887f' },
   { id: 9, key: 'ok',             label: 'OK',                  group: 'live', light: '#a3c9a0', dark: '#4e7a51' },
   { id: 2, key: 'absent',         label: 'Absent from feed',    group: 'gap',  light: '#bdbdbd', dark: '#616161' },
   { id: 1, key: 'stale_feed',     label: 'Stale feed',          group: 'gap',  light: '#b0bec5', dark: '#546e7a' },
