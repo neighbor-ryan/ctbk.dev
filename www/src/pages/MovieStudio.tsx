@@ -38,6 +38,7 @@ export default function MovieStudio() {
   const [frame, setFrame] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [loop, setLoop] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(true)
   const [busy, setBusy] = useState(false)
   const [jobId, setJobId] = useState<string | null>(params.get('job'))
   const iframe = useRef<HTMLIFrameElement>(null)
@@ -167,8 +168,14 @@ export default function MovieStudio() {
   const mapQuery = new URLSearchParams(currentQuery.current)
   for (const key of ['mlen', 'mw', 'mh', 'cfps', 'clip']) mapQuery.delete(key)
   return <div className={css.page} data-og-page-ready={!!plan}>
-    <header className={css.heading}><div><h1>Movie preview</h1><p>Pan or zoom the frame. Export uses this exact view.</p></div><Link to={`/timelapse?${mapQuery}`}>Back to map</Link></header>
-    <div className={css.workspace}>
+    <header className={css.heading}>
+      <div><h1>Movie preview</h1><p>Pan or zoom the frame. Export uses this exact view.</p></div>
+      <div className={css.headingActions}>
+        <Link to={`/timelapse?${mapQuery}`}>Back to map</Link>
+        <button type="button" aria-expanded={settingsOpen} aria-controls="movie-settings" onClick={() => setSettingsOpen(!settingsOpen)}>{settingsOpen ? 'Hide settings ›' : '‹ Show settings'}</button>
+      </div>
+    </header>
+    <div className={settingsOpen ? css.workspace : `${css.workspace} ${css.collapsed}`}>
       <div className={css.viewer}>
         <div className={css.stage} ref={stage}>
           <div className={css.frame} style={{ width: width * scale, height: height * scale }}>
@@ -185,7 +192,7 @@ export default function MovieStudio() {
         </div>
         <div className={css.frameNote} aria-live="polite">{plan ? `${width} × ${height} · ${plan.fps} fps · frame ${frame + 1} of ${plan.frames}${busy ? ' · buffering' : ''}` : 'Loading movie frame…'}</div>
       </div>
-      <aside className={css.sidebar}>
+      <aside id="movie-settings" className={css.sidebar} hidden={!settingsOpen}>
         <form onSubmit={apply}>
           <h2>Clip</h2>
           <label>Start (New York time)<input aria-label="Movie start" type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} required /></label>

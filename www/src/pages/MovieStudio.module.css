@@ -2,8 +2,10 @@
 .heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; }
 .heading h1 { font-size: 24px; font-weight: 650; margin: 0 0 4px; }
 .heading p, .sidebar p { font-size: 13px; color: #b7b9bf; margin: 0; }
+.headingActions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
 .page a { color: #a8ccff; font-size: 13px; }
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 24px; }
+.collapsed { grid-template-columns: minmax(0, 1fr); }
 .viewer { min-width: 0; }
 .stage { height: calc(100dvh - 172px); min-height: 280px; display: flex; justify-content: center; align-items: center; overflow: hidden; background: #131416; }
 .frame { position: relative; flex: none; overflow: hidden; box-shadow: 0 0 0 1px #484a50; }
@@ -33,6 +35,7 @@
   .workspace { grid-template-columns: 1fr; gap: 24px; }
   .stage { height: 64dvh; }
   .heading h1 { font-size: 20px; }
+  .heading { flex-wrap: wrap; }
   .heading p { max-width: 230px; }
   .transport { gap: 5px; }
 }
